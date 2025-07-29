@@ -1,4 +1,5 @@
 import time
+import threading
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -12,11 +13,63 @@ class BlackBoxHandler(SerialHandler):
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
+        self._tip_callback = None
+        self._read_thread = None
+        self.is_reading = False
         
     def connect(self):
         super().connect(self.port)
         # Get device info immediately after connection
         self._get_device_info()
+        # Start the background thread for reading automatic messages
+        self._start_read_thread()
+    
+    def _start_read_thread(self):
+        """Start background thread to read automatic messages"""
+        self.is_reading = True
+        self._read_thread = threading.Thread(target=self._read_automatic_messages)
+        self._read_thread.daemon = True
+        self._read_thread.start()
+    
+    def _read_automatic_messages(self):
+        """Background thread to read automatic tip messages"""
+        while self.is_reading and self.is_connected:
+            try:
+                line = self.read_line(timeout=0.1)
+                if line and line.startswith("tip "):
+                    self._process_tip(line)
+            except Exception:
+                pass
+            time.sleep(0.01)
+    
+    def _process_tip(self, line: str):
+        """Process automatic tip messages"""
+        try:
+            # Extract the file line after "tip "
+            file_line = line[4:]  # Skip "tip "
+            
+            # Parse the CSV line: Tip Number, Time Stamp, Seconds Elapsed, Channel Number, Temperature, Pressure
+            parts = file_line.split()
+            if len(parts) >= 6:
+                tip_data = {
+                    "tip_number": int(parts[0]),
+                    "timestamp": parts[1].strip(),
+                    "seconds_elapsed": int(parts[2]),
+                    "channel_number": int(parts[3]),
+                    "temperature": float(parts[4]),
+                    "pressure": float(parts[5])
+                }
+                
+                # Call callback if registered
+                if self._tip_callback:
+                    self._tip_callback(tip_data)
+                    
+        except (ValueError, IndexError):
+            pass
+    
+    def set_tip_callback(self, callback):
+        """Set callback for automatic tip messages"""
+        self._tip_callback = callback
     
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
@@ -248,4 +301,7 @@ class BlackBoxHandler(SerialHandler):
     
     def disconnect(self):
         """Disconnect from device"""
+        self.is_reading = False
+        if self._read_thread:
+            self._read_thread.join(timeout=2)
         super().disconnect()

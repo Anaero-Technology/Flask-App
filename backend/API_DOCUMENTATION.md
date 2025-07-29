@@ -1,7 +1,7 @@
 # Flask Device Management API Documentation
 
 ## Base URL
-All endpoints are prefixed with: `http://localhost:5000`
+All endpoints are prefixed with: `http://localhost:6000`
 
 ## General Device Management
 
@@ -298,6 +298,7 @@ Get current time from device RTC.
 POST /api/v1/black_box/<device_id>/time
 ```
 Set device RTC time.
+
 
 **Request Body:**
 ```json

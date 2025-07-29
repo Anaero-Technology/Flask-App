@@ -7,5 +7,5 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 echo "Starting Server..." 
-gunicorn -w 4 -b :6000 app:app
+gunicorn -w 1 -b :6000 app:app
 echo "Closing Server Down. "

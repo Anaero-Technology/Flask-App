@@ -36,7 +36,7 @@ class SerialHandler:
             return True
         return False
     
-    def send_command(self, command: str, wait_for_response: bool = True, timeout: int = 5) -> Optional[str]:
+    def send_command(self, command: str, wait_for_response: bool = True, timeout: float = 2) -> Optional[str]:
         if not self.is_connected:
             raise Exception("Device not connected")
         
@@ -75,7 +75,7 @@ class SerialHandler:
         
         return False, lines
     
-    def _read_response(self, timeout: int) -> Optional[str]:
+    def _read_response(self, timeout: float) -> Optional[str]:
         start_time = time.time()
         response = ""
         

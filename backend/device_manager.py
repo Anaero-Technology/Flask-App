@@ -71,8 +71,8 @@ class DeviceManager:
                 "device_id": device_id,
                 "port": handler.port,
                 "name": handler.device_name or "Unknown",
-                "serial": handler.device_serial,
-                "status": "collecting" if handler.is_collecting else "idle"
+                "mac_address": handler.mac_address,
+                "status": "logging" if handler.is_logging else "idle"
             })
         
         chimera_list = []
@@ -80,9 +80,11 @@ class DeviceManager:
             chimera_list.append({
                 "device_id": device_id,
                 "port": handler.port,
-                "status": "calibrating" if handler.is_calibrating else "ready",
-                "valve_open": handler.valve_open,
-                "flow_rate": handler.current_flow_rate
+                "name": handler.device_name or "Unknown",
+                "mac_address": handler.mac_address,
+                "status": "logging" if handler.is_logging else "idle",
+                "current_channel": handler.current_channel,
+                "seconds_elapsed": handler.seconds_elapsed
             })
         
         return {
