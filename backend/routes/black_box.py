@@ -20,20 +20,15 @@ def connect_black_box(device_id):
         if device.connected:
             return jsonify({"error": "Device already connected"}), 400
         
-        # Connect to the device
+        # Connect to the device (DeviceManager now handles DB updates)
         success = device_manager.connect_black_box(device_id, device.serial_port)
         if not success:
             return jsonify({"error": "Failed to connect to device"}), 500
         
+        # Get the handler to return device info
         handler = device_manager.get_black_box(device_id)
-        
-        # Update device in database with info from device
-        device.connected = True
-        if handler.mac_address:
-            device.mac_address = handler.mac_address
-        if handler.device_name:
-            device.name = handler.device_name
-        db.session.commit()
+        if not handler:
+            return jsonify({"error": "Handler not found after connection"}), 500
         
         return jsonify({
             "success": True,
@@ -45,7 +40,6 @@ def connect_black_box(device_id):
         }), 200
         
     except Exception as e:
-        db.session.rollback()
         return jsonify({"error": str(e)}), 500
     finally:
         db.session.close()
@@ -66,7 +60,6 @@ def disconnect_black_box(device_id):
         success = device_manager.disconnect_device('black_box', device_id)
         if success:
             device.connected = False
-            device.logging = False
             db.session.commit()
             return jsonify({"success": True}), 200
         
@@ -105,7 +98,7 @@ def start_logging(device_id):
         return jsonify({
             "success": success,
             "message": message,
-            "filename": filename if success else None
+            "filename": filename
         })
         
     except Exception as e:

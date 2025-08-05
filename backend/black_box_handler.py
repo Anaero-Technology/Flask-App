@@ -1,6 +1,4 @@
 import time
-import threading
-from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
 
@@ -13,64 +11,42 @@ class BlackBoxHandler(SerialHandler):
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
-        self._tip_callback = None
-        self._read_thread = None
-        self.is_reading = False
+
+        self.register_automatic_handler("tip ", self._print_tips)
         
     def connect(self):
         super().connect(self.port)
         # Get device info immediately after connection
         self._get_device_info()
-        # Start the background thread for reading automatic messages
-        self._start_read_thread()
     
-    def _start_read_thread(self):
-        """Start background thread to read automatic messages"""
-        self.is_reading = True
-        self._read_thread = threading.Thread(target=self._read_automatic_messages)
-        self._read_thread.daemon = True
-        self._read_thread.start()
-    
-    def _read_automatic_messages(self):
-        """Background thread to read automatic tip messages"""
-        while self.is_reading and self.is_connected:
-            try:
-                line = self.read_line(timeout=0.1)
-                if line and line.startswith("tip "):
-                    self._process_tip(line)
-            except Exception:
-                pass
-            time.sleep(0.01)
-    
-    def _process_tip(self, line: str):
-        """Process automatic tip messages"""
+    def _print_tips(self, line: str):
+        """Prints automatic tip messages"""
         try:
+            print(line)
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
-            
+
             # Parse the CSV line: Tip Number, Time Stamp, Seconds Elapsed, Channel Number, Temperature, Pressure
             parts = file_line.split()
-            if len(parts) >= 6:
-                tip_data = {
-                    "tip_number": int(parts[0]),
-                    "timestamp": parts[1].strip(),
-                    "seconds_elapsed": int(parts[2]),
-                    "channel_number": int(parts[3]),
-                    "temperature": float(parts[4]),
-                    "pressure": float(parts[5])
-                }
-                
-                # Call callback if registered
-                if self._tip_callback:
-                    self._tip_callback(tip_data)
+
+            tip_data = {
+                "tip_number": int(parts[0]),
+                "timestamp": parts[1].strip(),
+                "seconds_elapsed": int(parts[2]),
+                "channel_number": int(parts[3]),
+                "temperature" : "N/A" if parts[4] == "-" else float(parts[4]),
+                "pressure": float(parts[5])
+             }
+            
+            print(f"[AUTOMATIC TIP] Tip #{tip_data['tip_number']} - "
+                f"Channel: {tip_data['channel_number']}, "
+                f"Temp: {tip_data['temperature']}°C, "
+                f"Pressure: {tip_data['pressure']} PSI")                
                     
         except (ValueError, IndexError):
             pass
     
-    def set_tip_callback(self, callback):
-        """Set callback for automatic tip messages"""
-        self._tip_callback = callback
-    
+
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
         if self.is_connected:
@@ -78,12 +54,12 @@ class BlackBoxHandler(SerialHandler):
             if response and response.startswith("info"):
                 # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
                 parts = response.split()
-                if len(parts) >= 6:
-                    self.is_logging = (parts[1] == "1")
-                    self.current_log_file = parts[2] if parts[2] != "none" else None
-                    self.device_name = parts[3]
-                    # parts[4] should be "black-box"
-                    self.mac_address = parts[5]
+                
+                self.is_logging = (parts[1] == "1")
+                self.current_log_file = parts[2] if parts[2] != "none" else None
+                self.device_name = parts[3]
+                # parts[4] should be "black-box"
+                self.mac_address = parts[5]
 
     def get_info(self) -> Dict:
         """Get current device information"""
@@ -100,7 +76,7 @@ class BlackBoxHandler(SerialHandler):
         """Start logging to a specific file"""
         response = self.send_command(f"start {filename}")
         
-        if response == "done start":
+        if response == "done start" or response == "Setup successfully updated":
             self.is_logging = True
             self.current_log_file = filename
             return True, "Successfully started logging"
@@ -109,15 +85,18 @@ class BlackBoxHandler(SerialHandler):
         elif response == "failed start alreadyexists":
             return False, "File already exists"
         elif response == "already start":
-            return True, "Device already logging"
+            return False, "Device already logging"
         else:
             return False, "Unknown error"
     
     def stop_logging(self) -> Tuple[bool, str]:
         """Stop logging"""
         response = self.send_command("stop")
-        
-        if response == "done stop":
+
+        parts = response.split()
+        for x in parts:
+            print(x)
+        if response == "done stop" or response == "Setup successfully updated":
             self.is_logging = False
             self.current_log_file = None
             return True, "Successfully stopped logging"
@@ -131,7 +110,7 @@ class BlackBoxHandler(SerialHandler):
     def get_files(self) -> Dict:
         """Get SD card memory info and list of files"""
         self.clear_buffer()
-        self.send_command("files", wait_for_response=False)
+        self.send_command_no_wait("files")
         
         # Read memory info
         memory_line = self.read_line(timeout=5)
@@ -178,7 +157,7 @@ class BlackBoxHandler(SerialHandler):
             command = f"download {filename} 999999999"
         
         self.clear_buffer()
-        self.send_command(command, wait_for_response=False)
+        self.send_command_no_wait(command)
         
         # Wait for download to start
         response = self.read_line(timeout=5)
@@ -203,14 +182,14 @@ class BlackBoxHandler(SerialHandler):
                 data = line[9:]  # Skip "download "
                 lines.append(data)
                 # Send acknowledgment
-                self.send_command("next", wait_for_response=False)
+                self.send_command_no_wait("next")
     
     def download_file_from(self, filename: str, byte_from: int) -> Tuple[bool, List[str]]:
         """Download a file from a specific byte position"""
         command = f"downloadFrom {filename} {byte_from}"
         
         self.clear_buffer()
-        self.send_command(command, wait_for_response=False)
+        self.send_command_no_wait(command)
         
         # Same response handling as download_file
         response = self.read_line(timeout=5)
@@ -232,7 +211,7 @@ class BlackBoxHandler(SerialHandler):
             elif line.startswith("download "):
                 data = line[9:]
                 lines.append(data)
-                self.send_command("next", wait_for_response=False)
+                self.send_command_no_wait("next")
     
     def delete_file(self, filename: str) -> Tuple[bool, str]:
         """Delete a file from the SD card"""
@@ -276,7 +255,7 @@ class BlackBoxHandler(SerialHandler):
     def get_hourly_tips(self) -> Tuple[bool, List[str]]:
         """Get hourly tip count information"""
         self.clear_buffer()
-        self.send_command("getHourly", wait_for_response=False)
+        self.send_command_no_wait("getHourly")
         
         # Wait for start
         response = self.read_line(timeout=5)
@@ -301,7 +280,4 @@ class BlackBoxHandler(SerialHandler):
     
     def disconnect(self):
         """Disconnect from device"""
-        self.is_reading = False
-        if self._read_thread:
-            self._read_thread.join(timeout=2)
         super().disconnect()

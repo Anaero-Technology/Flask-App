@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from database.models import *
 from sqlalchemy import Column, String, Integer, Boolean
 import serial.tools.list_ports
+from serial_handler import SerialHandler
 from config import Config
 
 app = Flask(__name__)
@@ -48,13 +49,15 @@ def register_device():
         data = request.get_json()
         
         # Only serial_port is required
-        if not data.get('serial_port'):
+       
+        serial_port = data.get('serial_port')
+        if not serial_port:
             return jsonify({"error": "serial_port is required"}), 400
         
         # Check if device already exists on this port
-        existing = Device.query.filter_by(serial_port=data.get('serial_port')).first()
+        existing = Device.query.filter_by(serial_port=serial_port).first()
         if existing:
-            return jsonify({"error": f"Device already registered on port {data.get('serial_port')}"}), 409
+            return jsonify({"error": f"Device already registered on port {serial_port}"}), 409
         
         # Connect to device to get info
         device_type = data.get('device_type')
@@ -63,31 +66,36 @@ def register_device():
         try:
             if device_type == 'black_box':
                 from black_box_handler import BlackBoxHandler
-                temp_handler = BlackBoxHandler(data.get('serial_port'))
+                temp_handler = BlackBoxHandler(serial_port)
+            
             elif device_type == 'chimera':
                 from chimera_handler import ChimeraHandler
-                temp_handler = ChimeraHandler(data.get('serial_port'))
+                temp_handler = ChimeraHandler(serial_port)
+                
             else:
-                # Try to auto-detect device type
-                # Try black box first
-                try:
-                    from black_box_handler import BlackBoxHandler
-                    temp_handler = BlackBoxHandler(data.get('serial_port'))
-                    temp_handler.connect()
-                    info = temp_handler.get_info()
-                    device_type = 'black_box'
-                except Exception:
-                    temp_handler.disconnect() if temp_handler else None
-                    # Try chimera
-                    try:
-                        from chimera_handler import ChimeraHandler
-                        temp_handler = ChimeraHandler(data.get('serial_port'))
-                        temp_handler.connect()
-                        info = temp_handler.get_info()
-                        device_type = 'chimera'
-                    except Exception:
+                
+                temp_handler = SerialHandler()
+                connected = temp_handler.connect(serial_port)
+                if connected:
+                    response = temp_handler.send_command("info")
+                    if response and response.startswith("info"):
+                         # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
+                        if response.split()[4] == "black-box":
+                            device_type = 'black_box'
+                            temp_handler = BlackBoxHandler(serial_port)
+                          
+
+                        else:
+                            device_type = 'chimera'
+                            temp_handler = ChimeraHandler(serial_port)
+                       
+                    else:
                         return jsonify({"error": "Could not determine device type. Please specify device_type parameter."}), 400
-            
+
+                else:
+                    return jsonify({"error": "Could not connect."}), 400
+
+
             if temp_handler and not temp_handler.is_connected:
                 temp_handler.connect()
             
@@ -96,9 +104,11 @@ def register_device():
             # Get device name - either from POST request or from device
             device_name = data.get('name') or info.get('device_name')
             if not device_name:
+              
                 temp_handler.disconnect()
                 return jsonify({"error": "Device name not provided and could not be retrieved from device"}), 400
             
+            temp_handler.set_name(device_name)
             # Get MAC address from device
             mac_address = info.get('mac_address')
             
@@ -113,7 +123,7 @@ def register_device():
         db_device = Device(
             name=device_name,
             device_type=device_type,
-            serial_port=data.get('serial_port'),
+            serial_port=serial_port,
             mac_address=mac_address,
             connected=False,
             logging=False
@@ -240,14 +250,6 @@ def find_device_by_mac(mac_address):
         })
     finally:
         db.session.close()
-
-
-@app.route("/api/v1/devices/connected")
-def list_connected_devices():
-    """Get status of all connected devices from DeviceManager"""
-    from device_manager import DeviceManager
-    device_manager = DeviceManager()
-    return jsonify(device_manager.list_devices())
 
 
 @app.route("/api/v1/devices/discover", methods=['POST'])

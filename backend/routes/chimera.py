@@ -21,20 +21,15 @@ def connect_chimera(device_id):
         if device.connected:
             return jsonify({"error": "Device already connected"}), 400
         
-        # Connect to the device
+        # Connect to the device (DeviceManager now handles DB updates)
         success = device_manager.connect_chimera(device_id, device.serial_port)
         if not success:
             return jsonify({"error": "Failed to connect to device"}), 500
         
+        # Get the handler to return device info
         handler = device_manager.get_chimera(device_id)
-        
-        # Update device in database with info from device
-        device.connected = True
-        if handler.mac_address:
-            device.mac_address = handler.mac_address
-        if handler.device_name:
-            device.name = handler.device_name
-        db.session.commit()
+        if not handler:
+            return jsonify({"error": "Handler not found after connection"}), 500
         
         return jsonify({
             "success": True,
@@ -47,7 +42,6 @@ def connect_chimera(device_id):
         }), 200
         
     except Exception as e:
-        db.session.rollback()
         return jsonify({"error": str(e)}), 500
     finally:
         db.session.close()

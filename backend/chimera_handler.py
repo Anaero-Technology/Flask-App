@@ -1,5 +1,3 @@
-import threading
-import time
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -23,42 +21,20 @@ class ChimeraHandler(SerialHandler):
         self.recirculation_minute = 0
         self.sensor_types = {}
         self.past_data = {}
-        self._data_callback = None
-        self._read_thread = None
-        self.is_reading = False
+
+        self.register_automatic_handler("datapoint", self._print_datapoint)
         
     def connect(self):
         super().connect(self.port)
+        # Register automatic message handler for datapoint messages
+        
         # Get device info immediately after connection
         self._get_device_info()
-        # Start the background thread for reading automatic messages
-        self._start_read_thread()
     
     def disconnect(self):
-        self.is_reading = False
-        if self._read_thread:
-            self._read_thread.join(timeout=2)
         super().disconnect()
     
-    def _start_read_thread(self):
-        """Start background thread to read automatic messages"""
-        self.is_reading = True
-        self._read_thread = threading.Thread(target=self._read_automatic_messages)
-        self._read_thread.daemon = True
-        self._read_thread.start()
-    
-    def _read_automatic_messages(self):
-        """Background thread to read automatic datapoint messages"""
-        while self.is_reading and self.is_connected:
-            try:
-                line = self.read_line(timeout=0.1)
-                if line and line.startswith("datapoint"):
-                    self._process_datapoint(line)
-            except Exception:
-                pass
-            time.sleep(0.01)
-    
-    def _process_datapoint(self, line: str):
+    def _print_datapoint(self, line: str):
         """Process automatic datapoint messages"""
         parts = line.split()
         if len(parts) >= 2:
@@ -79,19 +55,14 @@ class ChimeraHandler(SerialHandler):
                     "peak_value": peak_value,
                     "peak_parts": peak_parts
                 })
+
+                print(sensor_data)
         
                 
-                # Call callback if registered
-                if self._data_callback:
-                    self._data_callback(channel, sensor_data)
                     
             except (ValueError, IndexError):
                 pass
-    
-    def set_data_callback(self, callback):
-        """Set callback for automatic datapoint messages"""
-        self._data_callback = callback
-
+ 
     def set_name(self, name: str):
         self.device_name = name
     
