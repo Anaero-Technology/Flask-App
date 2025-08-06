@@ -53,7 +53,7 @@ Register a new device by connecting to it and calling the info command. This aut
 ```json
 {
   "serial_port": "/dev/ttyUSB0",  // Required\
-  "device_type": "black_box",      // Required: "black_box" or "chimera"
+  "device_type": "black_box",      // Optional: "black_box" or "chimera"
   "name": "MyDevice"              // Optional: custom name (if not provided, must be available from device)
 }
 ```
