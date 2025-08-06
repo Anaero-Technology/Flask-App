@@ -9,6 +9,7 @@ class SerialHandler:
     def __init__(self, baudrate: int = 115200, timeout: float = 0.5):
         self.port = None
         self.baudrate = baudrate
+        self.device_type = None 
         self.timeout = timeout
         self.connection = None
         self.is_connected = False
@@ -33,6 +34,26 @@ class SerialHandler:
             return True
         except serial.SerialException as e:
             raise Exception(f"Failed to connect to {self.port}: {str(e)}")
+        
+
+    def get_type(self, port: str) -> str:
+        if self.is_connected:
+            response = self.send_command("info")
+        else:
+            old_port = self.port
+            self.connect(port=port)
+            response = self.send_command("info")
+            self.disconnect()
+            self.port = old_port
+
+        if response is None:
+            raise Exception("No response received from device")
+        
+        # Split the response and get the 5th element (index 4)
+        parts = response.split()
+    
+        return parts[4]
+
     
     def disconnect(self) -> bool:
         if self.connection and self.is_connected:

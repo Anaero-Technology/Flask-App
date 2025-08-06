@@ -8,6 +8,7 @@ class ChimeraHandler(SerialHandler):
         super().__init__()
         self.port = port
         self.device_name = None
+        self.device_type = "chimera"
         self.mac_address = None
         self.is_logging = False
         self.current_channel = 0

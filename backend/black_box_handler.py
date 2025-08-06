@@ -8,6 +8,7 @@ class BlackBoxHandler(SerialHandler):
         super().__init__()
         self.port = port
         self.device_name = None
+        self.device_type = "black_box"
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
@@ -22,7 +23,6 @@ class BlackBoxHandler(SerialHandler):
     def _print_tips(self, line: str):
         """Prints automatic tip messages"""
         try:
-            print(line)
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
 
@@ -51,6 +51,7 @@ class BlackBoxHandler(SerialHandler):
         """Get device information using the info command (auto appends \n at end of command)"""
         if self.is_connected:
             response = self.send_command("info")
+
             if response and response.startswith("info"):
                 # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
                 parts = response.split()

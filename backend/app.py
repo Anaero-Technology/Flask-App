@@ -59,12 +59,15 @@ def register_device():
         if existing:
             return jsonify({"error": f"Device already registered on port {serial_port}"}), 409
         
-        # Connect to device to get info
         device_type = data.get('device_type')
         temp_handler = None
         
         try:
-            if device_type == 'black_box':
+            if not device_type:
+                temp_handler = SerialHandler()
+                device_type = temp_handler.get_type(serial_port)
+
+            if device_type == 'black_box' or 'black-box':
                 from black_box_handler import BlackBoxHandler
                 temp_handler = BlackBoxHandler(serial_port)
             
@@ -72,37 +75,13 @@ def register_device():
                 from chimera_handler import ChimeraHandler
                 temp_handler = ChimeraHandler(serial_port)
                 
-            else:
-                
-                temp_handler = SerialHandler()
-                connected = temp_handler.connect(serial_port)
-                if connected:
-                    response = temp_handler.send_command("info")
-                    if response and response.startswith("info"):
-                         # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
-                        if response.split()[4] == "black-box":
-                            device_type = 'black_box'
-                            temp_handler = BlackBoxHandler(serial_port)
-                          
-
-                        else:
-                            device_type = 'chimera'
-                            temp_handler = ChimeraHandler(serial_port)
-                       
-                    else:
-                        return jsonify({"error": "Could not determine device type. Please specify device_type parameter."}), 400
-
-                else:
-                    return jsonify({"error": "Could not connect."}), 400
-
 
             if temp_handler and not temp_handler.is_connected:
                 temp_handler.connect()
             
-            info = temp_handler.get_info()
             
             # Get device name - either from POST request or from device
-            device_name = data.get('name') or info.get('device_name')
+            device_name = data.get('name') or temp_handler.device_name
             if not device_name:
               
                 temp_handler.disconnect()
@@ -110,7 +89,7 @@ def register_device():
             
             temp_handler.set_name(device_name)
             # Get MAC address from device
-            mac_address = info.get('mac_address')
+            mac_address = temp_handler.mac_address
             
             temp_handler.disconnect()
             
@@ -271,28 +250,26 @@ def discover_device():
                 from black_box_handler import BlackBoxHandler
                 temp_handler = BlackBoxHandler(data.get('serial_port'))
                 temp_handler.connect()
-                info = temp_handler.get_info()
                 device_info = {
                     "device_type": "black_box",
                     "port": data.get('serial_port'),
-                    "device_name": info.get('device_name'),
-                    "mac_address": info.get('mac_address'),
-                    "is_logging": info.get('is_logging'),
-                    "current_log_file": info.get('current_log_file')
+                    "device_name": temp_handler.device_name,
+                    "mac_address": temp_handler.mac_address,
+                    "is_logging": temp_handler.is_logging,
+                    "current_log_file": temp_handler.current_log_file
                 }
             elif data.get('device_type') == 'chimera':
                 from chimera_handler import ChimeraHandler
                 temp_handler = ChimeraHandler(data.get('serial_port'))
                 temp_handler.connect()
-                info = temp_handler.get_info()
                 device_info = {
                     "device_type": "chimera",
-                    "port": data.get('serial_port'),
-                    "device_name": info.get('device_name'),
-                    "mac_address": info.get('mac_address'),
-                    "is_logging": info.get('is_logging'),
-                    "current_channel": info.get('current_channel'),
-                    "seconds_elapsed": info.get('seconds_elapsed')
+                    "port": temp_handler.port,
+                    "device_name": temp_handler.device_name,
+                    "mac_address": temp_handler.mac_address,
+                    "is_logging": temp_handler.is_logging,
+                    "current_channel": temp_handler.current_channel,
+                    "seconds_elapsed": temp_handler.seconds_elapsed
                 }
             
             if temp_handler:

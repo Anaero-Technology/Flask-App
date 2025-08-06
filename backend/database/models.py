@@ -28,13 +28,14 @@ class BlackboxRawData(db.Model):
    timestamp = Column(Integer)
    seconds_elapsed = Column(Integer)
    channel_number = Column (Integer)
-   temperature = Column(Float)
-   pressure = Column(Float)
+   temperature = Column(Float, nullable=True)
+   pressure = Column(Float, nullable=True)
 
 class Sample(db.Model):
    __tablename__ = "samples"
 
    id = Column(Integer, primary_key=True)
+   blackbox_settings_id = Column, ForeignKey("blackboxSettings.id")
    inoculum_id = Column(Integer, ForeignKey("inoculum.id"))
    date_created = Column(DateTime)
    sample_name = Column(String(255), nullable=False)
@@ -51,6 +52,12 @@ class Sample(db.Model):
    other = Column(String)
    reactor  = Column(String)
    temperature = Column(Float)
+
+class BlackBoxSettings(db.Model):
+   __tablename__ = "blackboxSettings"
+
+   id = Column(Integer, primary_key=True)
+
   
 class InoculumSample(db.Model):
    __tablename__ = "inoculum"
