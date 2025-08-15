@@ -1,24 +1,45 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react'
 import DeviceCard from './components/deviceCard'
+import GFM from './assets/gfm.png'
+import refreshIcon from './assets/refresh.svg'
+import './App.css'
+
+
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [devices, setDevices] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const discoverDevices = async () => {
+    setLoading(true)
+    const response = await fetch('/api/v1/devices/discover')
+    setDevices(await response.json())
+    setLoading(false)
+  }
+
+  useEffect(() => {discoverDevices()}, [])
 
   return (
     <>
       <div>
-        <DeviceCard title={"Chimera"} image={"https://placehold.co/100x100/000000/FFF"}/>
-        <DeviceCard title={"Black Box"} image={"https://placehold.co/100x100/000000/FFF"}/>
-        <DeviceCard title={"PLC"} image={"https://placehold.co/100x100/000000/FFF"}/>
+        {devices && devices.map((device, index) => (
+          <DeviceCard 
+            key={index}
+            title={device.device_type == "black-box" ? "Gas-flow meter" : "Chimera"} 
+            name={device.name}
+            image={GFM}
+          />
+        ))}
       </div>
       
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
+      <div className="flex justify-center mt-6">
+        <img 
+          src={refreshIcon}
+          onClick={discoverDevices}
+          className={`w-8 h-8 cursor-pointer hover:scale-110 transition-transform ${loading ? 'animate-spin' : ''}`}
+          style={{ filter: 'invert(0.4)' }}
+          alt="Refresh"
+        />
       </div>
     </>
   )

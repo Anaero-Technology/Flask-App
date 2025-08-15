@@ -191,12 +191,13 @@ def discover_devices():
             if not connected:
                 return
             
-            device_type = device_manager.get_device_by_port(port_info.device).device_type
-            if device_type in ['black-box', 'chimera']:
+            device = device_manager.get_device_by_port(port_info.device)
+            if device.device_type in ['black-box', 'chimera']:
                 with lock:
                     valid_devices.append({
+                        "name": device.device_name,
                         "port": port_info.device,
-                        "device_type": device_type,
+                        "device_type": device.device_type,
                     })
         except Exception as e:
             print(str(e))
