@@ -8,13 +8,15 @@ class BlackBoxHandler(SerialHandler):
         super().__init__()
         self.port = port
         self.device_name = None
-        self.device_type = "black_box"
+        self.device_type = "black-box"
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
-
-        self.register_automatic_handler("tip ", self._print_tips)
         
+        # Handle automatic messages from the blackbox
+        self.register_automatic_handler("tip ", self._print_tips)
+        self.register_automatic_handler("counts ", lambda : None)
+
     def connect(self):
         super().connect(self.port)
         # Get device info immediately after connection
@@ -49,8 +51,8 @@ class BlackBoxHandler(SerialHandler):
 
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
-        if self.is_connected:
-            response = self.send_command("info")
+        if self.connection.is_open:
+            response = self.send_command("info", 1.0)
 
             if response and response.startswith("info"):
                 # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]

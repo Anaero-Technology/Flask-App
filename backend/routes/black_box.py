@@ -14,7 +14,7 @@ def connect_black_box(device_id):
         if not device:
             return jsonify({"error": "Device not found in database"}), 404
         
-        if device.device_type != 'black_box':
+        if device.device_type != 'black-box':
             return jsonify({"error": "Device is not a black box"}), 400
         
         if device.connected:
@@ -57,7 +57,7 @@ def disconnect_black_box(device_id):
             return jsonify({"error": "Device not connected"}), 400
         
         # Disconnect device
-        success = device_manager.disconnect_device('black_box', device_id)
+        success = device_manager.disconnect_device('black-box', device_id)
         if success:
             device.connected = False
             db.session.commit()

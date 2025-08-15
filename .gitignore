@@ -1,8 +1,10 @@
 .env
 .DS_store
-venv
+.vscode/
 backend/__pycache__/
 backend/database/__pycache__/
 backend/routes/__pycache__/
 backend/instance
 backend/tests
+backend/known_issues.md
+backend/venv

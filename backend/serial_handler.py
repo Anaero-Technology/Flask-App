@@ -11,14 +11,32 @@ class SerialHandler:
         self.baudrate = baudrate
         self.device_type = None 
         self.timeout = timeout
-        self.connection = None
-        self.is_connected = False
+        self.connection = serial.Serial()
         self._write_lock = threading.Lock()
         self._reader_thread = None
         self._stop_reading = threading.Event()
         self._command_response_queue = queue.Queue()
         self._line_buffer = ""
         self._automatic_handlers = {}  # Dict of prefix -> handler function
+        
+    
+    def __del__(self):
+        """Destructor to ensure serial connection is closed when object is garbage collected"""
+        try:
+            if self.connection.is_open:
+                self.disconnect()
+        except:
+            # Ignore errors during cleanup
+            pass
+    
+    def __enter__(self):
+        """Context manager support"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Ensure connection is closed when exiting context"""
+        self.disconnect()
+        return False
     
     def connect(self, port: str) -> bool:
         self.port = port
@@ -26,40 +44,40 @@ class SerialHandler:
             self.connection = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
-                timeout=self.timeout
+                timeout=self.timeout,
+                write_timeout=self.timeout
             )
-            self.is_connected = True
             self.clear_buffer()
             self._start_reader_thread()
+            # Small delay to let the connection stabilize
+            time.sleep(0.05)
             return True
         except serial.SerialException as e:
             raise Exception(f"Failed to connect to {self.port}: {str(e)}")
         
 
-    def get_type(self, port: str) -> str:
-        if self.is_connected:
-            response = self.send_command("info")
+    def get_type(self, port: str, timeout: float = 2.0) -> str:
+        if self.connection.is_open:
+            response = self.send_command("info", timeout)
         else:
-            old_port = self.port
             self.connect(port=port)
-            response = self.send_command("info")
-            self.disconnect()
-            self.port = old_port
+            response = self.send_command("info", timeout)
 
         if response is None:
             raise Exception("No response received from device")
         
         # Split the response and get the 5th element (index 4)
         parts = response.split()
-    
-        return parts[4]
+        if len(parts) > 4:
+            return parts[4]
+        else:
+            raise Exception(f"Invalid response format: {response}")
 
     
     def disconnect(self) -> bool:
-        if self.connection and self.is_connected:
+        if self.connection.is_open:
             self._stop_reader_thread()
             self.connection.close()
-            self.is_connected = False
             return True
         return False
     
@@ -75,8 +93,7 @@ class SerialHandler:
     def _start_reader_thread(self):
         """Start the background reader thread"""
         self._stop_reading.clear()
-        self._reader_thread = threading.Thread(target=self._reader_loop)
-        self._reader_thread.daemon = True
+        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
     
     def _stop_reader_thread(self):
@@ -87,7 +104,7 @@ class SerialHandler:
     
     def _reader_loop(self):
         """Main reader loop that continuously reads from serial port"""
-        while not self._stop_reading.is_set() and self.is_connected:
+        while not self._stop_reading.is_set() and self.connection.is_open:
             try:
                 if self.connection and self.connection.in_waiting > 0:
                     data = self.connection.read(self.connection.in_waiting)
@@ -95,8 +112,7 @@ class SerialHandler:
                 else:
                     time.sleep(0.01)
             except Exception:
-                if self.is_connected:
-                    time.sleep(0.1)
+                time.sleep(0.1)
     
     def _process_incoming_data(self, data: bytes):
         """Process incoming serial data byte by byte"""
@@ -106,7 +122,8 @@ class SerialHandler:
             
             while '\n' in self._line_buffer:
                 line, self._line_buffer = self._line_buffer.split('\n', 1)
-                line = line.strip()
+                # Remove both \r and spaces, handle \r\n line endings
+                line = line.rstrip('\r').strip()
                 if line:
                     self._handle_line(line)
         except Exception:
@@ -121,19 +138,22 @@ class SerialHandler:
                 try:
                     handler(line)
                     handled = True
+                    print(f"{line} not put in queue")
                     break
                 except Exception:
                     pass
-        
         # If not handled automatically, add to command response queue
         if not handled:
+            print(f"{line} put in queue")
             self._command_response_queue.put(line)
     
     def send_command(self, command: str, timeout: float = 5.0) -> Optional[str]:
         """Send a command and wait for response"""
-        if not self.is_connected:
+        import time
+        if not self.connection.is_open:
             raise Exception("Device not connected")
         
+        print(f"[{time.time():.2f}] send_command: clearing queue")
         # Clear the response queue before sending
         while not self._command_response_queue.empty():
             try:
@@ -141,20 +161,25 @@ class SerialHandler:
             except queue.Empty:
                 break
         
+        print(f"[{time.time():.2f}] send_command: writing '{command}' to {self.port}")
         # Send command
         with self._write_lock:
             self.connection.write(f"{command}\n".encode())
             self.connection.flush()
         
+        print(f"[{time.time():.2f}] send_command: waiting for response with timeout={timeout}")
         # Wait for response
         try:
-            return self._command_response_queue.get(timeout=timeout)
+            response = self._command_response_queue.get(timeout=timeout)
+            print(f"[{time.time():.2f}] send_command: got response: {response}")
+            return response
         except queue.Empty:
+            print(f"[{time.time():.2f}] send_command: timeout - no response received")
             return None
     
     def send_command_no_wait(self, command: str) -> None:
         """Send a command without waiting for response"""
-        if not self.is_connected:
+        if not self.connection.is_open:
             raise Exception("Device not connected")
         
         with self._write_lock:
@@ -170,7 +195,7 @@ class SerialHandler:
     
     def clear_buffer(self):
         """Clear all buffers"""
-        if self.is_connected and self.connection:
+        if self.connection:
             self.connection.reset_input_buffer()
             self.connection.reset_output_buffer()
             self._line_buffer = ""
@@ -182,7 +207,7 @@ class SerialHandler:
     
     def read_line(self, timeout: Optional[float] = None) -> Optional[str]:
         """Read a line from the command response queue"""
-        if not self.is_connected:
+        if not self.connection.is_open:
             return None
         
         timeout = timeout if timeout is not None else 5.0
