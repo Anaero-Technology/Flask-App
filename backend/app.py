@@ -11,6 +11,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
 CORS(app)  # Enable CORS for all routes
 db.init_app(app)
 device_manager = DeviceManager()
+DeviceManager.set_app(app)  # Set app reference for db
 
 # Create tables
 with app.app_context():
@@ -184,9 +185,8 @@ def discover_devices():
             return
         
         try:
-            # Use context manager to ensure proper cleanup
-            with app.app_context():
-                connected = device_manager.connect(port_info.device)
+            # Connect to the device
+            connected = device_manager.connect(port_info.device)
             
             if not connected:
                 return
@@ -195,9 +195,11 @@ def discover_devices():
             if device.device_type in ['black-box', 'chimera']:
                 with lock:
                     valid_devices.append({
+                        "id": device.id, 
                         "name": device.device_name,
                         "port": port_info.device,
                         "device_type": device.device_type,
+                        "logging": device.is_logging
                     })
         except Exception as e:
             print(str(e))
@@ -205,6 +207,7 @@ def discover_devices():
     
     # Get all available serial ports
     ports = list(serial.tools.list_ports.comports())
+
     
     # Check all ports in parallel with a thread pool
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ports))) as executor:
@@ -237,8 +240,7 @@ def connect_device():
 def disconnect_device_by_port(port):
     """Disconnect a device by port"""
     try:
-        with app.app_context():
-            success = device_manager.disconnect_by_port(port)
+        success = device_manager.disconnect_by_port(port)
         
         if success:
             return jsonify({"message": "Device disconnected successfully"}), 200
@@ -251,8 +253,7 @@ def disconnect_device_by_port(port):
 def disconnect_device(device_id):
     """Disconnect a device by ID"""
     try:
-        with app.app_context():
-            success = device_manager.disconnect_device(device_id)
+        success = device_manager.disconnect_device(device_id)
         
         if success:
             return jsonify({"message": "Device disconnected successfully"}), 200

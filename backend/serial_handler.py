@@ -7,6 +7,7 @@ import queue
 
 class SerialHandler:
     def __init__(self, baudrate: int = 115200, timeout: float = 0.5):
+        self.id = None
         self.port = None
         self.baudrate = baudrate
         self.device_type = None 
@@ -18,6 +19,7 @@ class SerialHandler:
         self._command_response_queue = queue.Queue()
         self._line_buffer = ""
         self._automatic_handlers = {}  # Dict of prefix -> handler function
+        self.on_disconnect = None  # Callback for when connection is lost
         
     
     def __del__(self):
@@ -104,15 +106,27 @@ class SerialHandler:
     
     def _reader_loop(self):
         """Main reader loop that continuously reads from serial port"""
-        while not self._stop_reading.is_set() and self.connection.is_open:
+        while self.connection.is_open:
             try:
                 if self.connection and self.connection.in_waiting > 0:
                     data = self.connection.read(self.connection.in_waiting)
                     self._process_incoming_data(data)
                 else:
                     time.sleep(0.01)
+            except (serial.SerialException, OSError):
+                # Device disconnected - exit the loop
+                break
             except Exception:
                 time.sleep(0.1)
+        
+        # Connection has stopped - call the disconnect callback
+        if self.on_disconnect and callable(self.on_disconnect):
+            try:
+                self.on_disconnect(self.port)
+            except Exception as e:
+                print(f"Error in disconnect callback: {e}")
+      
+          
     
     def _process_incoming_data(self, data: bytes):
         """Process incoming serial data byte by byte"""
@@ -171,7 +185,7 @@ class SerialHandler:
         # Wait for response
         try:
             response = self._command_response_queue.get(timeout=timeout)
-            print(f"[{time.time():.2f}] send_command: got response: {response}")
+            print(f"[{time.time():.2f}] send_command: got response: {repr(response)}")
             return response
         except queue.Empty:
             print(f"[{time.time():.2f}] send_command: timeout - no response received")
