@@ -337,6 +337,245 @@ def discover_device():
 
 
 # Register blueprints
+@app.route("/api/v1/samples", methods=['POST'])
+def create_sample():
+    """Create a new sample with associated inoculum data"""
+    try:
+        from datetime import datetime
+        data = request.get_json()
+        
+        # Create inoculum record if data is provided
+        inoculum = None
+        if any([data.get('inoculum_source'), data.get('inoculum_percent_ts'), data.get('inoculum_percent_vs')]):
+            inoculum = InoculumSample(
+                inoculum_source=data.get('inoculum_source'),
+                inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
+                inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
+                date_created=datetime.now()
+            )
+            db.session.add(inoculum)
+            db.session.flush()  # Get the ID without committing
+        
+        # Create sample record
+        sample = Sample(
+            sample_name=data.get('sample_name'),
+            substrate_source=data.get('substrate_source'),
+            description=data.get('description'),
+            substrate_type=data.get('substrate_type'),
+            substrate_subtype=data.get('substrate_subtype'),
+            ash_content=float(data.get('ash_content')) if data.get('ash_content') else None,
+            c_content=float(data.get('c_content')) if data.get('c_content') else None,
+            n_content=float(data.get('n_content')) if data.get('n_content') else None,
+            substrate_percent_ts=float(data.get('substrate_percent_ts')) if data.get('substrate_percent_ts') else None,
+            substrate_percent_vs=float(data.get('substrate_percent_vs')) if data.get('substrate_percent_vs') else None,
+            author=data.get('author'),
+            other=data.get('other'),
+            reactor=data.get('reactor'),
+            temperature=float(data.get('temperature')) if data.get('temperature') else None,
+            date_created=datetime.now()
+        )
+        
+        db.session.add(sample)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "sample_id": sample.id,
+            "message": "Sample created successfully"
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/samples", methods=['GET'])
+def list_samples():
+    """Get all samples"""
+    try:
+        samples = Sample.query.all()
+        return jsonify([{
+            "id": sample.id,
+            "sample_name": sample.sample_name,
+            "substrate_source": sample.substrate_source,
+            "description": sample.description,
+            "substrate_type": sample.substrate_type,
+            "author": sample.author,
+            "date_created": sample.date_created.isoformat() if sample.date_created else None,
+            "temperature": sample.temperature
+        } for sample in samples])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/inoculum", methods=['POST'])
+def create_inoculum():
+    """Create a new inoculum record"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('inoculum_source'):
+            return jsonify({"error": "inoculum_source is required"}), 400
+        
+        # Create inoculum record
+        from datetime import datetime
+        inoculum = InoculumSample(
+            inoculum_source=data.get('inoculum_source'),
+            inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
+            inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
+            date_created=datetime.now()
+        )
+        
+        db.session.add(inoculum)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "inoculum_id": inoculum.id,
+            "message": "Inoculum created successfully"
+        }), 201
+        
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"error": f"Invalid number format: {str(e)}"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/inoculum", methods=['GET'])
+def list_inoculum():
+    """Get all inoculum records"""
+    try:
+        inoculum_records = InoculumSample.query.all()
+        return jsonify([{
+            "id": inoculum.id,
+            "date_created": inoculum.date_created.isoformat() if inoculum.date_created else None,
+            "inoculum_source": inoculum.inoculum_source,
+            "inoculum_percent_ts": inoculum.inoculum_percent_ts,
+            "inoculum_percent_vs": inoculum.inoculum_percent_vs
+        } for inoculum in inoculum_records])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/samples/<int:sample_id>", methods=['PUT'])
+def update_sample(sample_id):
+    """Update an existing sample"""
+    try:
+        sample = Sample.query.get(sample_id)
+        if not sample:
+            return jsonify({"error": "Sample not found"}), 404
+
+        data = request.get_json()
+        
+        # Update fields
+        if 'sample_name' in data:
+            sample.sample_name = data['sample_name']
+        if 'substrate_source' in data:
+            sample.substrate_source = data['substrate_source']
+        if 'description' in data:
+            sample.description = data['description']
+        if 'substrate_type' in data:
+            sample.substrate_type = data['substrate_type']
+        if 'substrate_subtype' in data:
+            sample.substrate_subtype = data['substrate_subtype']
+        if 'ash_content' in data:
+            sample.ash_content = float(data['ash_content']) if data['ash_content'] else None
+        if 'c_content' in data:
+            sample.c_content = float(data['c_content']) if data['c_content'] else None
+        if 'n_content' in data:
+            sample.n_content = float(data['n_content']) if data['n_content'] else None
+        if 'substrate_percent_ts' in data:
+            sample.substrate_percent_ts = float(data['substrate_percent_ts']) if data['substrate_percent_ts'] else None
+        if 'substrate_percent_vs' in data:
+            sample.substrate_percent_vs = float(data['substrate_percent_vs']) if data['substrate_percent_vs'] else None
+        if 'author' in data:
+            sample.author = data['author']
+        if 'other' in data:
+            sample.other = data['other']
+        if 'reactor' in data:
+            sample.reactor = data['reactor']
+        if 'temperature' in data:
+            sample.temperature = float(data['temperature']) if data['temperature'] else None
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Sample updated successfully"
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/samples/<int:sample_id>", methods=['DELETE'])
+def delete_sample(sample_id):
+    """Delete a sample"""
+    try:
+        sample = Sample.query.get(sample_id)
+        if not sample:
+            return jsonify({"error": "Sample not found"}), 404
+
+        db.session.delete(sample)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Sample deleted successfully"
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['PUT'])
+def update_inoculum(inoculum_id):
+    """Update an existing inoculum"""
+    try:
+        inoculum = InoculumSample.query.get(inoculum_id)
+        if not inoculum:
+            return jsonify({"error": "Inoculum not found"}), 404
+
+        data = request.get_json()
+        
+        # Update fields
+        if 'inoculum_source' in data:
+            inoculum.inoculum_source = data['inoculum_source']
+        if 'inoculum_percent_ts' in data:
+            inoculum.inoculum_percent_ts = float(data['inoculum_percent_ts']) if data['inoculum_percent_ts'] else None
+        if 'inoculum_percent_vs' in data:
+            inoculum.inoculum_percent_vs = float(data['inoculum_percent_vs']) if data['inoculum_percent_vs'] else None
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Inoculum updated successfully"
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['DELETE'])
+def delete_inoculum(inoculum_id):
+    """Delete an inoculum"""
+    try:
+        inoculum = InoculumSample.query.get(inoculum_id)
+        if not inoculum:
+            return jsonify({"error": "Inoculum not found"}), 404
+
+        db.session.delete(inoculum)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Inoculum deleted successfully"
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 app.register_blueprint(black_box_bp)

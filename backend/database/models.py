@@ -24,6 +24,7 @@ class BlackboxRawData(db.Model):
 
    id = Column(Integer, primary_key=True)
    sample_id = Column(Integer, ForeignKey('samples.id'))
+   inoculum_id = Column(Integer, ForeignKey("inoculum.id"))
 
    timestamp = Column(Integer)
    seconds_elapsed = Column(Integer)
@@ -35,8 +36,6 @@ class Sample(db.Model):
    __tablename__ = "samples"
 
    id = Column(Integer, primary_key=True)
-   blackbox_settings_id = Column, ForeignKey("blackboxSettings.id")
-   inoculum_id = Column(Integer, ForeignKey("inoculum.id"))
    date_created = Column(DateTime)
    sample_name = Column(String(255), nullable=False)
    substrate_source = Column(String, nullable=False) # Potentially have substrate source as a separate more detailed table
@@ -63,6 +62,7 @@ class InoculumSample(db.Model):
    __tablename__ = "inoculum"
 
    id = Column(Integer, primary_key=True)
+   date_created = Column(DateTime)
    inoculum_source = Column(String)
    inoculum_percent_ts = Column(Float)
    inoculum_percent_vs = Column(Float)

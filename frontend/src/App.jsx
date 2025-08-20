@@ -1,47 +1,42 @@
-import { useState, useEffect } from 'react'
-import DeviceCard from './components/deviceCard'
-import GFM from './assets/gfm.png'
-import refreshIcon from './assets/refresh.svg'
+import { useState } from 'react'
+import Sidebar from './components/Sidebar'
+import Dashboard from './view/dashboard'
+import SampleForm from './view/SampleForm'
+import InoculumForm from './view/InoculumForm'
+import Database from './view/Database'
 import './App.css'
 
 
 
 function App() {
-  const [devices, setDevices] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [currentView, setCurrentView] = useState('dashboard')
 
-  const discoverDevices = async () => {
-    setLoading(true)
-    const response = await fetch('/api/v1/devices/discover')
-    setDevices(await response.json())
-    setLoading(false)
+  const handleNavigate = (view) => {
+    setCurrentView(view)
   }
 
-  useEffect(() => {discoverDevices()}, [])
 
   return (
-    <>
-      <div>
-        {devices && devices.map((device, index) => (
-          <DeviceCard 
-            key={index}
-            title={device.device_type == "black-box" ? "Gas-flow meter" : "Chimera"} 
-            name={device.name}
-            image={GFM}
-          />
-        ))}
-      </div>
+    <div className="flex">
+      <Sidebar 
+        onNavigate={handleNavigate} 
+        currentView={currentView} 
+      />
       
-      <div className="flex justify-center mt-6">
-        <img 
-          src={refreshIcon}
-          onClick={discoverDevices}
-          className={`w-8 h-8 cursor-pointer hover:scale-110 transition-transform ${loading ? 'animate-spin' : ''}`}
-          style={{ filter: 'invert(0.4)' }}
-          alt="Refresh"
-        />
+      <div className="flex-1 ml-64">
+        {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'create-sample' && <SampleForm />}
+        {currentView === 'create-inoculum' && <InoculumForm />}
+        {currentView === 'experiment' && <div className="p-6">Experiment Form - Coming Soon</div>}
+        {currentView === 'database' && <Database />}
+        {currentView === 'plot' && <div className="p-6">Plot - Coming Soon</div>}
+        {currentView === 'upload' && <div className="p-6">Upload Data - Coming Soon</div>}
+        {currentView === 'blackbox' && <div className="p-6">BlackBox - Coming Soon</div>}
+        {currentView === 'chimera' && <div className="p-6">Chimera - Coming Soon</div>}
+        {currentView === 'monitor' && <div className="p-6">Monitor - Coming Soon</div>}
+        {currentView === 'settings' && <div className="p-6">Settings - Coming Soon</div>}
       </div>
-    </>
+    </div>
   )
 }
 
