@@ -603,6 +603,44 @@ def set_recirculation_time(device_id):
         db.session.close()
 
 
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/name', methods=['POST'])
+def set_name(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+        
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+        
+        data = request.get_json()
+        name = data.get('name')
+        
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        
+        success = handler.set_name(name)
+        
+        if success:
+            # Update database too
+            device.name = name
+            db.session.commit()
+        
+        return jsonify({
+            "success": success,
+            "name": name if success else None
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/send_command', methods=['POST'])
 def send_command(device_id):
     try:

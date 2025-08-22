@@ -14,7 +14,8 @@ function DeviceCard(props){
 
         setIsUpdating(true);
         try {
-            const response = await fetch(`/api/v1/black_box/${props.deviceId}/name`, {
+            const deviceType = props.deviceType === 'black-box' ? 'black_box' : 'chimera';
+            const response = await fetch(`/api/v1/${deviceType}/${props.deviceId}/name`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

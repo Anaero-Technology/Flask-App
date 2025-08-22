@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard'
 import GFM from '../assets/gfm.png'
+import Chimera from "../assets/chimera.jpg"
 import refreshIcon from '../assets/refresh.svg'
 
 
@@ -45,11 +46,12 @@ function Dashboard() {
             <DeviceCard 
               key={device.id || index}
               deviceId={device.id}
+              deviceType={device.device_type}
               title={device.device_type == "black-box" ? "Gas-flow meter" : "Chimera"} 
               name={device.name}
               logging={device.logging}
               port={device.port}
-              image={GFM}
+              image={device.device_type == "black-box" ? GFM : Chimera}
               onNameUpdate={handleNameUpdate}
             />
           ))}

@@ -7,7 +7,7 @@ class ChimeraHandler(SerialHandler):
     def __init__(self, port: str):
         super().__init__()
         self.port = port
-        self.device_name = None
+        self.device_name = "New Device"
         self.device_type = "chimera"
         self.mac_address = None
         self.is_logging = False
@@ -27,8 +27,6 @@ class ChimeraHandler(SerialHandler):
         
     def connect(self):
         super().connect(self.port)
-        # Register automatic message handler for datapoint messages
-        
         # Get device info immediately after connection
         self._get_device_info()
     
@@ -64,12 +62,13 @@ class ChimeraHandler(SerialHandler):
             except (ValueError, IndexError):
                 pass
  
-    def set_name(self, name: str):
+    def set_name(self, name: str) -> bool:
         self.device_name = name
+        return True
     
     def _get_device_info(self):
         """Get device information using the info command"""
-        if self.is_connected:
+        if self.connection.is_open:
             response = self.send_command("info")
             if response and response.startswith("info"):
                 # Parse: info [logging_state] [current_channel] [seconds_elapsed] chimera-max [mac_address]

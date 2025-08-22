@@ -75,7 +75,7 @@ class DeviceManager:
                     from black_box_handler import BlackBoxHandler
                     handler = BlackBoxHandler(port)
                     handler.connect()
-                elif device_type == 'chimera':
+                elif device_type in ['chimera', 'chimera-max']:
                     from chimera_handler import ChimeraHandler
                     handler = ChimeraHandler(port)
                     handler.connect()
@@ -120,6 +120,7 @@ class DeviceManager:
                 return True
                 
             except Exception as e:
+                print(f"EXCEPTION: {e}")
                 if handler:
                     handler.disconnect()
                 return False
