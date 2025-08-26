@@ -576,6 +576,277 @@ def delete_inoculum(inoculum_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
+# Test Management Endpoints
+@app.route("/api/v1/tests", methods=['POST'])
+def create_test():
+    """Create a new test"""
+    try:
+        from datetime import datetime
+        data = request.get_json()
+        
+        if not data.get('name'):
+            return jsonify({"error": "Test name is required"}), 400
+        
+        test = Test(
+            name=data.get('name'),
+            description=data.get('description'),
+            created_by=data.get('created_by'),
+            date_created=datetime.now(),
+            status='setup'
+        )
+        
+        db.session.add(test)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "test_id": test.id,
+            "message": "Test created successfully"
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests", methods=['GET'])
+def list_tests():
+    """Get all tests"""
+    try:
+        tests = Test.query.all()
+        return jsonify([{
+            "id": test.id,
+            "name": test.name,
+            "description": test.description,
+            "created_by": test.created_by,
+            "date_created": test.date_created.isoformat() if test.date_created else None,
+            "date_started": test.date_started.isoformat() if test.date_started else None,
+            "date_ended": test.date_ended.isoformat() if test.date_ended else None,
+            "status": test.status
+        } for test in tests])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/<int:test_id>", methods=['GET'])
+def get_test(test_id):
+    """Get a specific test with its channel configurations"""
+    try:
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+        
+        # Get channel configurations for this test
+        configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
+        
+        return jsonify({
+            "id": test.id,
+            "name": test.name,
+            "description": test.description,
+            "created_by": test.created_by,
+            "date_created": test.date_created.isoformat() if test.date_created else None,
+            "date_started": test.date_started.isoformat() if test.date_started else None,
+            "date_ended": test.date_ended.isoformat() if test.date_ended else None,
+            "status": test.status,
+            "configurations": [{
+                "id": config.id,
+                "device_id": config.device_id,
+                "channel_number": config.channel_number,
+                "inoculum_sample_id": config.inoculum_sample_id,
+                "inoculum_weight_grams": config.inoculum_weight_grams,
+                "substrate_sample_id": config.substrate_sample_id,
+                "substrate_weight_grams": config.substrate_weight_grams,
+                "tumbler_volume": config.tumbler_volume,
+                "notes": config.notes
+            } for config in configurations]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
+def start_test(test_id):
+    """Start a test and assign it to devices"""
+    try:
+        from datetime import datetime
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+        
+        if test.status != 'setup':
+            return jsonify({"error": "Test must be in setup status to start"}), 400
+        
+        # Get all devices involved in this test
+        configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
+        device_ids = list(set([config.device_id for config in configurations]))
+        
+        # Update test status
+        test.status = 'running'
+        test.date_started = datetime.now()
+        
+        # Assign test to devices
+        for device_id in device_ids:
+            device = Device.query.get(device_id)
+            if device:
+                device.active_test_id = test_id
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Test started with {len(device_ids)} devices"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/<int:test_id>/stop", methods=['POST'])
+def stop_test(test_id):
+    """Stop a test"""
+    try:
+        from datetime import datetime
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+        
+        # Update test status
+        test.status = 'completed'
+        test.date_ended = datetime.now()
+        
+        # Remove test from devices
+        devices = Device.query.filter_by(active_test_id=test_id).all()
+        for device in devices:
+            device.active_test_id = None
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Test stopped successfully"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+# Channel Configuration Endpoints
+@app.route("/api/v1/tests/<int:test_id>/configurations", methods=['POST'])
+def create_channel_configuration(test_id):
+    """Create or update channel configurations for a test"""
+    try:
+        data = request.get_json()
+        configurations = data.get('configurations', [])
+        
+        if not configurations:
+            return jsonify({"error": "No configurations provided"}), 400
+        
+        created_configs = []
+        for config_data in configurations:
+            # Check if configuration already exists
+            existing = ChannelConfiguration.query.filter_by(
+                test_id=test_id,
+                device_id=config_data['device_id'],
+                channel_number=config_data['channel_number']
+            ).first()
+            
+            if existing:
+                # Update existing
+                existing.inoculum_sample_id = config_data['inoculum_sample_id']
+                existing.inoculum_weight_grams = config_data['inoculum_weight_grams']
+                existing.substrate_sample_id = config_data.get('substrate_sample_id')
+                existing.substrate_weight_grams = config_data.get('substrate_weight_grams', 0)
+                existing.tumbler_volume = config_data['tumbler_volume']
+                existing.notes = config_data.get('notes')
+                created_configs.append(existing)
+            else:
+                # Create new
+                config = ChannelConfiguration(
+                    test_id=test_id,
+                    device_id=config_data['device_id'],
+                    channel_number=config_data['channel_number'],
+                    inoculum_sample_id=config_data['inoculum_sample_id'],
+                    inoculum_weight_grams=config_data['inoculum_weight_grams'],
+                    substrate_sample_id=config_data.get('substrate_sample_id'),
+                    substrate_weight_grams=config_data.get('substrate_weight_grams', 0),
+                    tumbler_volume=config_data['tumbler_volume'],
+                    notes=config_data.get('notes')
+                )
+                db.session.add(config)
+                created_configs.append(config)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Created/updated {len(created_configs)} channel configurations"
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/upload-csv", methods=['POST'])
+def upload_csv_configuration():
+    """Parse CSV file and return channel configurations"""
+    try:
+        import csv
+        import io
+        
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({"error": "File must be a CSV"}), 400
+        
+        # Read and parse CSV
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        configurations = []
+        for row_num, row in enumerate(csv_reader, start=1):
+            try:
+                # Check if we've reached the "End of data" marker
+                sample_description = row.get('Sample description', '').strip()
+                if sample_description == 'End of data':
+                    break
+                
+                # Skip empty rows or rows with non-numeric sample descriptions
+                if not sample_description or not sample_description.isdigit():
+                    continue
+                
+                # Parse CSV columns based on the format:
+                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml)
+                channel_number = int(sample_description)
+                in_service = int(row['In service']) == 1
+                inoculum_only = int(row['Inoculum only']) == 1
+                inoculum_weight = float(row['Inoculum mass VS (g)'])
+                substrate_weight = 0 if inoculum_only else float(row['Sample mass VS (g)'])
+                tumbler_volume = float(row['Tumbler volume (ml)'])
+                
+                # Only include channels that are in service
+                if in_service:
+                    configurations.append({
+                        'channel_number': channel_number,
+                        'inoculum_weight_grams': inoculum_weight,
+                        'substrate_weight_grams': substrate_weight,
+                        'tumbler_volume': tumbler_volume,
+                        'is_control': inoculum_only,
+                        'notes': f"Imported from CSV - {'Control (inoculum only)' if inoculum_only else 'Test sample'}"
+                    })
+            except (ValueError, KeyError) as e:
+                return jsonify({"error": f"Invalid data in row {row_num}: {str(e)}"}), 400
+        
+        return jsonify({
+            "success": True,
+            "configurations": configurations,
+            "message": f"Parsed {len(configurations)} channel configurations from CSV"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 app.register_blueprint(black_box_bp)

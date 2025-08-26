@@ -5,7 +5,7 @@ function Sidebar({ onNavigate, currentView }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'experiment', label: 'Experiment Form' },
+    { id: 'test', label: 'Start Test' },
     { id: 'database', label: 'Database' },
     { id: 'plot', label: 'Plot' },
     { id: 'upload', label: 'Upload Data' },

@@ -17,20 +17,22 @@ class Device(db.Model):
     mac_address = Column(String(50), nullable=True, unique=True)  # Unique identifier
     connected = Column(Boolean, nullable=False, default=False)
     logging = Column(Boolean, nullable=False, default=False)
+    active_test_id = Column(Integer, ForeignKey('tests.id'), nullable=True)
 
 
 class BlackboxRawData(db.Model):
    __tablename__ = "blackboxRawData"
 
    id = Column(Integer, primary_key=True)
-   sample_id = Column(Integer, ForeignKey('samples.id'))
-   inoculum_id = Column(Integer, ForeignKey("inoculum.id"))
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   channel_number = Column(Integer, nullable=False)
 
    timestamp = Column(Integer)
    seconds_elapsed = Column(Integer)
-   channel_number = Column (Integer)
    temperature = Column(Float, nullable=True)
    pressure = Column(Float, nullable=True)
+   
 
 class Sample(db.Model):
    __tablename__ = "samples"
@@ -66,5 +68,40 @@ class InoculumSample(db.Model):
    inoculum_source = Column(String)
    inoculum_percent_ts = Column(Float)
    inoculum_percent_vs = Column(Float)
+
+
+class Test(db.Model):
+   __tablename__ = "tests"
+
+   id = Column(Integer, primary_key=True)
+   name = Column(String(255), nullable=False)
+   description = Column(String)
+   date_created = Column(DateTime)
+   date_started = Column(DateTime)
+   date_ended = Column(DateTime)
+   created_by = Column(String)
+   status = Column(String, default="setup")  # setup, running, completed
+
+
+class ChannelConfiguration(db.Model):
+   __tablename__ = "channel_configurations"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   channel_number = Column(Integer, nullable=False)  # 1-15
+   
+   inoculum_sample_id = Column(Integer, ForeignKey('inoculum.id'), nullable=False)
+   inoculum_weight_grams = Column(Float, nullable=False)
+   substrate_sample_id = Column(Integer, ForeignKey('samples.id'), nullable=True)
+   substrate_weight_grams = Column(Float, nullable=False, default=0)  # 0 for controls
+   tumbler_volume = Column(Float, nullable=False)  # Volume of gas required for a tip
+   
+   notes = Column(String)
+   
+   # Ensure unique channel per test
+   __table_args__ = (
+       db.UniqueConstraint('test_id', 'device_id', 'channel_number', name='unique_test_device_channel'),
+   )
   
 

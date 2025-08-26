@@ -4,6 +4,7 @@ import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import InoculumForm from './view/InoculumForm'
 import Database from './view/Database'
+import TestForm from './view/TestForm'
 import './App.css'
 
 
@@ -27,7 +28,7 @@ function App() {
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'create-sample' && <SampleForm />}
         {currentView === 'create-inoculum' && <InoculumForm />}
-        {currentView === 'experiment' && <div className="p-6">Experiment Form - Coming Soon</div>}
+        {currentView === 'test' && <TestForm />}
         {currentView === 'database' && <Database />}
         {currentView === 'plot' && <div className="p-6">Plot - Coming Soon</div>}
         {currentView === 'upload' && <div className="p-6">Upload Data - Coming Soon</div>}
