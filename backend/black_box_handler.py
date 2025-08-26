@@ -134,7 +134,7 @@ class BlackBoxHandler(SerialHandler):
             if not line:
                 continue
                 
-            if line == "files start":
+            if line == "file start":
                 files_started = True
             elif line == "done files":
                 break
@@ -154,10 +154,10 @@ class BlackBoxHandler(SerialHandler):
     def download_file(self, filename: str, max_bytes: Optional[int] = None) -> Tuple[bool, List[str]]:
         """Download a file from the SD card"""
         if max_bytes:
-            command = f"download {filename} {max_bytes}"
+            command = f"download /{filename} {max_bytes}"
         else:
             # If no max_bytes specified, download entire file
-            command = f"download {filename} 999999999"
+            command = f"download /{filename} 999999999"
         
         self.clear_buffer()
         self.send_command_no_wait(command)
@@ -166,7 +166,7 @@ class BlackBoxHandler(SerialHandler):
         response = self.read_line(timeout=5)
         if response == "failed download nofile":
             return False, ["File does not exist"]
-        elif response != "download start":
+        elif not response.startswith("download start"):
             return False, ["Failed to start download"]
         
         # Read file lines
@@ -189,7 +189,7 @@ class BlackBoxHandler(SerialHandler):
     
     def download_file_from(self, filename: str, byte_from: int) -> Tuple[bool, List[str]]:
         """Download a file from a specific byte position"""
-        command = f"downloadFrom {filename} {byte_from}"
+        command = f"downloadFrom /{filename} {byte_from}"
         
         self.clear_buffer()
         self.send_command_no_wait(command)
@@ -198,7 +198,7 @@ class BlackBoxHandler(SerialHandler):
         response = self.read_line(timeout=5)
         if response == "failed download nofile":
             return False, ["File does not exist"]
-        elif response != "download start":
+        elif not response.startswith("download start"):
             return False, ["Failed to start download"]
         
         lines = []
@@ -218,7 +218,7 @@ class BlackBoxHandler(SerialHandler):
     
     def delete_file(self, filename: str) -> Tuple[bool, str]:
         """Delete a file from the SD card"""
-        response = self.send_command(f"delete {filename}")
+        response = self.send_command(f"delete /{filename}")
         
         if response == "done delete":
             return True, "File deleted successfully"

@@ -6,6 +6,31 @@ black_box_bp = Blueprint('black_box', __name__)
 device_manager = DeviceManager()
 
 
+@black_box_bp.route('/api/v1/black_box/connected', methods=['GET'])
+def get_connected_black_boxes():
+    """Get all connected BlackBox devices from database"""
+    try:
+        connected_black_boxes = Device.query.filter_by(
+            device_type='black-box',
+            connected=True
+        ).all()
+        
+        devices_list = [{
+            "device_id": device.id,
+            "name": device.name,
+            "port": device.serial_port,
+            "mac_address": device.mac_address,
+            "connected": device.connected,
+            "logging": device.logging
+        } for device in connected_black_boxes]
+        
+        return jsonify(devices_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/connect', methods=['POST'])
 def connect_black_box(device_id):
     try:
