@@ -6,6 +6,7 @@ import InoculumForm from './view/InoculumForm'
 import Database from './view/Database'
 import TestForm from './view/TestForm'
 import BlackBox from './view/BlackBox'
+import Chimera from './view/Chimera'
 import './App.css'
 
 
@@ -34,7 +35,7 @@ function App() {
         {currentView === 'plot' && <div className="p-6">Plot - Coming Soon</div>}
         {currentView === 'upload' && <div className="p-6">Upload Data - Coming Soon</div>}
         {currentView === 'blackbox' && <BlackBox />}
-        {currentView === 'chimera' && <div className="p-6">Chimera - Coming Soon</div>}
+        {currentView === 'chimera' && <Chimera />}
         {currentView === 'monitor' && <div className="p-6">Monitor - Coming Soon</div>}
         {currentView === 'settings' && <div className="p-6">Settings - Coming Soon</div>}
       </div>

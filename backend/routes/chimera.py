@@ -7,6 +7,31 @@ chimera_bp = Blueprint('chimera', __name__)
 device_manager = DeviceManager()
 
 
+@chimera_bp.route('/api/v1/chimera/connected', methods=['GET'])
+def get_connected_chimeras():
+    """Get all connected Chimera devices from database"""
+    try:
+        connected_chimeras = Device.query.filter(
+            Device.device_type.in_(['chimera', 'chimera-max']),
+            Device.connected == True
+        ).all()
+        
+        devices_list = [{
+            "device_id": device.id,
+            "name": device.name,
+            "port": device.serial_port,
+            "mac_address": device.mac_address,
+            "connected": device.connected,
+            "logging": device.logging
+        } for device in connected_chimeras]
+        
+        return jsonify(devices_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/connect', methods=['POST'])
 def connect_chimera(device_id):
     try:

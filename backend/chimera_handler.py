@@ -120,6 +120,11 @@ class ChimeraHandler(SerialHandler):
         """Get list of files on SD card"""
         response = self.send_command("files")
         
+        # First response might be memory info, need to look for "files start"
+        if response and response.startswith("memory"):
+            # Read the next line which should be "files start"
+            response = self.read_line(timeout=5)
+        
         if not response or response != "files start":
             return False, []
         
@@ -135,7 +140,7 @@ class ChimeraHandler(SerialHandler):
                     filename = parts[1]
                     filesize = int(parts[2])
                     files.append({
-                        "filename": filename,
+                        "name": filename,
                         "size": filesize
                     })
             elif line == "done files":

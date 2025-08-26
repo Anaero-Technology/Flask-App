@@ -234,8 +234,8 @@ function BlackBox() {
 
             {/* File Manager Modal */}
             {showFileManager && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-3/4 max-w-4xl max-h-3/4 overflow-y-auto">
+                <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-3/4 max-w-4xl">
+                    <div className="bg-white rounded-lg p-6 max-h-[80vh] overflow-y-auto shadow-2xl border">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-2xl font-bold">
                                 Files on {selectedDevice?.name}
