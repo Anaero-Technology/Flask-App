@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_sse import sse
 from device_manager import DeviceManager
 from database.models import *
 from datetime import datetime
@@ -697,6 +698,35 @@ def send_command(device_id):
         db.session.close()
 
 
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/stream', methods=['GET'])
+def stream(device_id):
+    """SSE endpoint for real-time chimera notifications for a specific device"""
+    try:
+        # Verify device exists and is connected
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+        
+        if device.device_type not in ['chimera', 'chimera-max']:
+            return jsonify({"error": "Device is not a chimera"}), 400
+        
+        # Check both database and device manager state
+        if not device.connected:
+            return jsonify({"error": "Device not connected in database"}), 400
+            
+        # Verify device manager has active handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not active"}), 400
+        
+        # Return SSE stream directly
+        print(f"Starting SSE stream for chimera device {device_id}")
+        return sse.stream()
+        
+    finally:
+        db.session.close()
+
+
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/data_stream', methods=['GET'])
 def get_data_stream_info(device_id):
     """Get information about how to receive real-time data"""
@@ -707,9 +737,9 @@ def get_data_stream_info(device_id):
             return jsonify({"error": "Device not found or not connected"}), 404
         
         return jsonify({
-            "message": "Chimera devices send automatic datapoint messages during logging",
+            "message": "Use /api/v1/chimera/{device_id}/stream for real-time SSE datapoint streaming",
             "format": "datapoint [channel_number] [sensor_data...]",
-            "note": "Consider implementing WebSocket or Server-Sent Events for real-time data streaming"
+            "stream_endpoint": f"/api/v1/chimera/{device_id}/stream"
         })
         
     finally:

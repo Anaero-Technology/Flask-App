@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard'
+import TipNotification from '../components/TipNotification'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
 import refreshIcon from '../assets/refresh.svg'
@@ -41,6 +42,18 @@ function Dashboard() {
     return (
       <div>
         <h1 className="text-4xl font-bold text-black pl-6 m-6">Connected Devices</h1>
+        
+        {/* Show tip notifications for connected blackbox devices */}
+        <div className="p-6 pb-2">
+          {devices && devices
+            .filter(device => device.device_type === "black-box")
+            .map((device, index) => (
+            <div key={`tip-${device.id || index}`} className="mb-4">
+              <TipNotification deviceId={device.id} />
+            </div>
+          ))}
+        </div>
+        
         <div className="p-6 pt-6">
           {devices && devices.map((device, index) => (
             <DeviceCard 

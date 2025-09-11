@@ -12,6 +12,7 @@ class BlackBoxHandler(SerialHandler):
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
+        self.sse_callback = None  # Callback for SSE notifications
         
         # Handle automatic messages from the blackbox
         self.register_automatic_handler("tip ", self._print_tips)
@@ -22,8 +23,12 @@ class BlackBoxHandler(SerialHandler):
         # Get device info immediately after connection
         self._get_device_info()
     
+    def set_sse_callback(self, callback):
+        """Set the SSE notification callback"""
+        self.sse_callback = callback
+    
     def _print_tips(self, line: str):
-        """Prints automatic tip messages"""
+        """Prints automatic tip messages and sends SSE notification"""
         try:
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
@@ -43,12 +48,28 @@ class BlackBoxHandler(SerialHandler):
             print(f"[AUTOMATIC TIP] Tip #{tip_data['tip_number']} - "
                 f"Channel: {tip_data['channel_number']}, "
                 f"Temp: {tip_data['temperature']}°C, "
-                f"Pressure: {tip_data['pressure']} PSI")                
-                    
+                f"Pressure: {tip_data['pressure']} PSI")
+            
+            # Send SSE notification through callback
+            sse_data = {
+                "type": "tip_event",
+                "device_name": self.device_name,
+                "port": self.port,
+                "tip_data": tip_data
+            }
+            print(f"Publishing SSE notification: {sse_data}")
+            
+            if self.sse_callback:
+                try:
+                    self.sse_callback(sse_data, 'tip')
+                    print("SSE publish successful")
+                except Exception as e:
+                    print(f"SSE publish failed: {e}")
+    
         except (ValueError, IndexError):
             pass
-    
 
+  
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
         if self.connection.is_open:

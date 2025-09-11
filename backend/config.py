@@ -14,6 +14,11 @@ class Config:
     
     # Format the database URI
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
+    
+    # Redis configuration for Flask-SSE
+    REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+    REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+    REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}"
 
     # Other Flask-SQLAlchemy settings
     SQLALCHEMY_TRACK_MODIFICATIONS = False

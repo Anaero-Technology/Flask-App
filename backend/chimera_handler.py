@@ -22,6 +22,7 @@ class ChimeraHandler(SerialHandler):
         self.recirculation_minute = 0
         self.sensor_types = {}
         self.past_data = {}
+        self.sse_callback = None  # Callback for SSE notifications
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
         
@@ -33,10 +34,14 @@ class ChimeraHandler(SerialHandler):
     def disconnect(self):
         super().disconnect()
     
+    def set_sse_callback(self, callback):
+        """Set the SSE notification callback"""
+        self.sse_callback = callback
+    
     def _print_datapoint(self, line: str):
-        """Process automatic datapoint messages"""
+        """Process automatic datapoint messages and send SSE notification"""
         parts = line.split()
-        if len(parts) >= 2:
+        if len(parts) >= 10:  # Minimum parts needed for full datapoint
             try:
                 channel = int(parts[1])
                 sensor_data = []
@@ -55,11 +60,26 @@ class ChimeraHandler(SerialHandler):
                     "peak_parts": peak_parts
                 })
 
-                print(sensor_data)
-        
+                print(f"[CHIMERA DATAPOINT] Channel {channel} - Sensor {sensor_num} ({gas_name}): {peak_value}")
                 
-                    
-            except (ValueError, IndexError):
+                # Send SSE notification through callback
+                sse_data = {
+                    "type": "datapoint_event",
+                    "device_name": self.device_name,
+                    "port": self.port,
+                    "channel": channel,
+                    "sensor_data": sensor_data
+                }
+                
+                if self.sse_callback:
+                    try:
+                        self.sse_callback(sse_data, 'datapoint')
+                        print(f"SSE notification sent for channel {channel}")
+                    except Exception as e:
+                        print(f"SSE publish failed: {e}")
+                
+            except (ValueError, IndexError) as e:
+                print(f"Failed to parse datapoint: {e}")
                 pass
  
     def set_name(self, name: str) -> bool:

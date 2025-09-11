@@ -7,3 +7,4 @@ rq
 pyserial
 python-dotenv
 gunicorn
+flask-sse

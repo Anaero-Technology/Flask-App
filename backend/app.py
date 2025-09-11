@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_sse import sse
 from database.models import *
 import serial.tools.list_ports
 from device_manager import DeviceManager
@@ -8,6 +9,7 @@ import atexit
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
+app.config["REDIS_URL"] = Config.REDIS_URL
 CORS(app)  # Enable CORS for all routes
 db.init_app(app)
 device_manager = DeviceManager()
@@ -846,6 +848,7 @@ def upload_csv_configuration():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
 
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp

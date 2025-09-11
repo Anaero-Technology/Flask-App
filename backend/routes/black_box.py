@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_sse import sse
 from device_manager import DeviceManager
 from database.models import *
 
@@ -414,7 +415,7 @@ def get_hourly_tips(device_id):
             "data": lines if success else None,
             "error": lines[0] if not success and lines else None
         })
-        
+    
     finally:
         db.session.close()
 
@@ -446,5 +447,33 @@ def send_command(device_id):
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+@black_box_bp.route('/api/v1/black_box/<int:device_id>/stream', methods=['GET'])
+def stream(device_id):
+    """SSE endpoint for real-time blackbox notifications for a specific device"""
+    try:
+        # Verify device exists and is connected
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+        
+        if device.device_type != 'black-box':
+            return jsonify({"error": "Device is not a black-box"}), 400
+        
+        # Check both database and device manager state
+        if not device.connected:
+            return jsonify({"error": "Device not connected in database"}), 400
+            
+        # Verify device manager has active handler
+        handler = device_manager.get_black_box(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not active"}), 400
+        
+        # Return SSE stream directly
+        print(f"Starting SSE stream for device {device_id}")
+        return sse.stream()
+        
     finally:
         db.session.close()

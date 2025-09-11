@@ -24,7 +24,7 @@ class DeviceManager:
     def set_app(cls, app):
         """Set the Flask app reference for database operations"""
         cls._app = app
-    
+
     def _handle_disconnect(self, port: str):
         """Handle device disconnection - update database and remove from active handlers"""
         if port in self._active_handlers:
@@ -74,10 +74,12 @@ class DeviceManager:
                 if device_type in ['black_box', 'black-box']:
                     from black_box_handler import BlackBoxHandler
                     handler = BlackBoxHandler(port)
+                    handler.sse_callback = self.send_sse_notification  # Set SSE callback
                     handler.connect()
                 elif device_type in ['chimera', 'chimera-max']:
                     from chimera_handler import ChimeraHandler
                     handler = ChimeraHandler(port)
+                    handler.sse_callback = self.send_sse_notification  # Set SSE callback
                     handler.connect()
                 else:
                     return False
@@ -142,6 +144,8 @@ class DeviceManager:
             
             # Create and connect handler
             handler = BlackBoxHandler(port)
+            handler.id = device_id  # Set the device ID
+            handler.sse_callback = self.send_sse_notification  # Set SSE callback
             handler.connect()
             
             # Set the disconnect callback
@@ -178,6 +182,7 @@ class DeviceManager:
             
             # Create and connect handler
             handler = ChimeraHandler(port)
+            handler.sse_callback = self.send_sse_notification  # Set SSE callback
             handler.connect()
             
             # Set the disconnect callback
@@ -259,12 +264,14 @@ class DeviceManager:
             if device.device_type == "black-box":
                 from black_box_handler import BlackBoxHandler
                 handler = BlackBoxHandler(device.serial_port)
+                handler.sse_callback = self.send_sse_notification  # Set SSE callback
                 handler.connect()
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
             elif device.device_type == "chimera":
                 from chimera_handler import ChimeraHandler
                 handler = ChimeraHandler(device.serial_port)
+                handler.sse_callback = self.send_sse_notification  # Set SSE callback
                 handler.connect()
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
@@ -351,3 +358,17 @@ class DeviceManager:
     def is_port_connected(self, port: str) -> bool:
         """Check if a port is currently connected"""
         return port in self._active_handlers
+    
+    def send_sse_notification(self, notification_data, event_type='message'):
+        """Send SSE notification with proper Flask app context"""
+        if not self._app:
+            print("Failed to send SSE notification: No Flask app context available")
+            return
+        
+        try:
+            with self._app.app_context():
+                from flask_sse import sse
+                sse.publish(notification_data, type=event_type)
+                print(f"Published SSE notification: {notification_data}")
+        except Exception as e:
+            print(f"Failed to send SSE notification: {e}")
