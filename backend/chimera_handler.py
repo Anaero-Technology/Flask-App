@@ -1,3 +1,5 @@
+import time
+import json
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -22,7 +24,8 @@ class ChimeraHandler(SerialHandler):
         self.recirculation_minute = 0
         self.sensor_types = {}
         self.past_data = {}
-        self.sse_callback = None  # Callback for SSE notifications
+        self.app = None  # Flask app context for database operations
+        self.test_id = None  # Current test ID for database logging
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
         
@@ -34,9 +37,6 @@ class ChimeraHandler(SerialHandler):
     def disconnect(self):
         super().disconnect()
     
-    def set_sse_callback(self, callback):
-        """Set the SSE notification callback"""
-        self.sse_callback = callback
     
     def _print_datapoint(self, line: str):
         """Process automatic datapoint messages and send SSE notification"""
@@ -62,21 +62,51 @@ class ChimeraHandler(SerialHandler):
 
                 print(f"[CHIMERA DATAPOINT] Channel {channel} - Sensor {sensor_num} ({gas_name}): {peak_value}")
                 
-                # Send SSE notification through callback
-                sse_data = {
-                    "type": "datapoint_event",
-                    "device_name": self.device_name,
-                    "port": self.port,
-                    "channel": channel,
-                    "sensor_data": sensor_data
-                }
-                
-                if self.sse_callback:
+                # Send SSE notification directly
+                if self.app:
                     try:
-                        self.sse_callback(sse_data, 'datapoint')
-                        print(f"SSE notification sent for channel {channel}")
+                        with self.app.app_context():
+                            from flask_sse import sse
+                            sse_data = {
+                                "type": "datapoint_event",
+                                "device_name": self.device_name,
+                                "port": self.port,
+                                "channel": channel,
+                                "sensor_data": sensor_data
+                            }
+                            sse.publish(sse_data, type='datapoint')
+                            print(f"Published SSE notification for channel {channel}")
                     except Exception as e:
                         print(f"SSE publish failed: {e}")
+                
+                # Save datapoint to database if test_id is set and app context is available
+                if self.test_id and self.app and hasattr(self, 'id'):
+                    try:
+                        with self.app.app_context():
+                            from database.models import ChimeraRawData, db
+                            
+                            # Create new ChimeraRawData entry
+                            raw_data = ChimeraRawData(
+                                test_id=self.test_id,
+                                device_id=self.id,
+                                channel_number=channel,
+                                timestamp=int(time.time()),  # Current Unix timestamp
+                                sensor_number=sensor_num,
+                                gas_name=gas_name,
+                                peak_value=peak_value,
+                                peak_parts=json.dumps(peak_parts)  # Store as JSON string
+                            )
+                            
+                            db.session.add(raw_data)
+                            db.session.commit()
+                            print(f"Saved chimera datapoint to database: Test {self.test_id}, Channel {channel}")
+                            
+                    except Exception as e:
+                        print(f"Failed to save chimera datapoint to database: {e}")
+                        try:
+                            db.session.rollback()
+                        except:
+                            pass
                 
             except (ValueError, IndexError) as e:
                 print(f"Failed to parse datapoint: {e}")
@@ -132,7 +162,7 @@ class ChimeraHandler(SerialHandler):
             self.is_logging = False
             return True, "Logging stopped successfully"
         elif response == "failed stoplogging notlogging":
-            return True, "Device is not currently logging"
+            return False, "Device is already not logging"
         else:
             return False, f"Unexpected response: {response}"
     
@@ -434,6 +464,10 @@ class ChimeraHandler(SerialHandler):
             return False, "Cannot change recirculation time while logging"
         else:
             return False, f"Unexpected response: {response}"
+    
+    def set_test_id(self, test_id):
+        """Set the current test ID for database logging"""
+        self.test_id = test_id
     
     def send_raw_command(self, command: str) -> str:
         """Send a raw command to the device"""

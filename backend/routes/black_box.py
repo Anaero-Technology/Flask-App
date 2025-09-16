@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_sse import sse
+from datetime import datetime
 from device_manager import DeviceManager
 from database.models import *
 
@@ -83,7 +84,7 @@ def disconnect_black_box(device_id):
             return jsonify({"error": "Device not connected"}), 400
         
         # Disconnect device
-        success = device_manager.disconnect_device('black-box', device_id)
+        success = device_manager.disconnect_device(device_id)
         if success:
             device.connected = False
             db.session.commit()
@@ -116,16 +117,59 @@ def start_logging(device_id):
         if not filename:
             return jsonify({"error": "filename is required"}), 400
         
+        # Handle test creation/linking
+        test_id = data.get('test_id')
+        test = None
+        
+        if test_id:
+            # Use existing test
+            test = Test.query.get(test_id)
+            if not test:
+                return jsonify({"error": "Test not found"}), 404
+        else:
+            # Create new test automatically
+            test_name = data.get('test_name', f"BlackBox Log - {device.name} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            test = Test(
+                name=test_name,
+                description=data.get('test_description', f"Auto-created test for BlackBox logging on {device.name}"),
+                created_by=data.get('created_by', 'system'),
+                date_created=datetime.now(),
+                status='running',
+                date_started=datetime.now()
+            )
+            db.session.add(test)
+            db.session.flush()  # Get the ID without committing
+        
+        # Start logging on device
         success, message = handler.start_logging(filename)
         if success:
+            # Link test to handler and device
+            handler.set_test_id(test.id)
             device.logging = True
+            device.active_test_id = test.id
+            
+            # Update test status if it was existing and in setup
+            if test.status == 'setup':
+                test.status = 'running'
+                test.date_started = datetime.now()
+            
             db.session.commit()
-        
-        return jsonify({
-            "success": success,
-            "message": message,
-            "filename": filename
-        })
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "filename": filename,
+                "test_id": test.id,
+                "test_name": test.name
+            })
+        else:
+            # If logging failed and we created a test, don't save it
+            if not test_id:  # Only rollback if we created a new test
+                db.session.rollback()
+            return jsonify({
+                "success": False,
+                "message": message
+            })
         
     except Exception as e:
         db.session.rollback()
@@ -150,12 +194,28 @@ def stop_logging(device_id):
         success, message = handler.stop_logging()
         if success:
             device.logging = False
-            db.session.commit()
+            
+            if device.active_test_id:
+                test = Test.query.get(device.active_test_id)
+                if test and test.status == 'running':
+                    test.status = 'completed'
+                    test.date_ended = datetime.now()
         
-        return jsonify({
-            "success": success,
-            "message": message
-        })
+                # Clear test from device and handler
+                device.active_test_id = None
+                handler.set_test_id(None)
+            
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": message
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": message
+            })
         
     except Exception as e:
         db.session.rollback()

@@ -2,7 +2,8 @@ import threading
 from typing import Dict, Union, Optional
 from database.models import Device, db
 from serial_handler import SerialHandler
-
+from black_box_handler import BlackBoxHandler
+from chimera_handler import ChimeraHandler
 
 class DeviceManager:
     _instance = None
@@ -72,17 +73,14 @@ class DeviceManager:
             handler = None
             try:
                 if device_type in ['black_box', 'black-box']:
-                    from black_box_handler import BlackBoxHandler
                     handler = BlackBoxHandler(port)
-                    handler.sse_callback = self.send_sse_notification  # Set SSE callback
-                    handler.connect()
                 elif device_type in ['chimera', 'chimera-max']:
-                    from chimera_handler import ChimeraHandler
                     handler = ChimeraHandler(port)
-                    handler.sse_callback = self.send_sse_notification  # Set SSE callback
-                    handler.connect()
                 else:
                     return False
+                
+                handler.app = self._app  # Set app context
+                handler.connect()
                 
                 # If the device isn't already in the database
                 if not device:
@@ -105,7 +103,8 @@ class DeviceManager:
                     db.session.commit()
                     db.session.refresh(device)
                 else:
-                    device.connected = True       
+                    device.connected = True
+                    handler.set_test_id(device.active_test_id)   
                     if device_name:
                         device.name = device_name
                         handler.set_name(device_name)
@@ -145,7 +144,7 @@ class DeviceManager:
             # Create and connect handler
             handler = BlackBoxHandler(port)
             handler.id = device_id  # Set the device ID
-            handler.sse_callback = self.send_sse_notification  # Set SSE callback
+            handler.app = self._app  # Set app context
             handler.connect()
             
             # Set the disconnect callback
@@ -182,7 +181,8 @@ class DeviceManager:
             
             # Create and connect handler
             handler = ChimeraHandler(port)
-            handler.sse_callback = self.send_sse_notification  # Set SSE callback
+            handler.id = device_id  # Set the device ID
+            handler.app = self._app  # Set app context
             handler.connect()
             
             # Set the disconnect callback
@@ -249,7 +249,7 @@ class DeviceManager:
     def get_device(self, device_id: int) -> Optional[Union['BlackBoxHandler', 'ChimeraHandler']]:
         if not self._app:
             return None
-            
+        
         with self._app.app_context():
             # First check if device exists and is connected in database
             device = Device.query.get(device_id)
@@ -264,14 +264,16 @@ class DeviceManager:
             if device.device_type == "black-box":
                 from black_box_handler import BlackBoxHandler
                 handler = BlackBoxHandler(device.serial_port)
-                handler.sse_callback = self.send_sse_notification  # Set SSE callback
+                handler.app = self._app  # Set app context
+                handler.id = device.id  # Set device ID
                 handler.connect()
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
             elif device.device_type == "chimera":
                 from chimera_handler import ChimeraHandler
                 handler = ChimeraHandler(device.serial_port)
-                handler.sse_callback = self.send_sse_notification  # Set SSE callback
+                handler.app = self._app  # Set app context
+                handler.id = device.id  # Set device ID
                 handler.connect()
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
@@ -359,16 +361,3 @@ class DeviceManager:
         """Check if a port is currently connected"""
         return port in self._active_handlers
     
-    def send_sse_notification(self, notification_data, event_type='message'):
-        """Send SSE notification with proper Flask app context"""
-        if not self._app:
-            print("Failed to send SSE notification: No Flask app context available")
-            return
-        
-        try:
-            with self._app.app_context():
-                from flask_sse import sse
-                sse.publish(notification_data, type=event_type)
-                print(f"Published SSE notification: {notification_data}")
-        except Exception as e:
-            print(f"Failed to send SSE notification: {e}")

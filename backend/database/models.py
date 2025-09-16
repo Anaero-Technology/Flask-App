@@ -32,6 +32,21 @@ class BlackboxRawData(db.Model):
    seconds_elapsed = Column(Integer)
    temperature = Column(Float, nullable=True)
    pressure = Column(Float, nullable=True)
+
+
+class ChimeraRawData(db.Model):
+   __tablename__ = "chimeraRawData"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   channel_number = Column(Integer, nullable=False)
+
+   timestamp = Column(Integer)
+   sensor_number = Column(Integer, nullable=False)
+   gas_name = Column(String(50), nullable=True)
+   peak_value = Column(Float, nullable=True)
+   peak_parts = Column(String(500), nullable=True)  # JSON string of peak parts array
    
 
 class Sample(db.Model):

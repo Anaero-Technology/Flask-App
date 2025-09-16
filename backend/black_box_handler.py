@@ -12,7 +12,8 @@ class BlackBoxHandler(SerialHandler):
         self.mac_address = None
         self.is_logging = False
         self.current_log_file = None
-        self.sse_callback = None  # Callback for SSE notifications
+        self.app = None  # Flask app context for database operations
+        self.test_id = None  # Current test ID for database logging
         
         # Handle automatic messages from the blackbox
         self.register_automatic_handler("tip ", self._print_tips)
@@ -23,9 +24,6 @@ class BlackBoxHandler(SerialHandler):
         # Get device info immediately after connection
         self._get_device_info()
     
-    def set_sse_callback(self, callback):
-        """Set the SSE notification callback"""
-        self.sse_callback = callback
     
     def _print_tips(self, line: str):
         """Prints automatic tip messages and sends SSE notification"""
@@ -50,25 +48,50 @@ class BlackBoxHandler(SerialHandler):
                 f"Temp: {tip_data['temperature']}°C, "
                 f"Pressure: {tip_data['pressure']} PSI")
             
-            # Send SSE notification through callback
-            sse_data = {
-                "type": "tip_event",
-                "device_name": self.device_name,
-                "port": self.port,
-                "tip_data": tip_data
-            }
-            print(f"Publishing SSE notification: {sse_data}")
-            
-            if self.sse_callback:
+            # Send SSE notification directly
+            if self.app:
                 try:
-                    self.sse_callback(sse_data, 'tip')
-                    print("SSE publish successful")
+                    with self.app.app_context():
+                        from flask_sse import sse
+                        sse_data = {
+                            "type": "tip_event",
+                            "device_name": self.device_name,
+                            "port": self.port,
+                            "tip_data": tip_data
+                        }
+                        sse.publish(sse_data, type='tip')
+                        print(f"Published SSE notification: {sse_data}")
                 except Exception as e:
                     print(f"SSE publish failed: {e}")
+            # Save tip data to database if test_id is set and app context is available
+            if self.test_id and self.app and hasattr(self, 'id'):
+                try:
+                    with self.app.app_context():
+                        from database.models import BlackboxRawData, db
+                        # Create new BlackboxRawData entry
+                        raw_data = BlackboxRawData(
+                            test_id=self.test_id,
+                            device_id=self.id,
+                            channel_number=tip_data['channel_number'],
+                            timestamp=int(time.time()),  # Current Unix timestamp
+                            seconds_elapsed=tip_data['seconds_elapsed'],
+                            temperature=tip_data['temperature'] if tip_data['temperature'] != 'N/A' else None,
+                            pressure=tip_data['pressure']
+                        )
+                        
+                        db.session.add(raw_data)
+                        db.session.commit()
+                        print(f"Saved tip data to database: Test {self.test_id}, Channel {tip_data['channel_number']}")
+                        
+                except Exception as e:
+                    print(f"Failed to save tip data to database: {e}")
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
     
         except (ValueError, IndexError):
             pass
-
   
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
@@ -127,7 +150,7 @@ class BlackBoxHandler(SerialHandler):
         elif response == "failed stop nofiles":
             return False, "SD card not working"
         elif response == "already stop":
-            return False, "Device not logging"
+            return False, "Device is already not logging"
         else:
             return False, "Unknown error"
     
@@ -301,6 +324,10 @@ class BlackBoxHandler(SerialHandler):
                 # Extract data after "tipfile "
                 data = line[8:]
                 lines.append(data)
+    
+    def set_test_id(self, test_id):
+        """Set the current test ID for database logging"""
+        self.test_id = test_id
     
     def disconnect(self):
         """Disconnect from device"""

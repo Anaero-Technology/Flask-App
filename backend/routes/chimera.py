@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_sse import sse
+from datetime import datetime
 from device_manager import DeviceManager
 from database.models import *
-from datetime import datetime
 
 chimera_bp = Blueprint('chimera', __name__)
 device_manager = DeviceManager()
@@ -85,7 +85,7 @@ def disconnect_chimera(device_id):
             return jsonify({"error": "Device not connected"}), 400
         
         # Disconnect device
-        success = device_manager.disconnect_device('chimera', device_id)
+        success = device_manager.disconnect_device(device_id)
         if success:
             device.connected = False
             device.logging = False
@@ -135,15 +135,59 @@ def start_logging(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
+        data = request.get_json()
+        
+        # Handle test creation/linking
+        test_id = data.get('test_id')
+        test = None
+        
+        if test_id:
+            # Use existing test
+            test = Test.query.get(test_id)
+            if not test:
+                return jsonify({"error": "Test not found"}), 404
+        else:
+            # Create new test automatically
+            test_name = data.get('test_name', f"Chimera Log - {device.name} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            test = Test(
+                name=test_name,
+                description=data.get('test_description', f"Auto-created test for Chimera logging on {device.name}"),
+                created_by=data.get('created_by', 'system'),
+                date_created=datetime.now(),
+                status='running',
+                date_started=datetime.now()
+            )
+            db.session.add(test)
+            db.session.flush()  # Get the ID without committing
+        
         success, message = handler.start_logging()
         if success:
+            # Link test to handler and device
+            handler.set_test_id(test.id)
             device.logging = True
+            device.active_test_id = test.id
+            
+            # Update test status if it was existing and in setup
+            if test.status == 'setup':
+                test.status = 'running'
+                test.date_started = datetime.now()
+            
             db.session.commit()
-        
-        return jsonify({
-            "success": success,
-            "message": message
-        })
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "test_id": test.id,
+                "test_name": test.name
+            })
+        else:
+            # If logging failed and we created a test, don't save it
+            if not test_id:  # Only rollback if we created a new test
+                db.session.rollback()
+            return jsonify({
+                "success": False,
+                "message": message
+            })
         
     except Exception as e:
         db.session.rollback()
@@ -165,15 +209,46 @@ def stop_logging(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
+        # Handle JSON parsing safely - don't require JSON
+        data = {}
+        if request.is_json:
+            data = request.get_json() or {}
+        complete_test = data.get('complete_test', True)  # Default to completing the test
+        
         success, message = handler.stop_logging()
         if success:
             device.logging = False
+            
+            # Handle test completion if there's an active test
+            test_completed = False
+            if device.active_test_id and complete_test:
+                test = Test.query.get(device.active_test_id)
+                if test and test.status == 'running':
+                    test.status = 'completed'
+                    test.date_ended = datetime.now()
+                    test_completed = True
+                
+                # Clear test from device and handler
+                device.active_test_id = None
+                handler.set_test_id(None)
+            
             db.session.commit()
-        
-        return jsonify({
-            "success": success,
-            "message": message
-        })
+            
+            response_data = {
+                "success": True,
+                "message": message
+            }
+            
+            if test_completed:
+                response_data["test_completed"] = True
+                response_data["test_id"] = test.id
+            
+            return jsonify(response_data)
+        else:
+            return jsonify({
+                "success": False,
+                "message": message
+            })
         
     except Exception as e:
         db.session.rollback()
