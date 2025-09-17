@@ -202,20 +202,53 @@ Get current device information.
 ```
 POST /api/v1/black_box/<device_id>/start_logging
 ```
-Start logging data to SD card.
+Start logging data to SD card. Automatically creates or links to a test for data tracking.
 
 **Request Body:**
 ```json
 {
-  "filename": "log_20240115.txt"
+  "filename": "log_20240115.txt",           // Required: log file name
+  "test_id": 123,                          // Optional: link to existing test
+  "test_name": "My Experiment",            // Optional: name for new test (if no test_id)
+  "test_description": "Description",       // Optional: description for new test
+  "created_by": "researcher_name"          // Optional: who created the test
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully started logging",
+  "filename": "log_20240115.txt",
+  "test_id": 123,
+  "test_name": "My Experiment"
+}
+```
+
+**Notes:**
+- If `test_id` is provided, links logging to existing test
+- If no `test_id`, automatically creates a new test
+- All tip data is automatically saved to database during logging
+- Test status is set to 'running' when logging starts
 
 ### Stop Logging
 ```
 POST /api/v1/black_box/<device_id>/stop_logging
 ```
-Stop current logging session.
+Stop current logging session and complete the associated test.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully stopped logging"
+}
+```
+
+**Notes:**
+- Automatically sets test status to 'completed' and records end time
+- Clears active test ID from device and handler
 
 ### List Files
 ```
@@ -339,6 +372,59 @@ Send a raw command to the device.
   "command": "info"
 }
 ```
+
+### Real-time Data Stream
+```
+GET /api/v1/black_box/<device_id>/stream
+```
+Server-Sent Events (SSE) endpoint for real-time tip notifications.
+
+**Response:** Continuous SSE stream with events:
+```
+event: tip
+data: {
+  "type": "tip_event",
+  "device_name": "BlackBox1",
+  "port": "/dev/ttyUSB0",
+  "tip_data": {
+    "tip_number": 42,
+    "timestamp": "2024-01-15_14:30:45",
+    "seconds_elapsed": 3600,
+    "channel_number": 1,
+    "temperature": 37.5,
+    "pressure": 14.7
+  }
+}
+```
+
+**Notes:**
+- Requires device to be connected and active
+- Automatically saves tip data to database if test is active
+- Tip data includes sequential tip_number for gap detection
+
+## Database Models
+
+### BlackboxRawData Table
+Stores all tip data from BlackBox devices during logging sessions:
+
+```sql
+blackboxRawData:
+- id (Integer, Primary Key)
+- test_id (Integer, Foreign Key to tests.id)
+- device_id (Integer, Foreign Key to devices.id)
+- channel_number (Integer)
+- tip_number (Integer)           -- Sequential tip number for gap detection
+- timestamp (Integer)            -- Unix timestamp when recorded
+- seconds_elapsed (Integer)      -- Seconds since logging started
+- temperature (Float, nullable)  -- Temperature reading (null if N/A)
+- pressure (Float, nullable)     -- Pressure reading
+```
+
+### Test Management
+- Tests are automatically created when logging starts (if no test_id provided)
+- Test status: 'setup' → 'running' → 'completed'
+- All tip data is linked to the active test during logging
+- Missing tips are automatically detected and recovered using tip_number sequence
 
 ## Error Responses
 
