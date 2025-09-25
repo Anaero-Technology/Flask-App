@@ -144,27 +144,41 @@ class ChimeraHandler(SerialHandler):
     
     def start_logging(self) -> Tuple[bool, str]:
         """Start logging"""
-        response = self.send_command("startlogging")
+        self.send_command_no_wait("startlogging")
         
-        if response == "done startlogging":
-            self.is_logging = True
-            return True, "Logging started successfully"
-        elif response == "failed startlogging logging":
-            return False, "Device is already logging"
-        else:
-            return False, f"Unexpected response: {response}"
+        # Read through all queued responses until we find the final result
+        while True:
+            response = self.get_response(timeout=5.0)
+            if not response:
+                return False, "Timeout waiting for start logging response"
+                
+            if response == "done startlogging":
+                self.is_logging = True
+                return True, "Logging started successfully"
+            elif response == "failed startlogging logging":
+                return False, "Device is already logging"
+            elif response.startswith("failed startlogging"):
+                return False, f"Start logging failed: {response}"
+            # Continue reading other queued messages like "valve all closed latch put in queue"
     
     def stop_logging(self) -> Tuple[bool, str]:
         """Stop logging"""
-        response = self.send_command("stoplogging")
+        self.send_command_no_wait("stoplogging")
         
-        if response == "done stoplogging":
-            self.is_logging = False
-            return True, "Logging stopped successfully"
-        elif response == "failed stoplogging notlogging":
-            return False, "Device is already not logging"
-        else:
-            return False, f"Unexpected response: {response}"
+        # Read through all queued responses until we find the final result
+        while True:
+            response = self.get_response(timeout=5.0)
+            if not response:
+                return False, "Timeout waiting for stop logging response"
+                
+            if response == "done stoplogging":
+                self.is_logging = False
+                return True, "Logging stopped successfully"
+            elif response == "failed stoplogging notlogging":
+                return False, "Device is already not logging"
+            elif response.startswith("failed stoplogging"):
+                return False, f"Stop logging failed: {response}"
+            # Continue reading other queued messages
     
     def get_files(self) -> Tuple[bool, List[Dict]]:
         """Get list of files on SD card"""

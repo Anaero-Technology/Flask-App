@@ -155,11 +155,21 @@ function Chimera() {
             let response;
             if (isLogging) {
                 response = await fetch(`/api/v1/chimera/${deviceId}/stop_logging`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
                 });
             } else {
                 response = await fetch(`/api/v1/chimera/${deviceId}/start_logging`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        test_name: `Chimera Test - ${new Date().toLocaleString()}`
+                    })
                 });
             }
 

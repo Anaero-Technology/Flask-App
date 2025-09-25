@@ -121,7 +121,7 @@ class BlackBoxHandler(SerialHandler):
     
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
-        response = self.send_command(f"start {filename}")
+        response = self.send_command(f"start /{filename}.txt")
         
         if response == "done start" or response == "Setup successfully updated":
             self.is_logging = True
