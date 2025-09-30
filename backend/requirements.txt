@@ -1,0 +1,10 @@
+flask
+flask-cors
+psycopg2-binary
+Flask-SQLAlchemy
+redis
+rq
+pyserial
+python-dotenv
+gunicorn
+flask-sse
