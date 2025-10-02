@@ -41,27 +41,47 @@ class ChimeraHandler(SerialHandler):
     def _print_datapoint(self, line: str):
         """Process automatic datapoint messages and send SSE notification"""
         parts = line.split()
-        if len(parts) >= 10:  # Minimum parts needed for full datapoint
+        # Minimum: datapoint DATE TIME CHANNEL SENSOR1 GAS1 VAL1 VAL2 VAL3 VAL4 VAL5 VAL6 (12 parts)
+        if len(parts) >= 12:
             try:
-                channel = int(parts[1])
-                sensor_data = []
-                
-                # Parse sensor data (each sensor has 8 values)
-                sensor_num = int(parts[2])
-                gas_name = parts[3]
-                peak_value = float(parts[4])
-                peak_parts = [float(parts[5]), float(parts[6]), 
-                             float(parts[7]), float(parts[8]), float(parts[9])]
-                
-                sensor_data.append({
-                    "sensor_number": sensor_num,
-                    "gas_name": gas_name,
-                    "peak_value": peak_value,
-                    "peak_parts": peak_parts
-                })
+                # Format: datapoint DATE TIME CHANNEL [SENSOR GAS VAL1 VAL2 VAL3 VAL4 VAL5 VAL6]...
+                # parts[0] = "datapoint"
+                # parts[1] = date (e.g., "2025/10/2")
+                # parts[2] = time (e.g., "10:9:46")
+                # parts[3] = channel number
+                # Then repeating groups of 8: sensor_num, gas_name, 6 values
 
-                print(f"[CHIMERA DATAPOINT] Channel {channel} - Sensor {sensor_num} ({gas_name}): {peak_value}")
-                
+                channel = int(parts[3])
+                sensor_data = []
+
+                # Parse all sensors (each sensor has 8 parts: num, name, 6 values)
+                i = 4  # Start after channel number
+                while i + 7 < len(parts):  # Need at least 8 parts for a sensor
+                    try:
+                        sensor_num = int(parts[i])
+                        gas_name = parts[i + 1]
+                        peak_value = float(parts[i + 2])
+                        peak_parts = [
+                            float(parts[i + 3]),
+                            float(parts[i + 4]),
+                            float(parts[i + 5]),
+                            float(parts[i + 6]),
+                            float(parts[i + 7])
+                        ]
+
+                        sensor_data.append({
+                            "sensor_number": sensor_num,
+                            "gas_name": gas_name,
+                            "peak_value": peak_value,
+                            "peak_parts": peak_parts
+                        })
+
+                        i += 8  # Move to next sensor
+                    except (ValueError, IndexError):
+                        break
+
+                print(f"[CHIMERA DATAPOINT] Channel {channel} - {len(sensor_data)} sensors")
+
                 # Send SSE notification directly
                 if self.app:
                     try:
@@ -78,36 +98,40 @@ class ChimeraHandler(SerialHandler):
                             print(f"Published SSE notification for channel {channel}")
                     except Exception as e:
                         print(f"SSE publish failed: {e}")
-                
+
                 # Save datapoint to database if test_id is set and app context is available
+                # Create one database entry per sensor
                 if self.test_id and self.app and hasattr(self, 'id'):
                     try:
                         with self.app.app_context():
                             from database.models import ChimeraRawData, db
-                            
-                            # Create new ChimeraRawData entry
-                            raw_data = ChimeraRawData(
-                                test_id=self.test_id,
-                                device_id=self.id,
-                                channel_number=channel,
-                                timestamp=int(time.time()),  # Current Unix timestamp
-                                sensor_number=sensor_num,
-                                gas_name=gas_name,
-                                peak_value=peak_value,
-                                peak_parts=json.dumps(peak_parts)  # Store as JSON string
-                            )
-                            
-                            db.session.add(raw_data)
+
+                            timestamp = int(time.time())  # Current Unix timestamp
+
+                            # Create one entry per sensor
+                            for sensor in sensor_data:
+                                raw_data = ChimeraRawData(
+                                    test_id=self.test_id,
+                                    device_id=self.id,
+                                    channel_number=channel,
+                                    timestamp=timestamp,
+                                    sensor_number=sensor["sensor_number"],
+                                    gas_name=sensor["gas_name"],
+                                    peak_value=sensor["peak_value"],
+                                    peak_parts=json.dumps(sensor["peak_parts"])
+                                )
+                                db.session.add(raw_data)
+
                             db.session.commit()
-                            print(f"Saved chimera datapoint to database: Test {self.test_id}, Channel {channel}")
-                            
+                            print(f"Saved {len(sensor_data)} chimera datapoints to database: Test {self.test_id}, Channel {channel}")
+
                     except Exception as e:
                         print(f"Failed to save chimera datapoint to database: {e}")
                         try:
                             db.session.rollback()
                         except:
                             pass
-                
+
             except (ValueError, IndexError) as e:
                 print(f"Failed to parse datapoint: {e}")
                 pass
@@ -213,14 +237,14 @@ class ChimeraHandler(SerialHandler):
     def download_file(self, filename: str) -> Tuple[bool, List[str], str]:
         """Download a file from SD card"""
         response = self.send_command(f"download {filename}")
-        
+
         if response == "download start":
             lines = []
             while True:
                 line = self.read_line(timeout=5)
                 if not line:
                     return False, lines, "Timeout reading file"
-                
+
                 if line == "download stop":
                     return True, lines, "Download completed"
                 elif line == "download failed":

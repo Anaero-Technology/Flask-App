@@ -104,6 +104,7 @@ class DeviceManager:
                     db.session.refresh(device)
                 else:
                     device.connected = True
+                    device.logging = handler.is_logging  
                     handler.set_test_id(device.active_test_id)   
                     if device_name:
                         device.name = device_name
