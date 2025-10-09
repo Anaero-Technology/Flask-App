@@ -1,5 +1,7 @@
 import time
 import json
+import socket
+import threading
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -27,14 +29,23 @@ class ChimeraHandler(SerialHandler):
         self.app = None  # Flask app context for database operations
         self.test_id = None  # Current test ID for database logging
 
+        # IP monitoring daemon thread
+        self.ip_monitor_thread = None
+        self.ip_monitor_running = False
+        self.last_known_ip = None
+
         self.register_automatic_handler("datapoint", self._print_datapoint)
         
     def connect(self):
         super().connect(self.port)
         # Get device info immediately after connection
         self._get_device_info()
-    
+        # Start IP monitoring daemon
+        self.start_ip_monitor()
+
     def disconnect(self):
+        # Stop IP monitoring daemon
+        self.stop_ip_monitor()
         super().disconnect()
     
     
@@ -510,3 +521,72 @@ class ChimeraHandler(SerialHandler):
     def send_raw_command(self, command: str) -> str:
         """Send a raw command to the device"""
         return self.send_command(command)
+
+    def _get_local_ip(self) -> Optional[str]:
+        """Get the local IP address by attempting to connect to an external server"""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            return local_ip
+        except Exception:
+            return None
+
+    def _ip_monitor_daemon(self):
+        """Background daemon that monitors IP connection and sends ipset command to chimera"""
+        print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
+
+        while self.ip_monitor_running:
+            try:
+                # Check for IP connection
+                current_ip = self._get_local_ip()
+
+                if current_ip:
+                    # Only send command if IP has changed or this is the first check
+                    if current_ip != self.last_known_ip:
+                        print(f"[CHIMERA IP MONITOR] IP detected: {current_ip}")
+
+                        # Send ipset command to chimera
+                        if self.connection and self.connection.is_open:
+                            command = f"ipset {current_ip}\n"
+                            try:
+                                self.connection.write(command.encode())
+                                print(f"[CHIMERA IP MONITOR] Sent: ipset {current_ip}")
+                                self.last_known_ip = current_ip
+                            except Exception as e:
+                                print(f"[CHIMERA IP MONITOR] Failed to send ipset command: {e}")
+                        else:
+                            print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
+                else:
+                    if self.last_known_ip is not None:
+                        print(f"[CHIMERA IP MONITOR] No connection detected")
+                        self.last_known_ip = None
+
+            except Exception as e:
+                print(f"[CHIMERA IP MONITOR] Error in monitoring loop: {e}")
+
+            # Wait 30 seconds before next check
+            time.sleep(30)
+
+        print(f"[CHIMERA IP MONITOR] Stopped monitoring thread for {self.device_name}")
+
+    def start_ip_monitor(self):
+        """Start the IP monitoring daemon thread"""
+        if not self.ip_monitor_running:
+            self.ip_monitor_running = True
+            self.ip_monitor_thread = threading.Thread(
+                target=self._ip_monitor_daemon,
+                daemon=True,
+                name=f"ChimeraIPMonitor-{self.port}"
+            )
+            self.ip_monitor_thread.start()
+            print(f"[CHIMERA IP MONITOR] IP monitoring started for {self.device_name}")
+
+    def stop_ip_monitor(self):
+        """Stop the IP monitoring daemon thread"""
+        if self.ip_monitor_running:
+            self.ip_monitor_running = False
+            if self.ip_monitor_thread:
+                self.ip_monitor_thread.join(timeout=2)
+            print(f"[CHIMERA IP MONITOR] IP monitoring stopped for {self.device_name}")
