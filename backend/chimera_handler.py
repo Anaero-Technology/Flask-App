@@ -3,6 +3,7 @@ import json
 import socket
 import threading
 import subprocess
+import platform
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -552,12 +553,23 @@ class ChimeraHandler(SerialHandler):
             print(f"[CHIMERA WIFI] Error: {e}")
 
     def _connect_to_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
-        """Connect to WiFi network (Linux only)"""
+        """Connect to WiFi network"""
         try:
-            result = subprocess.run(
-                ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
-                capture_output=True, text=True, timeout=30
-            )
+            system = platform.system()
+
+            if system == 'Darwin':  # macOS
+                result = subprocess.run(
+                    ['networksetup', '-setairportnetwork', 'en0', ssid, password],
+                    capture_output=True, text=True, timeout=30
+                )
+            elif system == 'Linux':
+                result = subprocess.run(
+                    ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                    capture_output=True, text=True, timeout=30
+                )
+            else:
+                return False, "Unsupported OS"
+
             return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
         except Exception as e:
             return False, str(e)
@@ -574,26 +586,67 @@ class ChimeraHandler(SerialHandler):
             return None
 
     def _get_wifi_ssids(self) -> List[str]:
-        """Get list of available WiFi SSIDs (Linux only)"""
+        """Get list of available WiFi SSIDs"""
         try:
-            # Use nmcli (NetworkManager)
-            result = subprocess.run(
-                ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            system = platform.system()
 
-            if result.returncode == 0:
+            if system == 'Darwin':  # macOS
+                result = subprocess.run(
+                    ['system_profiler', 'SPAirPortDataType'],
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+
+                if result.returncode != 0:
+                    return []
+
                 ssids = []
-                lines = result.stdout.strip().split('\n')
+                lines = result.stdout.split('\n')
+                in_other_networks = False
+
                 for line in lines:
-                    ssid = line.strip()
-                    if ssid and ssid != '--':
-                        ssids.append(ssid)
+                    stripped = line.strip()
+
+                    if 'Other Local Wi-Fi Networks:' in line:
+                        in_other_networks = True
+                        continue
+
+                    if not in_other_networks:
+                        continue
+
+                    # New network entry (ends with :)
+                    if stripped.endswith(':') and not any(x in stripped for x in ['PHY Mode', 'Channel', 'Network Type', 'Security', 'Signal']):
+                        ssid = stripped[:-1]  # Remove trailing ':'
+                        # Filter out system entries
+                        if ssid not in ['awdl0', 'llw0', 'Current Network Information'] and not ssid.startswith('en'):
+                            if ssid and ssid.strip():
+                                ssids.append(ssid)
+
                 return ssids
 
-            return []
+            elif system == 'Linux':
+                # Use nmcli (NetworkManager)
+                result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                if result.returncode == 0:
+                    ssids = []
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        ssid = line.strip()
+                        if ssid and ssid != '--':
+                            ssids.append(ssid)
+                    return ssids
+
+                return []
+
+            else:
+                return []
 
         except Exception as e:
             print(f"[CHIMERA IP MONITOR] Error scanning WiFi SSIDs: {e}")

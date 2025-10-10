@@ -1,8 +1,96 @@
 from flask import Blueprint, jsonify, request
 import subprocess
 import re
+import platform
 
 wifi_bp = Blueprint('wifi', __name__)
+
+def get_wifi_networks_macos():
+    """Scan for WiFi networks on macOS"""
+    try:
+        # Use system_profiler to get WiFi networks
+        result = subprocess.run(
+            ['system_profiler', 'SPAirPortDataType'],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+
+        if result.returncode != 0:
+            print(f"system_profiler failed with return code: {result.returncode}")
+            print(f"stderr: {result.stderr}")
+            return []
+
+        networks = []
+        lines = result.stdout.split('\n')
+
+        # Parse the "Other Local Wi-Fi Networks:" section
+        in_other_networks = False
+        current_ssid = None
+        current_network = {}
+
+        for line in lines:
+            stripped = line.strip()
+
+            if 'Other Local Wi-Fi Networks:' in line:
+                in_other_networks = True
+                continue
+
+            if not in_other_networks:
+                continue
+
+            # New network entry (ends with :)
+            if stripped.endswith(':') and not any(x in stripped for x in ['PHY Mode', 'Channel', 'Network Type', 'Security', 'Signal']):
+                # Save previous network if it exists
+                if current_ssid and current_network:
+                    current_network['ssid'] = current_ssid
+                    networks.append(current_network.copy())
+
+                # Start new network
+                current_ssid = stripped[:-1]  # Remove the trailing ':'
+                current_network = {
+                    'signal': 'N/A',
+                    'security': 'Unknown'
+                }
+
+            # Parse network details
+            if current_ssid:
+                if 'Security:' in line:
+                    security = stripped.split('Security:')[1].strip()
+                    current_network['security'] = security if security else 'Open'
+                elif 'Signal / Noise:' in line:
+                    match = re.search(r'(-?\d+)\s*dBm', stripped)
+                    if match:
+                        current_network['signal'] = match.group(1)
+
+        # Add the last network
+        if current_ssid and current_network:
+            current_network['ssid'] = current_ssid
+            networks.append(current_network.copy())
+
+        # Filter out invalid networks (interface names, system entries, etc.)
+        filtered_networks = []
+        for net in networks:
+            ssid = net['ssid']
+            # Skip system entries and interface names
+            if ssid in ['awdl0', 'llw0', 'Current Network Information'] or ssid.startswith('en'):
+                continue
+            # Skip empty SSIDs
+            if not ssid or ssid.strip() == '':
+                continue
+            filtered_networks.append(net)
+
+        print(f"Found {len(filtered_networks)} WiFi networks on macOS")
+        return filtered_networks
+
+    except subprocess.TimeoutExpired:
+        print("WiFi scan timed out on macOS")
+        return []
+    except Exception as e:
+        print(f"Error scanning WiFi networks on macOS: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 def get_wifi_networks_linux():
     """Scan for WiFi networks on Linux"""
@@ -78,6 +166,24 @@ def get_wifi_networks_linux():
         print(f"Error scanning WiFi networks on Linux: {e}")
         return []
 
+def connect_to_wifi_macos(ssid, password):
+    """Connect to WiFi network on macOS"""
+    try:
+        # Use networksetup to connect
+        result = subprocess.run(
+            ['networksetup', '-setairportnetwork', 'en0', ssid, password],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            return True, "Successfully connected to WiFi"
+        else:
+            return False, result.stderr or "Failed to connect"
+    except Exception as e:
+        return False, str(e)
+
 def connect_to_wifi_linux(ssid, password):
     """Connect to WiFi network on Linux"""
     try:
@@ -98,9 +204,16 @@ def connect_to_wifi_linux(ssid, password):
 
 @wifi_bp.route('/api/v1/wifi/scan', methods=['GET'])
 def scan_wifi():
-    """Scan for available WiFi networks (Linux only)"""
+    """Scan for available WiFi networks"""
     try:
-        networks = get_wifi_networks_linux()
+        system = platform.system()
+
+        if system == 'Darwin':  # macOS
+            networks = get_wifi_networks_macos()
+        elif system == 'Linux':
+            networks = get_wifi_networks_linux()
+        else:
+            return jsonify({'error': 'Unsupported operating system'}), 400
 
         # Remove duplicates by SSID
         seen_ssids = set()
@@ -117,7 +230,7 @@ def scan_wifi():
 
 @wifi_bp.route('/api/v1/wifi/connect', methods=['POST'])
 def connect_wifi():
-    """Connect to a WiFi network (Linux only)"""
+    """Connect to a WiFi network"""
     try:
         data = request.get_json()
         ssid = data.get('ssid')
@@ -126,7 +239,14 @@ def connect_wifi():
         if not ssid:
             return jsonify({'error': 'SSID is required'}), 400
 
-        success, message = connect_to_wifi_linux(ssid, password)
+        system = platform.system()
+
+        if system == 'Darwin':  # macOS
+            success, message = connect_to_wifi_macos(ssid, password)
+        elif system == 'Linux':
+            success, message = connect_to_wifi_linux(ssid, password)
+        else:
+            return jsonify({'error': 'Unsupported operating system'}), 400
 
         if success:
             return jsonify({'message': message})
