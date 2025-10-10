@@ -2,6 +2,7 @@ import time
 import json
 import socket
 import threading
+import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -33,8 +34,10 @@ class ChimeraHandler(SerialHandler):
         self.ip_monitor_thread = None
         self.ip_monitor_running = False
         self.last_known_ip = None
+        self.last_known_ssids = set()  # Track SSIDs we've already sent
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
+        self.register_automatic_handler("connect", self._handle_wifi_connect)
         
     def connect(self):
         super().connect(self.port)
@@ -522,6 +525,43 @@ class ChimeraHandler(SerialHandler):
         """Send a raw command to the device"""
         return self.send_command(command)
 
+    def _handle_wifi_connect(self, line: str):
+        """Handle WiFi connection request: connect [SSID] [Password]
+        SSID may contain spaces. Last space separates SSID from password.
+        """
+        try:
+            # Remove "connect " prefix and split on last space
+            remainder = line[8:]  # Remove "connect "
+            parts = remainder.rsplit(' ', 1)  # Split from right, max 1 split
+
+            ssid = parts[0]
+            password = parts[1] if len(parts) > 1 else ""
+
+            print(f"[CHIMERA WIFI] Connecting to '{ssid}'")
+
+            # Connect to WiFi
+            success, message = self._connect_to_wifi(ssid, password)
+
+            # Send response to chimera
+            if self.connection and self.connection.is_open:
+                response = b"wificonnected\n" if success else b"wififailed\n"
+                self.connection.write(response)
+                print(f"[CHIMERA WIFI] {'Connected' if success else 'Failed'}: {message}")
+
+        except Exception as e:
+            print(f"[CHIMERA WIFI] Error: {e}")
+
+    def _connect_to_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
+        """Connect to WiFi network (Linux only)"""
+        try:
+            result = subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                capture_output=True, text=True, timeout=30
+            )
+            return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
+        except Exception as e:
+            return False, str(e)
+
     def _get_local_ip(self) -> Optional[str]:
         """Get the local IP address by attempting to connect to an external server"""
         try:
@@ -533,6 +573,32 @@ class ChimeraHandler(SerialHandler):
         except Exception:
             return None
 
+    def _get_wifi_ssids(self) -> List[str]:
+        """Get list of available WiFi SSIDs (Linux only)"""
+        try:
+            # Use nmcli (NetworkManager)
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                ssids = []
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    ssid = line.strip()
+                    if ssid and ssid != '--':
+                        ssids.append(ssid)
+                return ssids
+
+            return []
+
+        except Exception as e:
+            print(f"[CHIMERA IP MONITOR] Error scanning WiFi SSIDs: {e}")
+            return []
+
     def _ip_monitor_daemon(self):
         """Background daemon that monitors IP connection and sends ipset command to chimera"""
         print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
@@ -543,13 +609,13 @@ class ChimeraHandler(SerialHandler):
                 current_ip = self._get_local_ip()
 
                 if current_ip:
-                    # Only send command if IP has changed or this is the first check
+                    # Only send ipset command if IP has changed or this is the first check
                     if current_ip != self.last_known_ip:
                         print(f"[CHIMERA IP MONITOR] IP detected: {current_ip}")
 
                         # Send ipset command to chimera
                         if self.connection and self.connection.is_open:
-                            command = f"ipset {current_ip}\n"
+                            command = f"ipset {current_ip}:5173\n"
                             try:
                                 self.connection.write(command.encode())
                                 print(f"[CHIMERA IP MONITOR] Sent: ipset {current_ip}")
@@ -558,6 +624,30 @@ class ChimeraHandler(SerialHandler):
                                 print(f"[CHIMERA IP MONITOR] Failed to send ipset command: {e}")
                         else:
                             print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
+
+                    # Get WiFi SSIDs and send new ones to chimera
+                    ssids = self._get_wifi_ssids()
+                    if ssids:
+                        print(f"[CHIMERA IP MONITOR] Found {len(ssids)} WiFi networks")
+
+                        if self.connection and self.connection.is_open:
+                            for ssid in ssids:
+                                # Only send if we haven't sent this SSID before
+                                if ssid not in self.last_known_ssids:
+                                    command = f"ssidadd {ssid}\n"
+                                    try:
+                                        self.connection.write(command.encode())
+                                        print(f"[CHIMERA IP MONITOR] Sent: ssidadd {ssid}")
+                                        self.last_known_ssids.add(ssid)
+                                        # Small delay between commands to avoid overwhelming the device
+                                        time.sleep(0.1)
+                                    except Exception as e:
+                                        print(f"[CHIMERA IP MONITOR] Failed to send ssidadd command for {ssid}: {e}")
+                        else:
+                            print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ssidadd commands")
+                    else:
+                        print(f"[CHIMERA IP MONITOR] No WiFi networks found")
+
                 else:
                     if self.last_known_ip is not None:
                         print(f"[CHIMERA IP MONITOR] No connection detected")
@@ -589,4 +679,7 @@ class ChimeraHandler(SerialHandler):
             self.ip_monitor_running = False
             if self.ip_monitor_thread:
                 self.ip_monitor_thread.join(timeout=2)
+            # Reset tracking when stopping
+            self.last_known_ip = None
+            self.last_known_ssids.clear()
             print(f"[CHIMERA IP MONITOR] IP monitoring stopped for {self.device_name}")

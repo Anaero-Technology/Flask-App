@@ -7,6 +7,7 @@ import Database from './view/Database'
 import TestForm from './view/TestForm'
 import BlackBox from './view/BlackBox'
 import Chimera from './view/Chimera'
+import Settings from './view/Settings'
 import './App.css'
 
 
@@ -37,7 +38,7 @@ function App() {
         {currentView === 'blackbox' && <BlackBox />}
         {currentView === 'chimera' && <Chimera />}
         {currentView === 'monitor' && <div className="p-6">Monitor - Coming Soon</div>}
-        {currentView === 'settings' && <div className="p-6">Settings - Coming Soon</div>}
+        {currentView === 'settings' && <Settings />}
       </div>
     </div>
   )

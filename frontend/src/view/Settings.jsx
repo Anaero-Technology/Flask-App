@@ -1,0 +1,257 @@
+import { useState, useEffect } from 'react'
+
+function Settings() {
+  const [networks, setNetworks] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [selectedNetworkIndex, setSelectedNetworkIndex] = useState(null)
+  const [password, setPassword] = useState('')
+  const [message, setMessage] = useState({ text: '', type: '' })
+
+  const scanNetworks = async () => {
+    setLoading(true)
+    setMessage({ text: '', type: '' })
+
+    try {
+      const response = await fetch('/api/v1/wifi/scan')
+      const data = await response.json()
+
+      if (response.ok) {
+        setNetworks(data.networks)
+        setMessage({ text: 'Networks scanned successfully', type: 'success' })
+      } else {
+        setMessage({ text: data.error || 'Failed to scan networks', type: 'error' })
+      }
+    } catch (error) {
+      setMessage({ text: 'Error scanning networks: ' + error.message, type: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNetworkSelect = (network, index) => {
+    // If clicking the same network, collapse it
+    if (selectedNetworkIndex === index) {
+      setSelectedNetworkIndex(null)
+      setPassword('')
+      return
+    }
+
+    setSelectedNetworkIndex(index)
+    setPassword('')
+    setMessage({ text: '', type: '' })
+
+    // If network is open, connect immediately
+    if (network.security === 'None' || network.security === 'Open' || network.security === '') {
+      connectToNetwork(network.ssid, '')
+    }
+  }
+
+  const handleCancelConnect = () => {
+    setSelectedNetworkIndex(null)
+    setPassword('')
+    setMessage({ text: '', type: '' })
+  }
+
+  const connectToNetwork = async (ssid, pwd) => {
+    setConnecting(true)
+    setMessage({ text: '', type: '' })
+
+    try {
+      const response = await fetch('/api/v1/wifi/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ssid: ssid,
+          password: pwd
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMessage({ text: 'Successfully connected to ' + ssid, type: 'success' })
+        setSelectedNetworkIndex(null)
+        setPassword('')
+      } else {
+        setMessage({ text: data.error || 'Failed to connect', type: 'error' })
+      }
+    } catch (error) {
+      setMessage({ text: 'Error connecting: ' + error.message, type: 'error' })
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleConnectWithPassword = (e, network) => {
+    e.preventDefault()
+    if (network && password) {
+      connectToNetwork(network.ssid, password)
+    }
+  }
+
+  const getSignalStrength = (signal) => {
+    const signalNum = parseInt(signal)
+    if (isNaN(signalNum)) return 'Unknown'
+
+    if (signalNum >= -50) return 'Excellent'
+    if (signalNum >= -60) return 'Good'
+    if (signalNum >= -70) return 'Fair'
+    return 'Weak'
+  }
+
+  const getSignalIcon = (signal) => {
+    const signalNum = parseInt(signal)
+    if (isNaN(signalNum)) return '📶'
+
+    if (signalNum >= -50) return '📶'
+    if (signalNum >= -60) return '📶'
+    if (signalNum >= -70) return '📡'
+    return '📡'
+  }
+
+  useEffect(() => {
+    // Auto-scan on component mount
+    scanNetworks()
+  }, [])
+
+  return (
+    <div className="p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">Settings</h1>
+
+        {/* WiFi Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">WiFi Networks</h2>
+            <button
+              onClick={scanNetworks}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Scanning...' : 'Scan Networks'}
+            </button>
+          </div>
+
+          {/* Message Display */}
+          {message.text && (
+            <div className={`mb-4 p-3 rounded ${
+              message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {message.text}
+            </div>
+          )}
+
+          {/* Networks List */}
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">
+              Scanning for networks...
+            </div>
+          ) : networks.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No networks found. Click "Scan Networks" to search.
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="max-h-96 overflow-y-auto">
+                {networks.map((network, index) => {
+                  const isSelected = selectedNetworkIndex === index
+                  const needsPassword = network.security !== 'None' && network.security !== 'Open' && network.security !== ''
+
+                  return (
+                    <div
+                      key={index}
+                      className={`border-b last:border-b-0 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                    >
+                      <div
+                        className="p-4 flex justify-between items-center cursor-pointer"
+                        onClick={() => handleNetworkSelect(network, index)}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{getSignalIcon(network.signal)}</span>
+                            <span className="font-semibold">{network.ssid}</span>
+                            {needsPassword && <span className="text-gray-500">🔒</span>}
+                          </div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            Signal: {getSignalStrength(network.signal)} ({network.signal}) • {network.security}
+                          </div>
+                        </div>
+                        <div>
+                          <button
+                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleNetworkSelect(network, index)
+                            }}
+                          >
+                            {isSelected ? 'Hide' : 'Connect'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable Password Input Section */}
+                      {isSelected && needsPassword && (
+                        <div className="px-4 pb-4 bg-blue-50">
+                          <form onSubmit={(e) => handleConnectWithPassword(e, network)} className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Password
+                              </label>
+                              <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Enter WiFi password"
+                                autoFocus
+                                required
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+
+                            <div className="flex gap-3 justify-end">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleCancelConnect()
+                                }}
+                                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                                disabled={connecting}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                disabled={connecting || !password}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {connecting ? 'Connecting...' : 'Connect'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Other Settings Sections Can Go Here */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold mb-4">General Settings</h2>
+          <p className="text-gray-600">Additional settings coming soon...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default Settings
