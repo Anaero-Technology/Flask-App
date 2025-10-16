@@ -38,6 +38,7 @@ function DeviceCard(props){
             setEditedName(props.name);
         } finally {
             setIsUpdating(false);
+            setIsUpdating(true);
         }
     };
 

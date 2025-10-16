@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard';
+import ChimeraPlot from '../components/ChimeraPlot';
 import ChimeraImage from '../assets/chimera.jpg';
 import refreshIcon from '../assets/refresh.svg';
 
@@ -383,14 +384,17 @@ function Chimera() {
                             <button
                                 onClick={() => toggleLogging(device.device_id)}
                                 className={`px-4 py-2 rounded font-medium ${
-                                    loggingStates[device.device_id] 
-                                        ? 'bg-red-600 text-white hover:bg-red-700' 
+                                    loggingStates[device.device_id]
+                                        ? 'bg-red-600 text-white hover:bg-red-700'
                                         : 'bg-green-600 text-white hover:bg-green-700'
                                 }`}
                             >
                                 {loggingStates[device.device_id] ? 'Stop Logging' : 'Start Logging'}
                             </button>
                         </div>
+
+                        {/* Real-time Plot Section */}
+                        <ChimeraPlot deviceId={device.device_id} />
                     </div>
                 ))}
                 
