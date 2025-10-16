@@ -49,6 +49,8 @@ class SerialHandler:
                 timeout=self.timeout,
                 write_timeout=self.timeout
             )
+
+ 
             self.clear_buffer()
             self._start_reader_thread()
             # Small delay to let the connection stabilize
@@ -59,15 +61,27 @@ class SerialHandler:
         
 
     def get_type(self, port: str, timeout: float = 2.0) -> str:
-        if self.connection.is_open:
-            response = self.send_command("info", timeout)
-        else:
+        if not self.connection.is_open:
             self.connect(port=port)
-            response = self.send_command("info", timeout)
+
+        self.clear_buffer()
+        self.send_command_no_wait("info")
+
+        # Wait up to timeout, checking for responses that start with "info"
+        # Skip any other messages that come first (like "Setup completed sucessfully")
+        start_time = time.time()
+        response = None
+
+        while time.time() - start_time < timeout:
+            resp = self.read_line(timeout=0.2)
+
+            if resp and resp.startswith("info"):
+                response = resp
+                break
 
         if response is None:
-            raise Exception("No response received from device")
-        
+            raise Exception(f"No info response received from {port}")
+
         # Split the response and get the 5th element (index 4)
         parts = response.split()
         if len(parts) > 4:
@@ -158,7 +172,7 @@ class SerialHandler:
                     pass
         # If not handled automatically, add to command response queue
         if not handled:
-            print(f"{line} put in queue")
+            print(f"{repr(line)} put in queue")
             self._command_response_queue.put(line)
     
     def send_command(self, command: str, timeout: float = 5.0) -> Optional[str]:

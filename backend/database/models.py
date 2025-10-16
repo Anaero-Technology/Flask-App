@@ -26,6 +26,7 @@ class BlackboxRawData(db.Model):
    id = Column(Integer, primary_key=True)
    test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   tip_number = Column(Integer, nullable=False)
    channel_number = Column(Integer, nullable=False)
 
    timestamp = Column(Integer)

@@ -72,6 +72,7 @@ class BlackBoxHandler(SerialHandler):
                         raw_data = BlackboxRawData(
                             test_id=self.test_id,
                             device_id=self.id,
+                            tip_number=tip_data['tip_number'],
                             channel_number=tip_data['channel_number'],
                             timestamp=int(time.time()),  # Current Unix timestamp
                             seconds_elapsed=tip_data['seconds_elapsed'],
@@ -96,12 +97,22 @@ class BlackBoxHandler(SerialHandler):
     def _get_device_info(self):
         """Get device information using the info command (auto appends \n at end of command)"""
         if self.connection.is_open:
-            response = self.send_command("info", 1.0)
+            self.clear_buffer()
+            self.send_command_no_wait("info")
+
+            # Keep reading until we get the info response (may receive other messages first)
+            start_time = time.time()
+            response = None
+            while time.time() - start_time < 2.0:
+                resp = self.read_line(timeout=0.5)
+                if resp and resp.startswith("info"):
+                    response = resp
+                    break
 
             if response and response.startswith("info"):
                 # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
                 parts = response.split()
-                
+
                 self.is_logging = (parts[1] == "1")
                 self.current_log_file = parts[2] if parts[2] != "none" else None
                 self.device_name = parts[3]

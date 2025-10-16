@@ -105,10 +105,11 @@ class DeviceManager:
                 else:
                     device.connected = True
                     device.logging = handler.is_logging  
+                    print(f"[DEBUG] Setting device.logging = {handler.is_logging} for device {device.id}")
                     handler.set_test_id(device.active_test_id)   
                     if device_name:
                         device.name = device_name
-                        handler.set_name(device_name)
+                    handler.set_name(device.name)
                     db.session.commit()
                 
                 handler.id = device.id
@@ -219,7 +220,6 @@ class DeviceManager:
             device = Device.query.filter_by(serial_port=port).first()
             if device:
                 device.connected = False
-                device.logging = False
                 db.session.commit()
         
         return True

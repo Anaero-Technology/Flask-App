@@ -164,6 +164,7 @@ def start_logging(device_id):
             })
         else:
             # If logging failed and we created a test, don't save it
+            device.logging = False
             if not test_id:  # Only rollback if we created a new test
                 db.session.rollback()
             return jsonify({
