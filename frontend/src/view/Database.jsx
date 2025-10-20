@@ -29,7 +29,9 @@ function Database() {
 
             const response = await fetch(endpoint);
             const result = await response.json();
-            setData(result);
+            // Sort by ID descending (newest first) in case backend sorting isn't working
+            const sortedData = result.sort((a, b) => b.id - a.id);
+            setData(sortedData);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {

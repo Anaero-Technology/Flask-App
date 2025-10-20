@@ -11,6 +11,8 @@ function TestForm() {
     const [loading, setLoading] = useState(false);
     const [selectedChannel, setSelectedChannel] = useState(null);
     const [showChannelConfig, setShowChannelConfig] = useState(false);
+    const [selectedDevices, setSelectedDevices] = useState([]);
+    const [chimeraChannelError, setChimeraChannelError] = useState('');
 
     useEffect(() => {
         fetchDevices();
@@ -20,12 +22,32 @@ function TestForm() {
 
     const fetchDevices = async () => {
         try {
-            const response = await fetch('/api/v1/devices/discover');
+            const response = await fetch('/api/v1/devices/connected');
             const data = await response.json();
             setDevices(data);
+            // Auto-select all devices initially
+            setSelectedDevices(data.map(d => d.id));
         } catch (error) {
             console.error('Error fetching devices:', error);
         }
+    };
+
+    const toggleDeviceSelection = (deviceId) => {
+        setSelectedDevices(prev => {
+            if (prev.includes(deviceId)) {
+                return prev.filter(id => id !== deviceId);
+            } else {
+                return [...prev, deviceId];
+            }
+        });
+    };
+
+    const selectAllDevices = () => {
+        setSelectedDevices(devices.map(d => d.id));
+    };
+
+    const deselectAllDevices = () => {
+        setSelectedDevices([]);
     };
 
     const fetchSamples = async () => {
@@ -91,9 +113,43 @@ function TestForm() {
         }
     };
 
-    const createTest = async () => {
+    // Helper to check if Chimera channel should be shown
+    const shouldShowChimeraChannel = () => {
+        const selected = devices.filter(d => selectedDevices.includes(d.id));
+        const hasChimera = selected.some(d => ['chimera', 'chimera-max'].includes(d.device_type));
+        const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+        console.log('Device check:', {
+            selectedDevices: selected.map(d => ({ id: d.id, name: d.name, type: d.device_type })),
+            hasChimera,
+            hasBlackBox,
+            showChimera: hasChimera && hasBlackBox
+        });
+        return hasChimera && hasBlackBox;
+    };
+
+    const getTestValidationStatus = () => {
+        const missing = [];
+
         if (!testName.trim()) {
-            alert('Test name is required');
+            missing.push('test name');
+        }
+
+        const configCount = Object.keys(configurations).length;
+        if (configCount === 0) {
+            missing.push('at least one channel configuration');
+        }
+
+        return {
+            isValid: missing.length === 0,
+            missing: missing
+        };
+    };
+
+    const createTest = async () => {
+        const validation = getTestValidationStatus();
+
+        if (!validation.isValid) {
+            alert(`Cannot create test. Missing: ${validation.missing.join(', ')}`);
             return;
         }
 
@@ -204,6 +260,45 @@ function TestForm() {
                     </div>
                 </div>
 
+                {/* Device Selection */}
+                <div className="mb-8">
+                    <h2 className="text-xl font-semibold mb-4">Select Devices for Experiment</h2>
+                    {devices.length > 0 ? (
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="mb-4">
+                                <div className="text-sm text-gray-600">
+                                    {selectedDevices.length} of {devices.length} device(s) selected
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {devices.map(device => (
+                                    <label
+                                        key={device.id}
+                                        className="flex items-center gap-3 p-3 bg-white rounded border border-gray-300 hover:bg-gray-50 cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedDevices.includes(device.id)}
+                                            onChange={() => toggleDeviceSelection(device.id)}
+                                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                        />
+                                        <div className="flex-1">
+                                            <div className="font-medium text-gray-900">{device.name}</div>
+                                            <div className="text-xs text-gray-500">
+                                                {device.device_type === 'black-box' ? 'Black Box' : 'Chimera'}
+                                            </div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                            No devices found. Make sure devices are connected and discovered.
+                        </div>
+                    )}
+                </div>
+
                 {/* Device Channels */}
                 <div className="mb-8">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -217,7 +312,7 @@ function TestForm() {
                             </div>
                             
                             {devices.length > 0 ? (
-                                devices.map(device => (
+                                devices.filter(device => selectedDevices.includes(device.id)).map(device => (
                                     device.device_type === 'black-box' ? (
                                         <BlackBoxTestConfig
                                             key={device.id}
@@ -243,6 +338,10 @@ function TestForm() {
                                         </div>
                                     )
                                 ))
+                            ) : selectedDevices.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                                    No devices selected. Please select at least one device above to configure channels.
+                                </div>
                             ) : (
                                 <div className="text-center py-8 text-gray-500">
                                     No devices found. Make sure devices are connected and discovered.
@@ -265,6 +364,9 @@ function TestForm() {
                                         inoculums={inoculums}
                                         onSave={handleSaveChannelConfig}
                                         onClear={handleClearChannelConfig}
+                                        showChimeraChannel={shouldShowChimeraChannel()}
+                                        chimeraChannelError={chimeraChannelError}
+                                        setChimeraChannelError={setChimeraChannelError}
                                     />
                                 </div>
                             ) : (
@@ -277,14 +379,26 @@ function TestForm() {
                 </div>
 
                 {/* Create Test Button */}
-                <div className="flex justify-end">
-                    <button
-                        onClick={createTest}
-                        disabled={loading || !testName.trim()}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loading ? 'Creating Test...' : 'Create Test'}
-                    </button>
+                <div className="flex flex-col items-end gap-2">
+                    {(() => {
+                        const validation = getTestValidationStatus();
+                        return (
+                            <>
+                                {!validation.isValid && (
+                                    <div className="text-sm text-red-600">
+                                        Missing: {validation.missing.join(', ')}
+                                    </div>
+                                )}
+                                <button
+                                    onClick={createTest}
+                                    disabled={loading}
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? 'Creating Test...' : 'Create Test'}
+                                </button>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -293,13 +407,14 @@ function TestForm() {
 }
 
 // Inline Channel Configuration Form Component
-function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear }) {
+function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear, showChimeraChannel, chimeraChannelError, setChimeraChannelError }) {
     const [config, setConfig] = useState(currentConfig || {
         inoculum_sample_id: '',
         inoculum_weight_grams: '',
         substrate_sample_id: '',
-        substrate_weight_grams: 0,
+        substrate_weight_grams: '',
         tumbler_volume: '',
+        chimera_channel: null,
         notes: ''
     });
 
@@ -309,23 +424,38 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
             inoculum_sample_id: '',
             inoculum_weight_grams: '',
             substrate_sample_id: '',
-            substrate_weight_grams: 0,
+            substrate_weight_grams: '',
             tumbler_volume: '',
+            chimera_channel: null,
             notes: ''
         });
-    }, [currentConfig]);
+        setChimeraChannelError('');
+    }, [currentConfig, setChimeraChannelError]);
 
-    const handleSave = () => {
-        if (!config.inoculum_sample_id || !config.inoculum_weight_grams || !config.tumbler_volume) {
-            alert('Inoculum sample, weight, and tumbler volume are required');
-            return;
+    const handleConfirm = () => {
+        // Validate chimera channel if provided
+        if (config.chimera_channel !== null && config.chimera_channel !== '' && config.chimera_channel !== undefined) {
+            const channelNum = parseInt(config.chimera_channel);
+            if (isNaN(channelNum) || channelNum < 1 || channelNum > 15) {
+                setChimeraChannelError('Chimera channel must be between 1 and 15');
+                return;
+            }
         }
 
+        setChimeraChannelError('');
+
+        // Convert chimera_channel to null if empty or invalid
+        const chimeraChannel = config.chimera_channel === '' || config.chimera_channel === null || config.chimera_channel === undefined
+            ? null
+            : parseInt(config.chimera_channel);
+
+        // Save the configuration
         onSave({
             ...config,
-            inoculum_weight_grams: parseFloat(config.inoculum_weight_grams),
-            substrate_weight_grams: parseFloat(config.substrate_weight_grams) || 0,
-            tumbler_volume: parseFloat(config.tumbler_volume)
+            inoculum_weight_grams: config.inoculum_weight_grams ? parseFloat(config.inoculum_weight_grams) : '',
+            substrate_weight_grams: config.substrate_weight_grams ? parseFloat(config.substrate_weight_grams) : '',
+            tumbler_volume: config.tumbler_volume ? parseFloat(config.tumbler_volume) : '',
+            chimera_channel: chimeraChannel
         });
     };
 
@@ -415,6 +545,38 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 <p className="text-xs text-gray-500 mt-1">Volume of gas required for a tip to occur</p>
             </div>
 
+            {/* Chimera Channel - Only show when both chimera and black-box devices are selected */}
+            {showChimeraChannel && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chimera Channel (optional)
+                    </label>
+                    <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="15"
+                        value={config.chimera_channel === null ? '' : config.chimera_channel}
+                        onChange={(e) => {
+                            setConfig(prev => ({ ...prev, chimera_channel: e.target.value }));
+                            setChimeraChannelError('');
+                        }}
+                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 text-sm ${
+                            chimeraChannelError
+                                ? 'border-red-500 focus:ring-red-500'
+                                : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                        placeholder="Leave empty if not used"
+                    />
+                    {chimeraChannelError && (
+                        <p className="text-xs text-red-600 mt-1">{chimeraChannelError}</p>
+                    )}
+                    {!chimeraChannelError && (
+                        <p className="text-xs text-gray-500 mt-1">Must be between 1 and 15 (leave empty if not used)</p>
+                    )}
+                </div>
+            )}
+
             {/* Notes */}
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -429,19 +591,13 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 />
             </div>
 
-            {/* Actions */}
-            <div className="flex space-x-2 pt-2">
+            {/* Confirm Button */}
+            <div className="pt-2">
                 <button
-                    onClick={handleSave}
-                    className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                    onClick={handleConfirm}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                 >
-                    Save
-                </button>
-                <button
-                    onClick={onClear}
-                    className="px-3 py-2 text-red-600 border border-red-600 text-sm rounded hover:bg-red-50"
-                >
-                    Clear
+                    Confirm
                 </button>
             </div>
         </div>

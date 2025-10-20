@@ -819,14 +819,31 @@ def upload_csv_configuration():
                     continue
                 
                 # Parse CSV columns based on the format:
-                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml)
+                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml),Chimera channel (optional)
                 channel_number = int(sample_description)
                 in_service = int(row['In service']) == 1
                 inoculum_only = int(row['Inoculum only']) == 1
                 inoculum_weight = float(row['Inoculum mass VS (g)'])
                 substrate_weight = 0 if inoculum_only else float(row['Sample mass VS (g)'])
                 tumbler_volume = float(row['Tumbler volume (ml)'])
-                
+
+                # Parse optional Chimera channel column
+                chimera_channel = None
+                chimera_column_key = None
+                # Try different possible column names
+                for key in ['Chimera channel', 'Chimera Channel', 'chimera_channel', 'chimera channel']:
+                    if key in row:
+                        chimera_column_key = key
+                        break
+
+                if chimera_column_key and row[chimera_column_key].strip():
+                    try:
+                        chimera_val = int(row[chimera_column_key].strip())
+                        if 1 <= chimera_val <= 15:
+                            chimera_channel = chimera_val
+                    except ValueError:
+                        pass  # Invalid value, keep as None
+
                 # Only include channels that are in service
                 if in_service:
                     configurations.append({
@@ -835,6 +852,7 @@ def upload_csv_configuration():
                         'substrate_weight_grams': substrate_weight,
                         'tumbler_volume': tumbler_volume,
                         'is_control': inoculum_only,
+                        'chimera_channel': chimera_channel,
                         'notes': f"Imported from CSV - {'Control (inoculum only)' if inoculum_only else 'Test sample'}"
                     })
             except (ValueError, KeyError) as e:

@@ -50,6 +50,7 @@ function BlackBoxTestConfig({
                         substrate_sample_id: csvConfig.is_control ? '' : '', // User needs to select
                         substrate_weight_grams: csvConfig.substrate_weight_grams,
                         tumbler_volume: csvConfig.tumbler_volume,
+                        chimera_channel: csvConfig.chimera_channel || null,
                         notes: csvConfig.notes
                     };
                     appliedCount++;
