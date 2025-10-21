@@ -2,6 +2,7 @@ from serial_handler import SerialHandler
 import datetime
 
 class PlcHandler(SerialHandler):
+    #Class variables to store machine part counts and name parts
     machine_info = {"Ray" : {"reactors" : 2, "mixers" : 2, "heaters" : 2, "agitators" : 2, "feeders" : 1},
                     "Ray-3" : {"reactors" : 3, "mixers" : 3, "heaters" : 3, "agitators" : 3, "feeders" : 1},
                     "Ray-I" : {"reactors" : 2, "mixers" : 2, "heaters" : 2, "agitators" : 2, "feeders" : 2},
@@ -11,6 +12,7 @@ class PlcHandler(SerialHandler):
                     "Black Swan" : {"reactors" : 10, "mixers" : 8, "heaters" : 10, "agitators" : 4, "feeders" : 4},
                     "Medusa" : {"reactors" : 10, "mixers" : 1, "heaters" : 0, "agitators" : 10, "feeders" : 2}}
     machine_starts = {"Ray" : "_RAY", "Ray-3" : "_RAY", "Ray-I" : "_RAY", "Caterpillar" : "_CAT", "Lobster" : "_LOB", "MAX-I" : "_MAX", "Black Swan" : "_BS_S1S2", "Medusa" : "_MEDUSA"}
+    
     def __init__(self, port : str):
         """Setup the the PLC object"""
         super().__init__(baudrate = 38400)
