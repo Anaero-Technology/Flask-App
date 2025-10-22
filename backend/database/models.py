@@ -116,6 +116,13 @@ class ChannelConfiguration(db.Model):
    tip_count = Column(Integer, nullable=False, default=0) #Number of tips that have occurred
    total_stp_volume = Column(Float, nullable=False, default=0.0)
    total_net_volume = Column(Float, nullable=False, default=0.0)
+
+   hourly_tips = Column(Integer, nullable=False, default=0)
+   daily_tips = Column(Integer, nullable=False, default=0)
+   last_tip_time = Column(String, nullable=True)
+   hourly_volume = Column(Float, nullable=False, default=0.0)
+   daily_volume = Column(Float, nullable=False, default=0.0)
+
    
    notes = Column(String)
    
