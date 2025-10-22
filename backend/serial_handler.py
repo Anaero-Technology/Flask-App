@@ -73,6 +73,8 @@ class SerialHandler:
         if len(parts) > 4:
             return parts[4]
         else:
+            if "bad command" in response.lower():
+                return "plc"
             raise Exception(f"Invalid response format: {response}")
 
     

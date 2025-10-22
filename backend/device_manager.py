@@ -4,6 +4,7 @@ from database.models import Device, db
 from serial_handler import SerialHandler
 from black_box_handler import BlackBoxHandler
 from chimera_handler import ChimeraHandler
+from plc_handler import PlcHandler
 
 class DeviceManager:
     _instance = None
@@ -76,6 +77,8 @@ class DeviceManager:
                     handler = BlackBoxHandler(port)
                 elif device_type in ['chimera', 'chimera-max']:
                     handler = ChimeraHandler(port)
+                elif device_type in ["plc"]:
+                    handler = PlcHandler(port)
                 else:
                     return False
                 
