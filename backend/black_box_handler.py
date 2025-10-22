@@ -1,6 +1,7 @@
 import time
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
+from database.models import ChannelConfiguration, db
 
 
 class BlackBoxHandler(SerialHandler):
@@ -90,6 +91,8 @@ class BlackBoxHandler(SerialHandler):
                         db.session.rollback()
                     except:
                         pass
+            
+            self.calculateTip("")
     
         except (ValueError, IndexError):
             pass
@@ -339,6 +342,187 @@ class BlackBoxHandler(SerialHandler):
     def set_test_id(self, test_id):
         """Set the current test ID for database logging"""
         self.test_id = test_id
+
+    def convertSeconds(self, seconds) -> tuple:
+        '''Converts timestamp in seconds to number of days, hours minutes and seconds'''
+        #Calculate number of seconds in a minute, hour and day
+        secondsInMinute = 60
+        secondsInHour = secondsInMinute * 60
+        secondsInDay = secondsInHour * 24
+        #Take the days off first
+        d = seconds // secondsInDay
+        seconds = seconds - (d * secondsInDay)
+        #Take the hours off
+        h = seconds // secondsInHour
+        seconds = seconds - (h * secondsInHour)
+        #Take the minutes off
+        m = seconds // secondsInMinute
+        seconds = seconds - (m * secondsInMinute)
+        return d, h, m, seconds
+
+    def calculateTip(self, tipLine):
+        '''Convert from setup information and events to a fully processed event, day and hour logs with net volumes'''
+        if self._app:
+            with self._app.app_context():
+                tableData = list(ChannelConfiguration.query.filter_by(test_id = self.test_id))
+
+        print(tableData)
+        return True
+        
+        #Setup information about each channel
+        setup = {"names" : [str], "inUse" : [bool], "inoculumOnly" : [bool], "inoculumMass" : [float], "sampleMass" : [float], "tumblerVolume" : [float], "gasConstants" : [float]}
+
+        #Dicionary to store overall running information for all channels
+        overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
+        #Arrays to hold dictionaries of hour and day information for each channel
+        hours = [] #{"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15}
+        days = [] #{"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15}
+        #Array to hold final event log information (as it can be gathered immediately)
+        eventArray = []
+
+        lastHourNetVolume = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        lastDayNetVolume = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        eventCount = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        try:
+            #Iterate through every event in the log
+            for event in eventData:
+                #Event - event id, time(YYYY:MM:DD:HH:MM:SS), time (s), bucket number, temperature (deg C), pressure (hPa)
+                #Get the channel number
+                channelId = int(event[3]) - 1
+                #If this channel should be logging
+                if setup["inUse"][channelId]:
+                    #Get the time, temperature and pressure
+                    eventTime = int(float(event[2]))
+                    temperatureC = float(event[4])
+                    temperatureK = temperatureC + 273
+                    pressure = float(event[5])
+
+                    #Find the time as parts
+                    day, hour, min, sec = self.convertSeconds(eventTime)
+                    #Total hour count
+                    totalHour = hour + (day * 24)
+                    #Extend the day and hour arrays to store new values
+                    while len(days) <= day:
+                        if len(days) > 0:
+                            for channel in range(0, 15):
+                                lastDayNetVolume[channel] = lastDayNetVolume[channel] + days[-1]["volumeNet"][channel]
+                        days.append({"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15})
+                    while len(hours) <= totalHour:
+                        if len(hours) > 0:
+                            for channel in range(0, 15):
+                                lastHourNetVolume[channel] = lastHourNetVolume[channel] + hours[-1]["volumeNet"][channel]
+                        hours.append({"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15})
+
+                    #Calculate the volume for the tip
+                    eventVolume = setup["gasConstants"][channelId] * (pressure / temperatureK)
+
+                    #Add tip to overall, day and hour as well as the volume for each
+                    overall["tips"][channelId] = overall["tips"][channelId] + 1
+                    overall["volumeSTP"][channelId] = overall["volumeSTP"][channelId] + eventVolume
+                    days[-1]["tips"][channelId] = days[-1]["tips"][channelId] + 1
+                    days[-1]["volumeSTP"][channelId] = days[-1]["volumeSTP"][channelId] + eventVolume
+                    hours[-1]["tips"][channelId] = hours[-1]["tips"][channelId] + 1
+                    hours[-1]["volumeSTP"][channelId] = hours[-1]["volumeSTP"][channelId] + eventVolume
+
+                    #thisNetVolume = eventVolume
+                    totalNetVolume = overall["volumeSTP"][channelId]
+                    #If this is an inoculum only channel
+                    if setup["inoculumOnly"][channelId]:
+                        #If there is inoculum mass
+                        if setup["inoculumMass"][channelId] != 0:
+                            #Net volume is the total volume divided by the inoculum mass
+                            #thisNetVolume = eventVolume / setup["inoculumMass"][channelId]
+                            totalNetVolume = overall["volumeSTP"][channelId] / setup["inoculumMass"][channelId]
+                            #Add the mass and volume to overall running total
+                            overall["inoculumVolume"] = overall["inoculumVolume"] + eventVolume
+                            overall["inoculumMass"] = overall["inoculumMass"] + setup["inoculumMass"][channelId]
+                    else:
+                        #If there is sample mass
+                        if setup["sampleMass"][channelId] != 0:
+                            if overall["inoculumMass"] != 0:
+                                inoculumAdjust = 0
+                                inoculumCount = 0
+                                for channel in range(0, 15):
+                                    if setup["inoculumOnly"][channel] and setup["inoculumMass"][channel] != 0:
+                                        inoculumAdjust = inoculumAdjust + (overall["volumeSTP"][channel] / setup["inoculumMass"][channel])
+                                        inoculumCount = inoculumCount + 1
+                                inoculumAdjust = inoculumAdjust / inoculumCount
+                                totalNetVolume = (overall["volumeSTP"][channelId] - (inoculumAdjust * setup["inoculumMass"][channelId])) / setup["sampleMass"][channelId]
+                            else:
+                                totalNetVolume = overall["volumeSTP"][channelId] / setup["sampleMass"][channelId]
+                    
+                    #Add the net volume for this tip to the hourly and daily information for this channel
+                    days[-1]["volumeNet"][channelId] = totalNetVolume - lastDayNetVolume[channelId]
+                    hours[-1]["volumeNet"][channelId] = totalNetVolume - lastHourNetVolume[channelId]
+                    overall["volumeNet"][channelId] = totalNetVolume
+
+                    #Channel Number, Name, Timestamp, Days, Hours, Minutes, Tumbler Volume (ml), Temperature (C), Pressure (hPA), Cumulative Total Tips, Volume This Tip (STP), Total Volume (STP), Tips This Day, Volume This Day (STP), Tips This Hour, Volume This Hour (STP), Net Volume Per Gram (ml/g)
+                    eventArray.append([channelId + 1, setup["names"][channelId], eventTime, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], days[-1]["tips"][channelId], days[-1]["volumeSTP"][channelId], hours[-1]["tips"][channelId], hours[-1]["volumeSTP"][channelId], overall["volumeNet"][channelId]])
+                    eventCount[channelId] = eventCount[channelId] + 1
+                #Move progress bar forward
+                progress[0] = progress[0] + 1
+
+        except Exception as e:
+            #Something is wrong with the way the event log file is formatted - report error and stop
+            return "Event file not formatted correctly, ensure that all fields are present and of the correct data type.", None, None, None, None
+
+        progress[2] = "Creating Files: {0}%"
+        progress[1] = len(hours) + len(days)
+        progress[0] = 0
+        #Array to store hour data output
+        hourArray = []
+        #Stored totals for each channel
+        totalVolume = [0.0] * 15
+        totalNetVolume = [0.0] * 15
+        h = 0
+        d = 0
+        #Iterate through hours
+        for hour in hours:
+            #Increment hour count
+            h = h + 1
+            #Adjust for day rollover
+            if h > 23:
+                d = d + 1
+                h = h - 24
+            #Calculate the timestamp of the hour
+            timestamp = ((60 * 60 * 24) * d) + ((60 * 60) * h)
+            #Iterate channels
+            for channelId in range(0, 15):
+                #Add to the total volumes
+                totalVolume[channelId] = totalVolume[channelId] + hour["volumeSTP"][channelId]
+                totalNetVolume[channelId] = totalNetVolume[channelId] + hour["volumeNet"][channelId]
+                #Channel Number", "Name", "Timestamp", "Days", "Hours", "Minutes", "In Service", "Tips This Hour", "Volume This Hour at STP (ml)", "Net Volume This Hour (ml/g)", "Cumulative Net Vol (ml/g)", "Cumulative Volume at STP (ml)
+                hourArray.append([channelId + 1, setup["names"][channelId], timestamp, d, h, 0, setup["inUse"][channelId], hour["tips"][channelId], round(hour["volumeSTP"][channelId], 3), round(hour["volumeNet"][channelId], 3), round(totalNetVolume[channelId], 3), round(totalVolume[channelId], 3)])
+            progress[0] = progress[0] + 1
+        #Array to store day data output
+        dayArray = []
+        #Stored totals for each channel
+        totalVolume = [0.0] * 15
+        totalNetVolume = [0.0] * 15
+        d = 0
+        #Iterate through days
+        for day in days:
+            #Increment day count
+            d = d + 1
+            #Calculate the timestamp of the day
+            timestamp = (60 * 60 * 24) * d
+            #Iterate channels
+            for channelId in range(0, 15):
+                #Add tot the total volumes
+                totalVolume[channelId] = totalVolume[channelId] + day["volumeSTP"][channelId]
+                totalNetVolume[channelId] = totalNetVolume[channelId] + day["volumeNet"][channelId]
+                #Channel Number", "Name", "Timestamp", "Days", "Hours", "Minutes", "In Service", "Tips This Day", "Volume This Day at STP (ml)", "Net Volume This Day (ml/g)", "Cumulative Net Vol (ml/g)", "Cumulative Volume at STP (ml)
+                dayArray.append([channelId + 1, setup["names"][channelId], timestamp, d, 0, 0, setup["inUse"][channelId], day["tips"][channelId], round(day["volumeSTP"][channelId], 3), round(day["volumeNet"][channelId], 3), round(totalNetVolume[channelId], 3), round(totalVolume[channelId], 3)])
+            progress[0] = progress[0] + 1
+        #Add text headers
+        eventArray.insert(0, ["Channel Number", "Name", "Timestamp", "Days", "Hours", "Minutes", "Tumbler Volume (ml)", "Temperature (C)", "Pressure (hPA)", "Cumulative Total Tips", "Volume This Tip (STP)", "Total Volume (STP)", "Tips This Day", "Volume This Day (STP)", "Tips This Hour", "Volume This Hour (STP)", "Cumulative Net Volume Per Gram (ml/g) or (ml/gVS)"])
+        hourArray.insert(0, ["Channel Number", "Name", "Timestamp", "Days", "Hours", "Minutes", "In Service", "Tips This Hour", "Volume This Hour at STP (ml)", "Net Volume This Hour (ml/g)", "Cumulative Net Vol (ml/g)", "Cumulative Volume at STP (ml)"])
+        dayArray.insert(0, ["Channel Number", "Name", "Timestamp", "Days", "Hours", "Minutes", "In Service", "Tips This Day", "Volume This Day at STP (ml)", "Net Volume This Day (ml/g)", "Cumulative Net Vol (ml/g)", "Cumulative Volume at STP (ml)"])
+        setupArray = [setup["names"], setup["inUse"], setup["inoculumOnly"], setup["inoculumMass"], setup["sampleMass"], setup["tumblerVolume"]]
+        #Return correct information
+        return None, eventArray, hourArray, dayArray, setupArray
     
     def disconnect(self):
         """Disconnect from device"""
