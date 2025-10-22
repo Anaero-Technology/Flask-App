@@ -43,6 +43,8 @@ class BlackBoxHandler(SerialHandler):
                 "pressure": float(parts[5])
              }
             
+            print("Processed Data:", self.calculateTip(tip_data))
+            
             print(f"[AUTOMATIC TIP] Tip #{tip_data['tip_number']} - "
                 f"Channel: {tip_data['channel_number']}, "
                 f"Temp: {tip_data['temperature']}°C, "
@@ -90,8 +92,6 @@ class BlackBoxHandler(SerialHandler):
                         db.session.rollback()
                     except:
                         pass
-            
-            self.calculateTip("")
     
         except (ValueError, IndexError):
             pass
