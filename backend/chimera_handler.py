@@ -39,6 +39,7 @@ class ChimeraHandler(SerialHandler):
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
         self.register_automatic_handler("connect", self._handle_wifi_connect)
+        self.register_automatic_handler("calibration", self._handle_calibration)
         
     def connect(self):
         super().connect(self.port)
@@ -150,7 +151,37 @@ class ChimeraHandler(SerialHandler):
             except (ValueError, IndexError) as e:
                 print(f"Failed to parse datapoint: {e}")
                 pass
- 
+
+    def _handle_calibration(self, line: str):
+        """Process automatic calibration messages and send SSE updates"""
+        try:
+            parts = line.split()
+            if len(parts) >= 2:
+                stage = parts[1]
+
+                # Ignore calibration info messages
+                if stage == 'info':
+                    return
+
+                time_ms = int(parts[2]) if len(parts) >= 3 else 0
+
+                # Send SSE notification
+                if self.app:
+                    with self.app.app_context():
+                        from flask_sse import sse
+                        sse.publish(
+                            {
+                                "device_id": self.id,
+                                "stage": stage,
+                                "time_ms": time_ms
+                            },
+                            type='calibration_progress'
+                        )
+
+        except (ValueError, IndexError) as e:
+            print(f"Failed to parse calibration message: {e}")
+            pass
+
     def set_name(self, name: str) -> bool:
         self.device_name = name
         return True
@@ -172,13 +203,18 @@ class ChimeraHandler(SerialHandler):
     def get_info(self) -> Dict:
         """Get current device information"""
         self._get_device_info()
+
+        # Get service sequence
+        success, service_sequence, _ = self.get_service()
+
         return {
             "device_name": self.device_name,
             "mac_address": self.mac_address,
             "is_logging": self.is_logging,
             "current_channel": self.current_channel,
             "seconds_elapsed": self.seconds_elapsed,
-            "port": self.port
+            "port": self.port,
+            "service_sequence": service_sequence if success else '111111111111111'
         }
     
     def start_logging(self) -> Tuple[bool, str]:
@@ -502,9 +538,9 @@ class ChimeraHandler(SerialHandler):
         """Set recirculation time"""
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             return False, "Invalid time values"
-        
+
         response = self.send_command(f"recirculatesettime {hour} {minute}")
-        
+
         if response == "done recirculatesettime":
             self.recirculation_hour = hour
             self.recirculation_minute = minute
@@ -517,7 +553,45 @@ class ChimeraHandler(SerialHandler):
             return False, "Cannot change recirculation time while logging"
         else:
             return False, f"Unexpected response: {response}"
-    
+
+    def get_recirculation_info(self) -> Tuple[bool, Dict]:
+        """Get recirculation information from device"""
+        response = self.send_command("recirculateinfo")
+
+        if response and response.startswith("recirculateinfo "):
+            # Parse: recirculateinfo [recirculating] [days_between] [hour] [minute] [last_year] [last_month] [last_day]
+            parts = response.split()
+            if len(parts) >= 8:
+                recirculating = parts[1] == "1"
+                days_between = int(parts[2])
+                hour = int(parts[3])
+                minute = int(parts[4])
+                last_year = int(parts[5])
+                last_month = int(parts[6])
+                last_day = int(parts[7])
+
+                # Update internal state
+                self.recirculation_enabled = recirculating
+                self.recirculation_days = days_between
+                self.recirculation_hour = hour
+                self.recirculation_minute = minute
+
+                info = {
+                    "recirculation_enabled": recirculating,
+                    "days_between": days_between,
+                    "hour": hour,
+                    "minute": minute,
+                    "last_recirculation_date": {
+                        "year": last_year,
+                        "month": last_month,
+                        "day": last_day
+                    }
+                }
+
+                return True, info
+
+        return False, {}
+
     def set_test_id(self, test_id):
         """Set the current test ID for database logging"""
         self.test_id = test_id

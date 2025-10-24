@@ -112,7 +112,8 @@ class ChannelConfiguration(db.Model):
    substrate_sample_id = Column(Integer, ForeignKey('samples.id'), nullable=True)
    substrate_weight_grams = Column(Float, nullable=False, default=0)  # 0 for controls
    tumbler_volume = Column(Float, nullable=False)  # Volume of gas required for a tip
-   
+   chimera_channel = Column(Integer, nullable=True)  # Optional chimera channel (1-15) linked to this BlackBox channel
+
    notes = Column(String)
    
    # Ensure unique channel per test

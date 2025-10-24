@@ -1,18 +1,226 @@
 import React, { useState } from 'react';
 
-function BlackBoxTestConfig({ 
-    device, 
-    configurations, 
-    samples, 
-    inoculums, 
-    selectedChannel, 
-    onChannelClick, 
+// Channel Configuration Form Component
+function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear, showChimeraChannel, chimeraChannelError, setChimeraChannelError }) {
+    const [config, setConfig] = useState(currentConfig || {
+        inoculum_sample_id: '',
+        inoculum_weight_grams: '',
+        substrate_sample_id: '',
+        substrate_weight_grams: '',
+        tumbler_volume: '',
+        chimera_channel: null,
+        notes: ''
+    });
+
+    React.useEffect(() => {
+        setConfig(currentConfig || {
+            inoculum_sample_id: '',
+            inoculum_weight_grams: '',
+            substrate_sample_id: '',
+            substrate_weight_grams: '',
+            tumbler_volume: '',
+            chimera_channel: null,
+            notes: ''
+        });
+        if (setChimeraChannelError) setChimeraChannelError('');
+    }, [currentConfig, setChimeraChannelError]);
+
+    const handleConfirm = () => {
+        // Validate chimera channel if provided
+        if (config.chimera_channel !== null && config.chimera_channel !== '' && config.chimera_channel !== undefined) {
+            const channelNum = parseInt(config.chimera_channel);
+            if (isNaN(channelNum) || channelNum < 1 || channelNum > 15) {
+                if (setChimeraChannelError) setChimeraChannelError('Chimera channel must be between 1 and 15');
+                return;
+            }
+        }
+
+        if (setChimeraChannelError) setChimeraChannelError('');
+
+        // Convert chimera_channel to null if empty or invalid
+        const chimeraChannel = config.chimera_channel === '' || config.chimera_channel === null || config.chimera_channel === undefined
+            ? null
+            : parseInt(config.chimera_channel);
+
+        // Save the configuration
+        onSave({
+            ...config,
+            inoculum_weight_grams: config.inoculum_weight_grams ? parseFloat(config.inoculum_weight_grams) : '',
+            substrate_weight_grams: config.substrate_weight_grams ? parseFloat(config.substrate_weight_grams) : '',
+            tumbler_volume: config.tumbler_volume ? parseFloat(config.tumbler_volume) : '',
+            chimera_channel: chimeraChannel
+        });
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* Inoculum Selection */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Inoculum Sample <span className="text-red-500">*</span>
+                </label>
+                <select
+                    value={config.inoculum_sample_id}
+                    onChange={(e) => setConfig(prev => ({ ...prev, inoculum_sample_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                >
+                    <option value="">Select inoculum...</option>
+                    {inoculums.map(inoculum => (
+                        <option key={inoculum.id} value={inoculum.id}>
+                            {inoculum.inoculum_source}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Inoculum Weight */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Inoculum Weight (g) <span className="text-red-500">*</span>
+                </label>
+                <input
+                    type="number"
+                    step="0.1"
+                    value={config.inoculum_weight_grams}
+                    onChange={(e) => setConfig(prev => ({ ...prev, inoculum_weight_grams: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                    placeholder="0.0"
+                />
+            </div>
+
+            {/* Substrate Selection */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Substrate Sample (optional)
+                </label>
+                <select
+                    value={config.substrate_sample_id || ''}
+                    onChange={(e) => setConfig(prev => ({ ...prev, substrate_sample_id: e.target.value || null }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                >
+                    <option value="">No substrate (control)</option>
+                    {samples.map(sample => (
+                        <option key={sample.id} value={sample.id}>
+                            {sample.sample_name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Substrate Weight */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Substrate Weight (g)
+                </label>
+                <input
+                    type="number"
+                    step="0.1"
+                    value={config.substrate_weight_grams}
+                    onChange={(e) => setConfig(prev => ({ ...prev, substrate_weight_grams: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                    placeholder="0.0"
+                />
+            </div>
+
+            {/* Tumbler Volume */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tumbler Volume (mL) <span className="text-red-500">*</span>
+                </label>
+                <input
+                    type="number"
+                    step="0.1"
+                    value={config.tumbler_volume}
+                    onChange={(e) => setConfig(prev => ({ ...prev, tumbler_volume: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                    placeholder="0.0"
+                />
+                <p className="text-xs text-gray-500 mt-1">Volume of gas required for a tip to occur</p>
+            </div>
+
+            {/* Chimera Channel - Only show when both chimera and black-box devices are selected */}
+            {showChimeraChannel && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chimera Channel (optional)
+                    </label>
+                    <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="15"
+                        value={config.chimera_channel === null ? '' : config.chimera_channel}
+                        onChange={(e) => {
+                            setConfig(prev => ({ ...prev, chimera_channel: e.target.value }));
+                            if (setChimeraChannelError) setChimeraChannelError('');
+                        }}
+                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 text-sm ${
+                            chimeraChannelError
+                                ? 'border-red-500 focus:ring-red-500'
+                                : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                        placeholder="Leave empty if not used"
+                    />
+                    {chimeraChannelError && (
+                        <p className="text-xs text-red-600 mt-1">{chimeraChannelError}</p>
+                    )}
+                    {!chimeraChannelError && (
+                        <p className="text-xs text-gray-500 mt-1">Must be between 1 and 15 (leave empty if not used)</p>
+                    )}
+                </div>
+            )}
+
+            {/* Notes */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                </label>
+                <textarea
+                    value={config.notes}
+                    onChange={(e) => setConfig(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                    rows="2"
+                    placeholder="Optional notes..."
+                />
+            </div>
+
+            {/* Confirm Button */}
+            <div className="pt-2">
+                <button
+                    onClick={handleConfirm}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                >
+                    Confirm
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function BlackBoxTestConfig({
+    device,
+    configurations,
+    samples,
+    inoculums,
+    selectedChannel,
+    onChannelClick,
     onConfigurationChange,
     showChannelConfig,
     onSaveChannelConfig,
-    onClearChannelConfig 
+    onClearChannelConfig,
+    showChimeraChannel,
+    chimeraChannelError,
+    setChimeraChannelError
 }) {
     const [uploadingCsv, setUploadingCsv] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    // Auto-select channel 1 when expanded
+    React.useEffect(() => {
+        if (isExpanded && (!selectedChannel || selectedChannel.deviceId !== device.id)) {
+            onChannelClick(device.id, 1);
+        }
+    }, [isExpanded, device.id, selectedChannel, onChannelClick]);
 
     const getChannelConfig = (channelNumber) => {
         return configurations[`${device.id}-${channelNumber}`] || null;
@@ -114,23 +322,86 @@ function BlackBoxTestConfig({
     };
 
     return (
-        <div className="mb-8 bg-gray-50 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">
-                    {device.name} (Gas-flow meter)
-                </h3>
-                <label className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 cursor-pointer">
-                    {uploadingCsv ? 'Uploading...' : 'Upload CSV'}
-                    <input
-                        type="file"
-                        accept=".csv"
-                        onChange={handleCsvUpload}
-                        disabled={uploadingCsv}
-                        className="hidden"
-                    />
-                </label>
+        <div className="mb-8 bg-gray-50 rounded-lg">
+            {/* Collapsible Header */}
+            <div className="flex items-center justify-between p-4 hover:bg-gray-100 rounded-lg transition-colors">
+                <div
+                    className="flex-1 cursor-pointer"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    <h3 className="text-lg font-semibold">{device.name} (Gas-flow meter)</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                    {/* Dropdown arrow */}
+                    <svg
+                        className={`w-5 h-5 transition-transform cursor-pointer ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        onClick={() => setIsExpanded(!isExpanded)}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
             </div>
-            {renderChannelGrid()}
+
+            {/* Expandable Content */}
+            {isExpanded && (
+                <div className="px-4 pb-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Left side - Channel grid and info */}
+                        <div className={showChannelConfig && selectedChannel && selectedChannel.deviceId === device.id ? "lg:col-span-2" : "lg:col-span-3"}>
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="text-sm text-gray-600 flex-1">
+                                    <div className="mb-2">Click on a channel to configure it, or upload a CSV file to auto-fill configurations.</div>
+                                    <div className="space-y-1">
+                                        <div className="text-blue-600">Blue = Selected</div>
+                                        <div className="text-green-600">Green = Configured with substrate</div>
+                                        <div className="text-yellow-600">Yellow = Control (inoculum only)</div>
+                                    </div>
+                                </div>
+                                {/* Upload CSV Button */}
+                                <label className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 cursor-pointer ml-4 flex-shrink-0">
+                                    {uploadingCsv ? 'Uploading...' : 'Upload CSV'}
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleCsvUpload}
+                                        disabled={uploadingCsv}
+                                        className="hidden"
+                                    />
+                                </label>
+                            </div>
+
+                            {/* Channel Grid */}
+                            {renderChannelGrid()}
+                        </div>
+
+                        {/* Right side - Channel Configuration Form */}
+                        {showChannelConfig && selectedChannel && selectedChannel.deviceId === device.id && (
+                            <div className="lg:col-span-1">
+                                <div className="bg-white rounded-lg p-4 border border-gray-200 sticky top-4">
+                                    <h3 className="text-lg font-semibold mb-4">
+                                        Configure Channel {selectedChannel.channelNumber}
+                                    </h3>
+                                    <ChannelConfigForm
+                                        deviceId={selectedChannel.deviceId}
+                                        channelNumber={selectedChannel.channelNumber}
+                                        currentConfig={getChannelConfig(selectedChannel.channelNumber)}
+                                        samples={samples}
+                                        inoculums={inoculums}
+                                        onSave={onSaveChannelConfig}
+                                        onClear={onClearChannelConfig}
+                                        showChimeraChannel={showChimeraChannel}
+                                        chimeraChannelError={chimeraChannelError}
+                                        setChimeraChannelError={setChimeraChannelError}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
