@@ -66,7 +66,6 @@ class Sample(db.Model):
    substrate_percent_ts = Column(Float)
    substrate_percent_vs = Column(Float)
    author = Column(String)
-   other = Column(String)
    reactor  = Column(String)
    temperature = Column(Float)
 
