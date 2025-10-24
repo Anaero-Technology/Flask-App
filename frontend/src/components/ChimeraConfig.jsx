@@ -56,7 +56,6 @@ function ChimeraConfig({ device }) {
 
         eventSource.addEventListener('calibration_progress', (event) => {
             const data = JSON.parse(event.data);
-            console.log('Calibration progress received:', data);
 
             // Map stage to message
             let message = '';
@@ -87,10 +86,6 @@ function ChimeraConfig({ device }) {
                 startTime: Date.now()
             });
         });
-
-        eventSource.onerror = (error) => {
-            console.error('SSE Error:', error);
-        };
 
         // Listen for done calibrate to clear progress
         eventSource.addEventListener('message', (event) => {

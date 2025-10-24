@@ -29,7 +29,7 @@ function TestForm() {
             const data = await response.json();
             setDevices(data);
             // Auto-select only free devices initially
-            const freeDevices = data.filter(d => !d.busy);
+            const freeDevices = data.filter(d => !d.active_test_id);
             setSelectedDevices(freeDevices.map(d => d.id));
 
             // Check if any device has an active test to restore the active test state
@@ -68,7 +68,7 @@ function TestForm() {
 
     const selectAllDevices = () => {
         // Only select free devices
-        const freeDevices = devices.filter(d => !d.busy);
+        const freeDevices = devices.filter(d => !d.active_test_id);
         setSelectedDevices(freeDevices.map(d => d.id));
     };
 
@@ -181,7 +181,7 @@ function TestForm() {
 
         // Check if any selected devices are busy
         const selectedDeviceObjs = devices.filter(d => selectedDevices.includes(d.id));
-        const busyDevices = selectedDeviceObjs.filter(d => d.busy);
+        const busyDevices = selectedDeviceObjs.filter(d => d.active_test_id);
 
         if (busyDevices.length > 0) {
             alert(`Cannot start test. The following devices are currently in use: ${busyDevices.map(d => d.name).join(', ')}`);
@@ -193,7 +193,7 @@ function TestForm() {
             Object.keys(configurations).map(key => parseInt(key.split('-')[0]))
         )];
         const busyConfigDevices = devices.filter(d =>
-            deviceIdsInConfigs.includes(d.id) && d.busy
+            deviceIdsInConfigs.includes(d.id) && d.active_test_id
         );
 
         if (busyConfigDevices.length > 0) {
@@ -369,7 +369,7 @@ function TestForm() {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {devices.map(device => {
-                                    const isBusy = device.busy;
+                                    const isBusy = device.active_test_id;
                                     return (
                                         <label
                                             key={device.id}

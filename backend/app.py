@@ -281,7 +281,6 @@ def list_connected_devices():
                 "mac_address": device.mac_address,
                 "connected": device.connected,
                 "logging": device.logging,
-                "busy": device.active_test_id is not None,
                 "active_test_id": device.active_test_id,
                 "active_test_name": None
             }
