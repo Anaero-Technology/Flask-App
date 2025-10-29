@@ -27,10 +27,12 @@ class BlackBoxHandler(SerialHandler):
     
     def _print_tips(self, line: str):
         """Prints automatic tip messages and sends SSE notification"""
+        self.calculateTip("")
+       
         try:
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
-
+            
             # Parse the CSV line: Tip Number, Time Stamp, Seconds Elapsed, Channel Number, Temperature, Pressure
             parts = file_line.split()
 
@@ -70,7 +72,32 @@ class BlackBoxHandler(SerialHandler):
                 try:
                     with self.app.app_context():
                         from database.models import BlackboxRawData, db
-                        # Create new BlackboxRawData entry
+
+                        # Check if tips were missed (gap in tip numbers)
+                        latest_tip = db.session.query(BlackboxRawData)\
+                            .filter_by(test_id=self.test_id, device_id=self.id)\
+                            .order_by(BlackboxRawData.tip_number.desc())\
+                            .first()
+
+                        if latest_tip:
+                            expected_tip = latest_tip.tip_number + 1
+                            if tip_data['tip_number'] > expected_tip:
+                                # Missed tips detected!
+                                missed_count = tip_data['tip_number'] - expected_tip
+                                print(f"⚠️  MISSED TIPS DETECTED: Expected tip {expected_tip}, got {tip_data['tip_number']}")
+                                print(f"   Missing {missed_count} tip(s). Scheduling recovery in background thread...")
+
+                                # Schedule recovery in a separate thread to avoid blocking reader thread
+                                import threading
+                                recovery_thread = threading.Thread(
+                                    target=self._recover_missed_tips_background,
+                                    args=(latest_tip.tip_number + 1, tip_data['tip_number']),
+                                    daemon=True
+                                )
+                                recovery_thread.start()
+                                return 
+
+                        # Create new BlackboxRawData entry for the current tip
                         raw_data = BlackboxRawData(
                             test_id=self.test_id,
                             device_id=self.id,
@@ -81,17 +108,19 @@ class BlackBoxHandler(SerialHandler):
                             temperature=tip_data['temperature'] if tip_data['temperature'] != 'N/A' else None,
                             pressure=tip_data['pressure']
                         )
-                        
+
                         db.session.add(raw_data)
                         db.session.commit()
-                        print(f"Saved tip data to database: Test {self.test_id}, Channel {tip_data['channel_number']}")
-                        
+                        print(f"Saved tip data to database: Test {self.test_id}, Tip #{tip_data['tip_number']}, Channel {tip_data['channel_number']}")
+
                 except Exception as e:
                     print(f"Failed to save tip data to database: {e}")
                     try:
                         db.session.rollback()
                     except:
                         pass
+            
+      
     
         except (ValueError, IndexError):
             pass
@@ -215,16 +244,32 @@ class BlackBoxHandler(SerialHandler):
         else:
             # If no max_bytes specified, download entire file
             command = f"download /{filename} 999999999"
-        
+
         self.clear_buffer()
         self.send_command_no_wait(command)
-        
-        # Wait for download to start
-        response = self.read_line(timeout=5)
-        if response == "failed download nofile":
-            return False, ["File does not exist"]
+
+        # Wait for download start, skipping automatic messages
+        response = None
+        start_time = time.time()
+        while time.time() - start_time < 5.0:
+            line = self.read_line(timeout=0.5)
+            
+            # Check for error responses
+            if line == "failed download nofile":
+                return False, ["File does not exist"]
+
+            # Found the download start message
+            if line.startswith("download start"):
+                response = line
+                break
+
+            # Skip automatic messages
+            print(f"Skipping automatic message during download: {line}")
+
+        if not response:
+            return False, ["Timeout waiting for download start"]
         elif not response.startswith("download start"):
-            return False, ["Failed to start download"]
+            return False, [f"Failed to start download: {response}"]
         
         # Read file lines
         lines = []
@@ -244,19 +289,37 @@ class BlackBoxHandler(SerialHandler):
                 # Send acknowledgment
                 self.send_command_no_wait("next")
     
-    def download_file_from(self, filename: str, byte_from: int) -> Tuple[bool, List[str]]:
-        """Download a file from a specific byte position"""
-        command = f"downloadFrom /{filename} {byte_from}"
-        
+    def download_file_from(self, filename: str, event_number: int) -> Tuple[bool, List[str]]:
+        """Download a file from a specific event position number"""
+
         self.clear_buffer()
-        self.send_command_no_wait(command)
-        
-        # Same response handling as download_file
-        response = self.read_line(timeout=5)
-        if response == "failed download nofile":
-            return False, ["File does not exist"]
+        self.send_command_no_wait(f"downloadFrom {filename} {event_number}")
+
+
+        # Wait for download start, skipping automatic messages
+        response = None
+        start_time = time.time()
+        while time.time() - start_time < 50.0:
+            line = self.read_line(timeout=0.5)
+            if not line:
+                continue
+
+            # Check for error responses
+            if line == "failed download nofile":
+                return False, ["File does not exist"]
+
+            # Found the download start message
+            if line.startswith("download start"):
+                response = line
+                break
+
+            # Skip automatic messages (DATA_PAUSED, tip, counts, etc)
+            print(f"Skipping automatic message during download: {line}")
+
+        if not response:
+            return False, ["Timeout waiting for download start"]
         elif not response.startswith("download start"):
-            return False, ["Failed to start download"]
+            return False, [f"Failed to start download: {response}"]
         
         lines = []
         while True:
@@ -338,6 +401,59 @@ class BlackBoxHandler(SerialHandler):
                 data = line[8:]
                 lines.append(data)
     
+    def _recover_missed_tips_background(self, from_event: int, current_tip: int):
+        """Background thread to recover missed tips without blocking reader thread"""
+        try:
+            print(f"[Recovery Thread] Downloading from event #{from_event}...")
+
+            if not self.current_log_file:
+                print("[Recovery Thread] No log file")
+                return
+
+            success, lines = self.download_file_from(self.current_log_file, from_event)
+
+            if not success:
+                print(f"[Recovery Thread] Download failed: {lines}")
+                return
+
+            print(f"[Recovery Thread] Downloaded {len(lines)} line(s)")
+
+            # Parse and save recovered tips
+            if self.app and hasattr(self, 'id'):
+                with self.app.app_context():
+                    from database.models import BlackboxRawData, db
+                    recovered = 0
+
+                    for line in lines:
+                        try:
+                            parts = line.split()
+                            if len(parts) >= 6:
+                                recovered_tip = int(parts[0])
+
+                                # Only save tips that are missing (before current tip)
+                                if recovered_tip <= current_tip:
+                                    recovered_data = BlackboxRawData(
+                                        test_id=self.test_id,
+                                        device_id=self.id,
+                                        tip_number=recovered_tip,
+                                        channel_number=int(parts[3]),
+                                        timestamp=int(time.time()),
+                                        seconds_elapsed=int(parts[2]),
+                                        temperature=None if parts[4] == "-" else float(parts[4]),
+                                        pressure=float(parts[5])
+                                    )
+                                    db.session.add(recovered_data)
+                                    recovered += 1
+                        except (ValueError, IndexError) as e:
+                            print(f"[Recovery Thread] Failed to parse line: {e}")
+                            continue
+
+                    db.session.commit()
+                    print(f"[Recovery Thread] Recovered {recovered} missed tip(s)")
+
+        except Exception as e:
+            print(f"[Recovery Thread] Error: {e}")
+
     def set_test_id(self, test_id):
         """Set the current test ID for database logging"""
         self.test_id = test_id

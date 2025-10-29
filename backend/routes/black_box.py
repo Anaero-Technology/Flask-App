@@ -16,15 +16,28 @@ def get_connected_black_boxes():
             device_type='black-box',
             connected=True
         ).all()
-        
-        devices_list = [{
-            "device_id": device.id,
-            "name": device.name,
-            "port": device.serial_port,
-            "mac_address": device.mac_address,
-            "connected": device.connected,
-            "logging": device.logging
-        } for device in connected_black_boxes]
+
+        devices_list = []
+        for device in connected_black_boxes:
+            device_data = {
+                "device_id": device.id,
+                "name": device.name,
+                "port": device.serial_port,
+                "mac_address": device.mac_address,
+                "connected": device.connected,
+                "logging": device.logging,
+                "active_test_id": device.active_test_id,
+                "active_test_name": None
+            }
+
+            # Get test name if device is in an active test
+            if device.active_test_id:
+                from database.models import Test
+                test = Test.query.get(device.active_test_id)
+                if test:
+                    device_data["active_test_name"] = test.name
+
+            devices_list.append(device_data)
         
         return jsonify(devices_list)
     except Exception as e:
@@ -106,21 +119,29 @@ def start_logging(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Check if device is already part of an active test
+        if device.active_test_id:
+            test = Test.query.get(device.active_test_id)
+            if test and test.status == 'running':
+                return jsonify({
+                    "error": f"Cannot start logging. Device is already part of active test '{test.name}'. Please stop the test first."
+                }), 400
+
         # Get handler
         handler = device_manager.get_black_box(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         data = request.get_json()
         filename = data.get('filename')
         if not filename:
             return jsonify({"error": "filename is required"}), 400
-        
+
         # Handle test creation/linking
         test_id = data.get('test_id')
         test = None
-        
+
         if test_id:
             # Use existing test
             test = Test.query.get(test_id)
@@ -186,28 +207,31 @@ def stop_logging(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Check if device is part of an active test
+        if device.active_test_id:
+            test = Test.query.get(device.active_test_id)
+            if test and test.status == 'running':
+                return jsonify({
+                    "error": f"Cannot stop logging. Device is part of active test '{test.name}'. Please stop the test first."
+                }), 400
+
         # Get handler
         handler = device_manager.get_black_box(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         success, message = handler.stop_logging()
         if success:
             device.logging = False
-            
+
+            # Clear any residual test assignment (in case test is not running)
             if device.active_test_id:
-                test = Test.query.get(device.active_test_id)
-                if test and test.status == 'running':
-                    test.status = 'completed'
-                    test.date_ended = datetime.now()
-        
-                # Clear test from device and handler
                 device.active_test_id = None
                 handler.set_test_id(None)
-            
+
             db.session.commit()
-            
+
             return jsonify({
                 "success": True,
                 "message": message
@@ -217,7 +241,7 @@ def stop_logging(device_id):
                 "success": False,
                 "message": message
             })
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

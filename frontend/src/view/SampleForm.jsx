@@ -187,40 +187,7 @@ function SampleForm() {
                                 </div>
                             </div>
 
-                            {/* Substrate Characteristics */}
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Substrate Characteristics</h3>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            %TS (of wet weight)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="substrate_percent_ts"
-                                            value={formData.substrate_percent_ts}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            %VS (of wet weight)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="substrate_percent_vs"
-                                            value={formData.substrate_percent_vs}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                         
                         </div>
 
                         {/* Right Column - Reactor & Inoculum */}
@@ -247,7 +214,7 @@ function SampleForm() {
                                         </select>
                                     </div>
 
-                                    <div>
+                                    <div className="mb-8">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                             Temperature (°C)
                                         </label>
@@ -261,48 +228,42 @@ function SampleForm() {
                                         />
                                     </div>
 
+                                </div>
+
+                               {/* Substrate Characteristics */}
+                               <div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Substrate Characteristics</h3>
+                                
+                                <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Substrate Input Amount (g)
+                                        <label className="block text-sm font-medium text-gray-700 mb-4">
+                                            %TS (of wet weight)
                                         </label>
                                         <input
                                             type="number"
                                             step="0.01"
-                                            name="ash_content"
-                                            value={formData.ash_content}
+                                            name="substrate_percent_ts"
+                                            value={formData.substrate_percent_ts}
                                             onChange={handleChange}
                                             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
 
-                                    <div>
+                                 <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Inoculum Input Amount (g)
+                                            %VS (of wet weight)
                                         </label>
                                         <input
                                             type="number"
                                             step="0.01"
-                                            name="other"
-                                            value={formData.other}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Methane Concentration (%)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="author"
-                                            value={formData.author}
+                                            name="substrate_percent_vs"
+                                            value={formData.substrate_percent_vs}
                                             onChange={handleChange}
                                             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                     </div>
                                 </div>
+                            </div>
                             </div>
 
                         </div>

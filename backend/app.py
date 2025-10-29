@@ -266,21 +266,34 @@ def disconnect_device(device_id):
 
 @app.route("/api/v1/devices/connected")
 def list_connected_devices():
-    """List all currently connected devices"""
+    """List all currently connected devices with availability status"""
     try:
         # Simply query the database for connected devices
         connected_devices = Device.query.filter_by(connected=True).all()
-        
-        devices_list = [{
-            "id": device.id,
-            "name": device.name,
-            "device_type": device.device_type,
-            "serial_port": device.serial_port,
-            "mac_address": device.mac_address,
-            "connected": device.connected,
-            "logging": device.logging
-        } for device in connected_devices]
-        
+
+        devices_list = []
+        for device in connected_devices:
+            device_data = {
+                "id": device.id,
+                "name": device.name,
+                "device_type": device.device_type,
+                "serial_port": device.serial_port,
+                "mac_address": device.mac_address,
+                "connected": device.connected,
+                "logging": device.logging,
+                "active_test_id": device.active_test_id,
+                "active_test_name": None
+            }
+
+            # Get test name if device is in an active test
+            if device.active_test_id:
+                from database.models import Test
+                test = Test.query.get(device.active_test_id)
+                if test:
+                    device_data["active_test_name"] = test.name
+
+            devices_list.append(device_data)
+
         return jsonify(devices_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -665,66 +678,172 @@ def get_test(test_id):
 
 @app.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
 def start_test(test_id):
-    """Start a test and assign it to devices"""
+    """Start a test and assign it to devices, initiating logging"""
     try:
         from datetime import datetime
         test = Test.query.get(test_id)
         if not test:
             return jsonify({"error": "Test not found"}), 404
-        
+
         if test.status != 'setup':
             return jsonify({"error": "Test must be in setup status to start"}), 400
-        
+
         # Get all devices involved in this test
         configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
         device_ids = list(set([config.device_id for config in configurations]))
-        
+
+        # Check if any configurations have chimera_channel set - if so, find the Chimera device
+        chimera_device_ids = set()
+        configs_with_chimera = [c for c in configurations if c.chimera_channel is not None]
+
+        if configs_with_chimera:
+            # Find all Chimera devices that are connected
+            chimera_devices = Device.query.filter(
+                Device.device_type.in_(['chimera', 'chimera-max']),
+                Device.connected == True
+            ).all()
+
+            if chimera_devices:
+                # Add first available Chimera to the test
+                # TODO: In the future, support multiple Chimeras or device selection
+                chimera_device_ids.add(chimera_devices[0].id)
+                print(f"[DEBUG] Found Chimera device to include: {chimera_devices[0].name} (ID: {chimera_devices[0].id})")
+
+        # Combine BlackBox devices and Chimera devices
+        all_device_ids = list(set(device_ids) | chimera_device_ids)
+
+        print(f"[DEBUG] Starting test {test_id} with {len(all_device_ids)} devices: {all_device_ids}")
+        print(f"[DEBUG] BlackBox devices: {device_ids}, Chimera devices: {list(chimera_device_ids)}")
+        print(f"[DEBUG] Channel configurations: {len(configurations)}, with Chimera channel: {len(configs_with_chimera)}")
+
+        # Check all devices are connected
+        for device_id in all_device_ids:
+            device = Device.query.get(device_id)
+            if not device:
+                return jsonify({"error": f"Device {device_id} not found"}), 404
+            if not device.connected:
+                return jsonify({"error": f"Device {device.name} is not connected"}), 400
+            if device.active_test_id and device.active_test_id != test_id:
+                return jsonify({"error": f"Device {device.name} is already in use by another test"}), 400
+
         # Update test status
         test.status = 'running'
         test.date_started = datetime.now()
-        
-        # Assign test to devices
-        for device_id in device_ids:
+
+        # Start logging on each device
+        logging_results = []
+        for device_id in all_device_ids:
             device = Device.query.get(device_id)
-            if device:
-                device.active_test_id = test_id
-        
+            handler = device_manager.get_device(device_id)
+
+            if not handler:
+                db.session.rollback()
+                return jsonify({"error": f"Handler not found for device {device.name}"}), 500
+
+            # Start logging based on device type
+            if device.device_type in ['black-box', 'black_box']:
+                # Generate filename - keep it very simple and short for BlackBox compatibility
+                # Use only alphanumeric characters, no special chars that might cause issues
+                import re
+
+                # Clean test name: only letters, numbers, and underscores
+                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:15]
+                # Clean device name
+                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:10]
+                # Short timestamp
+                timestamp = datetime.now().strftime('%m%d%H%M')  # MMDDHHMM (8 chars)
+
+                # Format: testname_device_timestamp (max ~35 chars)
+                filename = f"{clean_test_name}_{clean_device_name}_{timestamp}"
+
+                # Final safety: truncate to 30 chars max (conservative limit)
+                if len(filename) > 30:
+                    filename = filename[:30]
+
+                print(f"[DEBUG] Generated filename: '{filename}' (length: {len(filename)})")
+                success, message = handler.start_logging(filename)
+                if not success:
+                    db.session.rollback()
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+
+                logging_results.append({
+                    "device": device.name,
+                    "filename": filename,
+                    "message": message
+                })
+
+            elif device.device_type in ['chimera', 'chimera-max']:
+                print(f"[DEBUG] Starting Chimera logging for device {device.name} (ID: {device.id})")
+                success, message = handler.start_logging()
+                print(f"[DEBUG] Chimera start_logging result: success={success}, message={message}")
+
+                if not success:
+                    db.session.rollback()
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+
+                logging_results.append({
+                    "device": device.name,
+                    "message": message
+                })
+
+            # Set test ID on handler and update device
+            handler.set_test_id(test_id)
+            device.active_test_id = test_id
+            device.logging = True
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
-            "message": f"Test started with {len(device_ids)} devices"
+            "message": f"Test started with {len(all_device_ids)} devices",
+            "logging_results": logging_results
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>/stop", methods=['POST'])
 def stop_test(test_id):
-    """Stop a test"""
+    """Stop a test and stop logging on all associated devices"""
     try:
         from datetime import datetime
         test = Test.query.get(test_id)
         if not test:
             return jsonify({"error": "Test not found"}), 404
-        
+
+        # Get all devices involved in this test
+        devices = Device.query.filter_by(active_test_id=test_id).all()
+
+        # Stop logging on each device
+        stop_results = []
+        for device in devices:
+            handler = device_manager.get_device(device.id)
+            if handler and handler.is_logging:
+                success, message = handler.stop_logging()
+                stop_results.append({
+                    "device": device.name,
+                    "success": success,
+                    "message": message
+                })
+                if success:
+                    device.logging = False
+
+            # Remove test assignment
+            device.active_test_id = None
+
         # Update test status
         test.status = 'completed'
         test.date_ended = datetime.now()
-        
-        # Remove test from devices
-        devices = Device.query.filter_by(active_test_id=test_id).all()
-        for device in devices:
-            device.active_test_id = None
-        
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
-            "message": "Test stopped successfully"
+            "message": "Test stopped successfully",
+            "stop_results": stop_results
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
@@ -756,6 +875,7 @@ def create_channel_configuration(test_id):
                 existing.substrate_sample_id = config_data.get('substrate_sample_id')
                 existing.substrate_weight_grams = config_data.get('substrate_weight_grams', 0)
                 existing.tumbler_volume = config_data['tumbler_volume']
+                existing.chimera_channel = config_data.get('chimera_channel')
                 existing.notes = config_data.get('notes')
                 created_configs.append(existing)
             else:
@@ -769,6 +889,7 @@ def create_channel_configuration(test_id):
                     substrate_sample_id=config_data.get('substrate_sample_id'),
                     substrate_weight_grams=config_data.get('substrate_weight_grams', 0),
                     tumbler_volume=config_data['tumbler_volume'],
+                    chimera_channel=config_data.get('chimera_channel'),
                     notes=config_data.get('notes')
                 )
                 db.session.add(config)

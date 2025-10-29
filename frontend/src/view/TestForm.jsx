@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
+import ChimeraConfig from '../components/ChimeraConfig';
 
 function TestForm() {
     const [testName, setTestName] = useState('');
@@ -13,6 +14,8 @@ function TestForm() {
     const [showChannelConfig, setShowChannelConfig] = useState(false);
     const [selectedDevices, setSelectedDevices] = useState([]);
     const [chimeraChannelError, setChimeraChannelError] = useState('');
+    const [activeTestId, setActiveTestId] = useState(null);
+    const [activeTestName, setActiveTestName] = useState('');
 
     useEffect(() => {
         fetchDevices();
@@ -25,8 +28,24 @@ function TestForm() {
             const response = await fetch('/api/v1/devices/connected');
             const data = await response.json();
             setDevices(data);
-            // Auto-select all devices initially
-            setSelectedDevices(data.map(d => d.id));
+            // Auto-select only free devices initially
+            const freeDevices = data.filter(d => !d.active_test_id);
+            setSelectedDevices(freeDevices.map(d => d.id));
+
+            // Check if any device has an active test to restore the active test state
+            const devicesWithActiveTest = data.filter(d => d.active_test_id);
+            if (devicesWithActiveTest.length > 0 && !activeTestId) {
+                // Get the test info from the first device with an active test
+                const testId = devicesWithActiveTest[0].active_test_id;
+                const testName = devicesWithActiveTest[0].active_test_name || `Test #${testId}`;
+                setActiveTestId(testId);
+                setActiveTestName(testName);
+                console.log(`Restored active test: ${testName} (ID: ${testId})`);
+            } else if (devicesWithActiveTest.length === 0 && activeTestId) {
+                // No devices have active test anymore, clear the state
+                setActiveTestId(null);
+                setActiveTestName('');
+            }
         } catch (error) {
             console.error('Error fetching devices:', error);
         }
@@ -35,6 +54,11 @@ function TestForm() {
     const toggleDeviceSelection = (deviceId) => {
         setSelectedDevices(prev => {
             if (prev.includes(deviceId)) {
+                // If deselecting a device, clear the selected channel if it belongs to this device
+                if (selectedChannel && selectedChannel.deviceId === deviceId) {
+                    setSelectedChannel(null);
+                    setShowChannelConfig(false);
+                }
                 return prev.filter(id => id !== deviceId);
             } else {
                 return [...prev, deviceId];
@@ -43,7 +67,9 @@ function TestForm() {
     };
 
     const selectAllDevices = () => {
-        setSelectedDevices(devices.map(d => d.id));
+        // Only select free devices
+        const freeDevices = devices.filter(d => !d.active_test_id);
+        setSelectedDevices(freeDevices.map(d => d.id));
     };
 
     const deselectAllDevices = () => {
@@ -145,11 +171,33 @@ function TestForm() {
         };
     };
 
-    const createTest = async () => {
+    const startTest = async () => {
         const validation = getTestValidationStatus();
 
         if (!validation.isValid) {
-            alert(`Cannot create test. Missing: ${validation.missing.join(', ')}`);
+            alert(`Cannot start test. Missing: ${validation.missing.join(', ')}`);
+            return;
+        }
+
+        // Check if any selected devices are busy
+        const selectedDeviceObjs = devices.filter(d => selectedDevices.includes(d.id));
+        const busyDevices = selectedDeviceObjs.filter(d => d.active_test_id);
+
+        if (busyDevices.length > 0) {
+            alert(`Cannot start test. The following devices are currently in use: ${busyDevices.map(d => d.name).join(', ')}`);
+            return;
+        }
+
+        // Check if devices being used in configurations are all free
+        const deviceIdsInConfigs = [...new Set(
+            Object.keys(configurations).map(key => parseInt(key.split('-')[0]))
+        )];
+        const busyConfigDevices = devices.filter(d =>
+            deviceIdsInConfigs.includes(d.id) && d.active_test_id
+        );
+
+        if (busyConfigDevices.length > 0) {
+            alert(`Cannot start test. The following configured devices are in use: ${busyConfigDevices.map(d => d.name).join(', ')}`);
             return;
         }
 
@@ -183,6 +231,7 @@ function TestForm() {
                     substrate_sample_id: config.substrate_sample_id || null,
                     substrate_weight_grams: config.substrate_weight_grams || 0,
                     tumbler_volume: config.tumbler_volume,
+                    chimera_channel: config.chimera_channel || null,
                     notes: config.notes || ''
                 };
             });
@@ -200,16 +249,64 @@ function TestForm() {
                 }
             }
 
-            alert('Test created successfully!');
-            
-            // Reset form
+            // Start the test immediately
+            const startResponse = await fetch(`/api/v1/tests/${testId}/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!startResponse.ok) {
+                const startError = await startResponse.json();
+                throw new Error(startError.error);
+            }
+
+            alert('Test started successfully!');
+
+            // Set active test state
+            setActiveTestId(testId);
+            setActiveTestName(testName);
+
+            // Reset form fields but keep test running
             setTestName('');
             setTestDescription('');
             setConfigurations({});
-            
+            fetchDevices(); // Refresh devices to show updated busy status
+
         } catch (error) {
-            console.error('Error creating test:', error);
-            alert(`Failed to create test: ${error.message}`);
+            console.error('Error starting test:', error);
+            alert(`Failed to start test: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const stopTest = async () => {
+        if (!confirm(`Are you sure you want to stop test "${activeTestName}"? This will stop logging on all devices.`)) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const response = await fetch(`/api/v1/tests/${activeTestId}/stop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error);
+            }
+
+            alert('Test stopped successfully!');
+
+            // Clear active test state
+            setActiveTestId(null);
+            setActiveTestName('');
+            fetchDevices(); // Refresh devices to show updated status
+
+        } catch (error) {
+            console.error('Error stopping test:', error);
+            alert(`Failed to stop test: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -225,7 +322,7 @@ function TestForm() {
 
     return (
         <div className="p-6">
-            <h1 className="text-4xl font-bold text-black pl-6 m-6">Create Test</h1>
+            <h1 className="text-4xl font-bold text-black pl-6 m-6">Start New Test</h1>
             
             <div className="bg-white rounded-lg shadow-sm p-6">
                 {/* Test Information */}
@@ -271,25 +368,34 @@ function TestForm() {
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {devices.map(device => (
-                                    <label
-                                        key={device.id}
-                                        className="flex items-center gap-3 p-3 bg-white rounded border border-gray-300 hover:bg-gray-50 cursor-pointer"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedDevices.includes(device.id)}
-                                            onChange={() => toggleDeviceSelection(device.id)}
-                                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                        />
-                                        <div className="flex-1">
-                                            <div className="font-medium text-gray-900">{device.name}</div>
-                                            <div className="text-xs text-gray-500">
-                                                {device.device_type === 'black-box' ? 'Black Box' : 'Chimera'}
+                                {devices.map(device => {
+                                    const isBusy = device.active_test_id;
+                                    return (
+                                        <label
+                                            key={device.id}
+                                            className={`flex items-center gap-3 p-3 rounded border ${
+                                                isBusy
+                                                    ? 'bg-red-50 border-red-300 cursor-not-allowed opacity-70'
+                                                    : 'bg-white border-gray-300 hover:bg-gray-50 cursor-pointer'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDevices.includes(device.id)}
+                                                onChange={() => !isBusy && toggleDeviceSelection(device.id)}
+                                                disabled={isBusy}
+                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                            />
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-900">{device.name}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {device.device_type === 'black-box' ? 'Black Box' : 'Chimera'}
+                                                    {isBusy && <span className="text-red-600 ml-2 font-semibold">• In Use</span>}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </label>
-                                ))}
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
                     ) : (
@@ -301,104 +407,81 @@ function TestForm() {
 
                 {/* Device Channels */}
                 <div className="mb-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Channel Grids */}
-                        <div className="lg:col-span-2">
-                            <div className="mb-4">
-                                <h2 className="text-xl font-semibold mb-2">Channel Configuration</h2>
-                                <div className="text-sm text-gray-600 mb-4">
-                                    Click on a channel to configure it, or upload a CSV file per device to auto-fill configurations. Blue = Selected, Green = Configured with substrate, Yellow = Control (inoculum only)
-                                </div>
-                            </div>
-                            
-                            {devices.length > 0 ? (
-                                devices.filter(device => selectedDevices.includes(device.id)).map(device => (
-                                    device.device_type === 'black-box' ? (
-                                        <BlackBoxTestConfig
-                                            key={device.id}
-                                            device={device}
-                                            configurations={configurations}
-                                            samples={samples}
-                                            inoculums={inoculums}
-                                            selectedChannel={selectedChannel}
-                                            onChannelClick={handleChannelClick}
-                                            onConfigurationChange={handleConfigurationChange}
-                                            showChannelConfig={showChannelConfig}
-                                            onSaveChannelConfig={handleSaveChannelConfig}
-                                            onClearChannelConfig={handleClearChannelConfig}
-                                        />
-                                    ) : (
-                                        <div key={device.id} className="mb-8 bg-gray-50 rounded-lg p-4">
-                                            <h3 className="text-lg font-semibold mb-4">
-                                                {device.name} (Chimera)
-                                            </h3>
-                                            <div className="text-gray-500 text-center py-4">
-                                                Chimera device configuration coming soon...
-                                            </div>
-                                        </div>
-                                    )
-                                ))
-                            ) : selectedDevices.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                                    No devices selected. Please select at least one device above to configure channels.
-                                </div>
+                    {devices.length > 0 ? (
+                        devices.filter(device => selectedDevices.includes(device.id)).map(device => (
+                            device.device_type === 'black-box' ? (
+                                <BlackBoxTestConfig
+                                    key={device.id}
+                                    device={device}
+                                    configurations={configurations}
+                                    samples={samples}
+                                    inoculums={inoculums}
+                                    selectedChannel={selectedChannel}
+                                    onChannelClick={handleChannelClick}
+                                    onConfigurationChange={handleConfigurationChange}
+                                    showChannelConfig={showChannelConfig}
+                                    onSaveChannelConfig={handleSaveChannelConfig}
+                                    onClearChannelConfig={handleClearChannelConfig}
+                                    showChimeraChannel={shouldShowChimeraChannel()}
+                                    chimeraChannelError={chimeraChannelError}
+                                    setChimeraChannelError={setChimeraChannelError}
+                                />
                             ) : (
-                                <div className="text-center py-8 text-gray-500">
-                                    No devices found. Make sure devices are connected and discovered.
-                                </div>
-                            )}
+                                <ChimeraConfig
+                                    key={device.id}
+                                    device={device}
+                                />
+                            )
+                        ))
+                    ) : selectedDevices.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                            No devices selected. Please select at least one device above to configure.
                         </div>
-
-                        {/* Inline Channel Configuration */}
-                        <div className="lg:col-span-1">
-                            {showChannelConfig && selectedChannel ? (
-                                <div className="bg-gray-50 rounded-lg p-4 sticky top-4">
-                                    <h3 className="text-lg font-semibold mb-4">
-                                        Configure Channel {selectedChannel.channelNumber}
-                                    </h3>
-                                    <ChannelConfigForm
-                                        deviceId={selectedChannel.deviceId}
-                                        channelNumber={selectedChannel.channelNumber}
-                                        currentConfig={getChannelConfig(selectedChannel.deviceId, selectedChannel.channelNumber)}
-                                        samples={samples}
-                                        inoculums={inoculums}
-                                        onSave={handleSaveChannelConfig}
-                                        onClear={handleClearChannelConfig}
-                                        showChimeraChannel={shouldShowChimeraChannel()}
-                                        chimeraChannelError={chimeraChannelError}
-                                        setChimeraChannelError={setChimeraChannelError}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500">
-                                    Select a channel to configure
-                                </div>
-                            )}
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">
+                            No devices found. Make sure devices are connected and discovered.
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Create Test Button */}
                 <div className="flex flex-col items-end gap-2">
-                    {(() => {
-                        const validation = getTestValidationStatus();
-                        return (
-                            <>
-                                {!validation.isValid && (
-                                    <div className="text-sm text-red-600">
-                                        Missing: {validation.missing.join(', ')}
-                                    </div>
-                                )}
-                                <button
-                                    onClick={createTest}
-                                    disabled={loading}
-                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {loading ? 'Creating Test...' : 'Create Test'}
-                                </button>
-                            </>
-                        );
-                    })()}
+                    {activeTestId ? (
+                        // Show Stop Test button when test is running
+                        <>
+                            <div className="text-sm text-green-600 font-semibold mb-1">
+                                ✓ Test "{activeTestName}" is running
+                            </div>
+                            <button
+                                onClick={stopTest}
+                                disabled={loading}
+                                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Stopping Test...' : 'Stop Test'}
+                            </button>
+                        </>
+                    ) : (
+                        // Show Start Test button when no test is running
+                        (() => {
+                            const validation = getTestValidationStatus();
+                            return (
+                                <>
+                                    {!validation.isValid && (
+                                        <div className="text-sm text-red-600">
+                                            Missing: {validation.missing.join(', ')}
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={startTest}
+                                        disabled={loading}
+                                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {loading ? 'Starting Test...' : 'Start Test'}
+                                    </button>
+                                </>
+                            );
+                        })()
+                    )}
                 </div>
             </div>
 

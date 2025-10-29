@@ -66,7 +66,6 @@ class Sample(db.Model):
    substrate_percent_ts = Column(Float)
    substrate_percent_vs = Column(Float)
    author = Column(String)
-   other = Column(String)
    reactor  = Column(String)
    temperature = Column(Float)
 
@@ -124,6 +123,8 @@ class ChannelConfiguration(db.Model):
    daily_volume = Column(Float, nullable=False, default=0.0)
 
    
+   chimera_channel = Column(Integer, nullable=True)  # Optional chimera channel (1-15) linked to this BlackBox channel
+
    notes = Column(String)
    
    # Ensure unique channel per test
