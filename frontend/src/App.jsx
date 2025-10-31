@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Sidebar from './components/Sidebar'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
-import InoculumForm from './view/InoculumForm'
 import Database from './view/Database'
 import TestForm from './view/TestForm'
 import BlackBox from './view/BlackBox'
@@ -30,7 +29,6 @@ function App() {
       <div className="flex-1 ml-64">
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'create-sample' && <SampleForm />}
-        {currentView === 'create-inoculum' && <InoculumForm />}
         {currentView === 'test' && <TestForm />}
         {currentView === 'database' && <Database />}
         {currentView === 'plot' && <div className="p-6">Plot - Coming Soon</div>}

@@ -12,10 +12,7 @@ function SampleForm() {
         n_content: '',
         substrate_percent_ts: '',
         substrate_percent_vs: '',
-        author: '',
-        other: '',
-        reactor: '',
-        temperature: ''
+        author: ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -57,10 +54,7 @@ function SampleForm() {
                     n_content: '',
                     substrate_percent_ts: '',
                     substrate_percent_vs: '',
-                    author: '',
-                    other: '',
-                    reactor: '',
-                    temperature: ''
+                    author: ''
                 });
                 
                 alert('Sample created successfully!');
@@ -190,46 +184,8 @@ function SampleForm() {
                          
                         </div>
 
-                        {/* Right Column - Reactor & Inoculum */}
+                        {/* Right Column - Substrate Characteristics */}
                         <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">Reactor</h2>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Type
-                                        </label>
-                                        <select 
-                                            name="reactor"
-                                            value={formData.reactor}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="">Select type</option>
-                                            <option value="BMP">BMP</option>
-                                            <option value="CSTR">CSTR</option>
-                                            <option value="Batch">Batch</option>
-                                            <option value="Fed-batch">Fed-batch</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="mb-8">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Temperature (°C)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            name="temperature"
-                                            value={formData.temperature}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                </div>
-
                                {/* Substrate Characteristics */}
                                <div>
                                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Substrate Characteristics</h3>
@@ -263,7 +219,6 @@ function SampleForm() {
                                         />
                                     </div>
                                 </div>
-                            </div>
                             </div>
 
                         </div>

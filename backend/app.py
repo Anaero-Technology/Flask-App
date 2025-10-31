@@ -354,23 +354,11 @@ def discover_device():
 # Register blueprints
 @app.route("/api/v1/samples", methods=['POST'])
 def create_sample():
-    """Create a new sample with associated inoculum data"""
+    """Create a new sample"""
     try:
         from datetime import datetime
         data = request.get_json()
-        
-        # Create inoculum record if data is provided
-        inoculum = None
-        if any([data.get('inoculum_source'), data.get('inoculum_percent_ts'), data.get('inoculum_percent_vs')]):
-            inoculum = InoculumSample(
-                inoculum_source=data.get('inoculum_source'),
-                inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
-                inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
-                date_created=datetime.now()
-            )
-            db.session.add(inoculum)
-            db.session.flush()  # Get the ID without committing
-        
+
         # Create sample record
         sample = Sample(
             sample_name=data.get('sample_name'),
@@ -384,21 +372,18 @@ def create_sample():
             substrate_percent_ts=float(data.get('substrate_percent_ts')) if data.get('substrate_percent_ts') else None,
             substrate_percent_vs=float(data.get('substrate_percent_vs')) if data.get('substrate_percent_vs') else None,
             author=data.get('author'),
-            other=data.get('other'),
-            reactor=data.get('reactor'),
-            temperature=float(data.get('temperature')) if data.get('temperature') else None,
             date_created=datetime.now()
         )
-        
+
         db.session.add(sample)
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
             "sample_id": sample.id,
             "message": "Sample created successfully"
         }), 201
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
@@ -421,55 +406,6 @@ def list_samples():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/api/v1/inoculum", methods=['POST'])
-def create_inoculum():
-    """Create a new inoculum record"""
-    try:
-        data = request.get_json()
-        
-        # Validate required fields
-        if not data.get('inoculum_source'):
-            return jsonify({"error": "inoculum_source is required"}), 400
-        
-        # Create inoculum record
-        from datetime import datetime
-        inoculum = InoculumSample(
-            inoculum_source=data.get('inoculum_source'),
-            inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
-            inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
-            date_created=datetime.now()
-        )
-        
-        db.session.add(inoculum)
-        db.session.commit()
-        
-        return jsonify({
-            "success": True,
-            "inoculum_id": inoculum.id,
-            "message": "Inoculum created successfully"
-        }), 201
-        
-    except ValueError as e:
-        db.session.rollback()
-        return jsonify({"error": f"Invalid number format: {str(e)}"}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/api/v1/inoculum", methods=['GET'])
-def list_inoculum():
-    """Get all inoculum records"""
-    try:
-        inoculum_records = InoculumSample.query.all()
-        return jsonify([{
-            "id": inoculum.id,
-            "date_created": inoculum.date_created.isoformat() if inoculum.date_created else None,
-            "inoculum_source": inoculum.inoculum_source,
-            "inoculum_percent_ts": inoculum.inoculum_percent_ts,
-            "inoculum_percent_vs": inoculum.inoculum_percent_vs
-        } for inoculum in inoculum_records])
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/samples/<int:sample_id>", methods=['PUT'])
 def update_sample(sample_id):
@@ -542,54 +478,6 @@ def delete_sample(sample_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['PUT'])
-def update_inoculum(inoculum_id):
-    """Update an existing inoculum"""
-    try:
-        inoculum = InoculumSample.query.get(inoculum_id)
-        if not inoculum:
-            return jsonify({"error": "Inoculum not found"}), 404
-
-        data = request.get_json()
-        
-        # Update fields
-        if 'inoculum_source' in data:
-            inoculum.inoculum_source = data['inoculum_source']
-        if 'inoculum_percent_ts' in data:
-            inoculum.inoculum_percent_ts = float(data['inoculum_percent_ts']) if data['inoculum_percent_ts'] else None
-        if 'inoculum_percent_vs' in data:
-            inoculum.inoculum_percent_vs = float(data['inoculum_percent_vs']) if data['inoculum_percent_vs'] else None
-
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Inoculum updated successfully"
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['DELETE'])
-def delete_inoculum(inoculum_id):
-    """Delete an inoculum"""
-    try:
-        inoculum = InoculumSample.query.get(inoculum_id)
-        if not inoculum:
-            return jsonify({"error": "Inoculum not found"}), 404
-
-        db.session.delete(inoculum)
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Inoculum deleted successfully"
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
 
 # Test Management Endpoints
 @app.route("/api/v1/tests", methods=['POST'])
@@ -928,20 +816,22 @@ def upload_csv_configuration():
         csv_reader = csv.DictReader(stream)
         
         configurations = []
+        channel_number = 1  # Start from channel 1
         for row_num, row in enumerate(csv_reader, start=1):
             try:
-                # Check if we've reached the "End of data" marker
+                # Get sample description (should be a string)
                 sample_description = row.get('Sample description', '').strip()
+
+                # Check if we've reached the "End of data" marker
                 if sample_description == 'End of data':
                     break
-                
-                # Skip empty rows or rows with non-numeric sample descriptions
-                if not sample_description or not sample_description.isdigit():
+
+                # Skip empty rows
+                if not sample_description:
                     continue
-                
+
                 # Parse CSV columns based on the format:
                 # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml),Chimera channel (optional)
-                channel_number = int(sample_description)
                 in_service = int(row['In service']) == 1
                 inoculum_only = int(row['Inoculum only']) == 1
                 inoculum_weight = float(row['Inoculum mass VS (g)'])
@@ -974,8 +864,9 @@ def upload_csv_configuration():
                         'tumbler_volume': tumbler_volume,
                         'is_control': inoculum_only,
                         'chimera_channel': chimera_channel,
-                        'notes': f"Imported from CSV - {'Control (inoculum only)' if inoculum_only else 'Test sample'}"
+                        'notes': sample_description  # Store sample description in notes
                     })
+                    channel_number += 1  # Increment channel number for next in-service row
             except (ValueError, KeyError) as e:
                 return jsonify({"error": f"Invalid data in row {row_num}: {str(e)}"}), 400
         

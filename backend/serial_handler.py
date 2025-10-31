@@ -49,8 +49,6 @@ class SerialHandler:
                 timeout=self.timeout,
                 write_timeout=self.timeout
             )
-
- 
             self.clear_buffer()
             self._start_reader_thread()
             # Small delay to let the connection stabilize
@@ -66,32 +64,24 @@ class SerialHandler:
 
         self.clear_buffer()
         self.send_command_no_wait("info")
-
         # Wait up to timeout, checking for responses that start with "info"
         # Skip any other messages that come first (like "Setup completed sucessfully")
         start_time = time.time()
         response = None
-
         while time.time() - start_time < timeout:
             resp = self.read_line(timeout=0.2)
-
             if resp and resp.startswith("info"):
                 response = resp
                 break
-
         if response is None:
             raise Exception(f"No info response received from {port}")
-
         # Split the response and get the 5th element (index 4)
         parts = response.split()
         if len(parts) > 4:
             return parts[4]
         else:
-            if "bad command" in response.lower():
-                return "plc"
             raise Exception(f"Invalid response format: {response}")
 
-    
     def disconnect(self) -> bool:
         if self.connection.is_open:
             self._stop_reader_thread()
@@ -169,7 +159,6 @@ class SerialHandler:
                     handler(line)
                     handled = True
                     print(f"{line} not put in queue")
-                    break
                 except Exception:
                     pass
         # If not handled automatically, add to command response queue
@@ -179,32 +168,26 @@ class SerialHandler:
     
     def send_command(self, command: str, timeout: float = 5.0) -> Optional[str]:
         """Send a command and wait for response"""
-        import time
         if not self.connection.is_open:
             raise Exception("Device not connected")
-        
-        print(f"[{time.time():.2f}] send_command: clearing queue")
+
         # Clear the response queue before sending
         while not self._command_response_queue.empty():
             try:
                 self._command_response_queue.get_nowait()
             except queue.Empty:
                 break
-        
-        print(f"[{time.time():.2f}] send_command: writing '{command}' to {self.port}")
+
         # Send command
         with self._write_lock:
             self.connection.write(f"{command}\n".encode())
             self.connection.flush()
-        
-        print(f"[{time.time():.2f}] send_command: waiting for response with timeout={timeout}")
+
         # Wait for response
         try:
             response = self._command_response_queue.get(timeout=timeout)
-            print(f"[{time.time():.2f}] send_command: got response: {repr(response)}")
             return response
         except queue.Empty:
-            print(f"[{time.time():.2f}] send_command: timeout - no response received")
             return None
     
     def send_command_no_wait(self, command: str) -> None:

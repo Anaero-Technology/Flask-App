@@ -27,8 +27,6 @@ class BlackBoxHandler(SerialHandler):
     
     def _print_tips(self, line: str):
         """Prints automatic tip messages and sends SSE notification"""
-        self.calculateTip("")
-       
         try:
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
@@ -45,7 +43,8 @@ class BlackBoxHandler(SerialHandler):
                 "pressure": float(parts[5])
              }
             
-            print("Processed Data:", self.calculateTip(tip_data))
+
+            print("Processed Data:", self.calculateEventLogTip(tip_data))
             
             print(f"[AUTOMATIC TIP] Tip #{tip_data['tip_number']} - "
                 f"Channel: {tip_data['channel_number']}, "
@@ -123,6 +122,8 @@ class BlackBoxHandler(SerialHandler):
       
     
         except (ValueError, IndexError):
+            import traceback
+            traceback.print_exc()
             pass
   
     def _get_device_info(self):
@@ -475,152 +476,187 @@ class BlackBoxHandler(SerialHandler):
         seconds = seconds - (m * secondsInMinute)
         return d, h, m, seconds
 
-    def calculateTip(self, tipData):
+    def calculateEventLogTip(self, tipData):
         '''Convert from setup information and events to a fully processed event, day and hour logs with net volumes'''
-        if self._app:
-            with self._app.app_context():
-                tableData = list(ChannelConfiguration.query.filter_by(test_id = self.test_id))
-        else:
+
+        if not self.app:
             print("No app found")
-            return ""
-        
-        result = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}"
-        eventData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        
-        setup = {"names" : [""] * 15,
-                 "inUse" : [False] * 15,
-                 "inoculumOnly" : [False] * 15,
-                 "inoculumMass" : [0.0] * 15,
-                 "sampleMass" : [0.0] * 15,
-                 "tumblerVolume" : [0.0] * 15,
-                 "gasConstants" : [0.0] * 15}
-        
-        #Dicionary to store overall running information for all channels
-        overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
+            return 
 
-        hourlyTips = 0
-        dailyTips = 0
-        hourlyVolume = 0.0
-        dailyVolume = 0.0
-        lastTipTime = None
+        with self.app.app_context():
+            try:
+                tableData = db.session.query(ChannelConfiguration).filter_by(test_id = self.test_id).all()
+                print(f"Loaded {len(tableData)} channel configurations for test_id {self.test_id}")
+            except Exception as e:
+                print(f" Error loading channel configurations: {type(e).__name__}: {e}")
+                return ""
 
-        for row in tableData:
-            channel = row[3]
-            if channel > 0 and channel < 16:
-                setup["inUse"][channel] = True
-                sample = False
-                setup["tumblerVolume"][channel] = setup[8]
-                overall["tips"][channel] = row[9]
-                overall["volumeSTP"][channel] = row[10]
-                overall["volumeNet"][channel] = row[11]
-                setup["gasConstants"][channel] = (273 * setup["tumblerVolume"][channel]) / 1013.25
+            result = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}"
+            eventData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-                if row[7] > 0:
-                    setup["sampleMass"][channel] = row[7]
-                    sample = True
-                if row[5] > 0:
-                    setup["inoculumMass"][channel] = row[5]
-                    if not sample:
-                        setup["inoculumOnly"][channel] = True
-                        overall["inoculumVolume"] = overall["inoculumVolume"] + overall["volumeSTP"][channel]
-                        overall["inoculumMass"] = overall["inoculumMass"] + overall["tips"][channel] * setup["inoculumMass"][channel]
-                
-                hourlyTips = row[12]
-                dailyTips = row[13]
-                lastTipTime = row[14]
-                hourlyVolume = row[15]
-                dailyVolume = row[16]
+            setup = {"names" : [""] * 15,
+                     "inUse" : [False] * 15,
+                     "inoculumOnly" : [False] * 15,
+                     "inoculumMass" : [0.0] * 15,
+                     "sampleMass" : [0.0] * 15,
+                     "tumblerVolume" : [0.0] * 15,
+                     "gasConstants" : [0.0] * 15}
 
-        try:
-            #Get the channel number
-            channelId = tipData["channel_number"]
-            #If this channel should be logging
-            if setup["inUse"][channelId]:
-                #Get the time, temperature and pressure
-                eventTime = tipData["seconds_elapsed"]
-                temperatureC = tipData["temperature"]
-                temperatureK = temperatureC + 273
-                pressure = tipData["pressure"]
+            #Dicionary to store overall running information for all channels
+            overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
 
-                #Find the time as parts
-                day, hour, min, sec = self.convertSeconds(eventTime)
-                
-                if lastTipTime != None:
-                    lastTimeParts = lastTipTime.split(".")
-                    lastDay = int(lastTimeParts[0])
-                    lastHour = int(lastTimeParts[1])
-                    if hour > lastHour:
-                        hourlyTips = 0
-                        hourlyVolume = 0.0
-                    if day > lastDay:
-                        dailyTips = 0
-                        dailyVolume = 0.0
+            hourlyTips = 0
+            dailyTips = 0
+            hourlyVolume = 0.0
+            dailyVolume = 0.0
+            lastTipTime = None
+
+            for row in tableData:
+                channel = row.channel_number
+                if channel >= 0 and channel < 15:
+                    setup["inUse"][channel] = True
+                    setup["names"][channel] = row.notes
+                    sample = False
+                    setup["tumblerVolume"][channel] = row.tumbler_volume
+                    overall["tips"][channel] = row.tip_count
+                    overall["volumeSTP"][channel] = row.total_stp_volume
+                    overall["volumeNet"][channel] = row.total_net_volume
+                    setup["gasConstants"][channel] = (273 * setup["tumblerVolume"][channel]) / 1013.25
+
+                    if row.substrate_weight_grams > 0:
+                        setup["sampleMass"][channel] = row.substrate_weight_grams
+                        sample = True
+                    if row.inoculum_weight_grams > 0:
+                        setup["inoculumMass"][channel] = row.inoculum_weight_grams
+                        if not sample:
+                            setup["inoculumOnly"][channel] = True
+                            overall["inoculumVolume"] = overall["inoculumVolume"] + overall["volumeSTP"][channel]
+                            overall["inoculumMass"] = overall["inoculumMass"] + overall["tips"][channel] * setup["inoculumMass"][channel]
+
+                    hourlyTips = row.hourly_tips
+                    dailyTips = row.daily_tips
+                    lastTipTime = row.last_tip_time
+                    hourlyVolume = row.hourly_volume
+                    dailyVolume = row.daily_volume
+
+            try:
+                    #Get the channel number
+                    channelId = tipData["channel_number"]
+                    #If this channel should be logging
+                    if setup["inUse"][channelId]:
+                        #Get the time, temperature and pressure
+                        eventTime = tipData["seconds_elapsed"]
+                        temperatureC = tipData["temperature"]
+                        temperatureK = temperatureC + 273
+                        pressure = tipData["pressure"]
+
+                        #Find the time as parts
+                        day, hour, min, sec = self.convertSeconds(eventTime)
+                        
+                        if lastTipTime != None:
+                            lastTimeParts = lastTipTime.split(".")
+                            lastDay = int(lastTimeParts[0])
+                            lastHour = int(lastTimeParts[1])
+                            if hour > lastHour:
+                                hourlyTips = 0
+                                hourlyVolume = 0.0
+                            if day > lastDay:
+                                dailyTips = 0
+                                dailyVolume = 0.0
 
 
-                #Calculate the volume for the tip
-                eventVolume = setup["gasConstants"][channelId] * (pressure / temperatureK)
+                        #Calculate the volume for the tip
+                        eventVolume = setup["gasConstants"][channelId] * (pressure / temperatureK)
 
-                #Add tip to overall, day and hour as well as the volume for each
-                overall["tips"][channelId] = overall["tips"][channelId] + 1
-                overall["volumeSTP"][channelId] = overall["volumeSTP"][channelId] + eventVolume
+                        #Add tip to overall, day and hour as well as the volume for each
+                        overall["tips"][channelId] = overall["tips"][channelId] + 1
+                        overall["volumeSTP"][channelId] = overall["volumeSTP"][channelId] + eventVolume
 
-                hourlyTips = hourlyTips + 1
-                dailyTips = dailyTips + 1
+                        hourlyTips = hourlyTips + 1
+                        dailyTips = dailyTips + 1
 
-                hourlyVolume = hourlyVolume + eventVolume
-                dailyVolume = dailyVolume + eventVolume
+                        hourlyVolume = hourlyVolume + eventVolume
+                        dailyVolume = dailyVolume + eventVolume
 
-                #thisNetVolume = eventVolume
-                totalNetVolume = overall["volumeSTP"][channelId]
-                #If this is an inoculum only channel
-                if setup["inoculumOnly"][channelId]:
-                    #If there is inoculum mass
-                    if setup["inoculumMass"][channelId] != 0:
-                        #Net volume is the total volume divided by the inoculum mass
-                        #thisNetVolume = eventVolume / setup["inoculumMass"][channelId]
-                        totalNetVolume = overall["volumeSTP"][channelId] / setup["inoculumMass"][channelId]
-                        #Add the mass and volume to overall running total
-                        overall["inoculumVolume"] = overall["inoculumVolume"] + eventVolume
-                        overall["inoculumMass"] = overall["inoculumMass"] + setup["inoculumMass"][channelId]
-                else:
-                    #If there is sample mass
-                    if setup["sampleMass"][channelId] != 0:
-                        if overall["inoculumMass"] != 0:
-                            inoculumAdjust = 0
-                            inoculumCount = 0
-                            for channel in range(0, 15):
-                                if setup["inoculumOnly"][channel] and setup["inoculumMass"][channel] != 0:
-                                    inoculumAdjust = inoculumAdjust + (overall["volumeSTP"][channel] / setup["inoculumMass"][channel])
-                                    inoculumCount = inoculumCount + 1
-                            inoculumAdjust = inoculumAdjust / inoculumCount
-                            totalNetVolume = (overall["volumeSTP"][channelId] - (inoculumAdjust * setup["inoculumMass"][channelId])) / setup["sampleMass"][channelId]
+                        #thisNetVolume = eventVolume
+                        totalNetVolume = overall["volumeSTP"][channelId]
+                        #If this is an inoculum only channel
+                        if setup["inoculumOnly"][channelId]:
+                            #If there is inoculum mass
+                            if setup["inoculumMass"][channelId] != 0:
+                                #Net volume is the total volume divided by the inoculum mass
+                                #thisNetVolume = eventVolume / setup["inoculumMass"][channelId]
+                                totalNetVolume = overall["volumeSTP"][channelId] / setup["inoculumMass"][channelId]
+                                #Add the mass and volume to overall running total
+                                overall["inoculumVolume"] = overall["inoculumVolume"] + eventVolume
+                                overall["inoculumMass"] = overall["inoculumMass"] + setup["inoculumMass"][channelId]
                         else:
-                            totalNetVolume = overall["volumeSTP"][channelId] / setup["sampleMass"][channelId]
-                
-                #Add the net volume for this tip to the hourly and daily information for this channel
-                overall["volumeNet"][channelId] = totalNetVolume
+                            #If there is sample mass
+                            if setup["sampleMass"][channelId] != 0:
+                                if overall["inoculumMass"] != 0:
+                                    inoculumAdjust = 0
+                                    inoculumCount = 0
+                                    for channel in range(0, 15):
+                                        if setup["inoculumOnly"][channel] and setup["inoculumMass"][channel] != 0:
+                                            inoculumAdjust = inoculumAdjust + (overall["volumeSTP"][channel] / setup["inoculumMass"][channel])
+                                            inoculumCount = inoculumCount + 1
+                                    inoculumAdjust = inoculumAdjust / inoculumCount
+                                    totalNetVolume = (overall["volumeSTP"][channelId] - (inoculumAdjust * setup["inoculumMass"][channelId])) / setup["sampleMass"][channelId]
+                                else:
+                                    totalNetVolume = overall["volumeSTP"][channelId] / setup["sampleMass"][channelId]
+                        
+                        #Add the net volume for this tip to the hourly and daily information for this channel
+                        overall["volumeNet"][channelId] = totalNetVolume
 
-                #Channel Number, Name, Timestamp, Days, Hours, Minutes, Tumbler Volume (ml), Temperature (C), Pressure (hPA), Cumulative Total Tips, Volume This Tip (STP), Total Volume (STP), Tips This Day, Volume This Day (STP), Tips This Hour, Volume This Hour (STP), Net Volume Per Gram (ml/g)
-                eventData = [channelId + 1, setup["names"][channelId], eventTime, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
+                        #Channel Number, Name, Timestamp, Days, Hours, Minutes, Tumbler Volume (ml), Temperature (C), Pressure (hPA), Cumulative Total Tips, Volume This Tip (STP), Total Volume (STP), Tips This Day, Volume This Day (STP), Tips This Hour, Volume This Hour (STP), Net Volume Per Gram (ml/g)
+                        eventData = [channelId + 1, setup["names"][channelId], eventTime, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
 
-                databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, channel_number = channelId)
-                databaseRow.hourly_tips = hourlyTips
-                databaseRow.daily_tips = dailyTips
-                databaseRow.last_tip_time = "{0}.{1}.{2}.{3}".format(day, hour, min, sec)
-                databaseRow.hourly_volume = hourlyVolume
-                databaseRow.daily_volume = dailyVolume
-                databaseRow.tip_count = overall["tips"][channelId]
-                databaseRow.total_stp_volume = overall["volumeSTP"][channelId]
-                databaseRow.total_net_volume = overall["volumeNet"][channelId]
+                        # Update channel configuration
+                        databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, channel_number = channelId).first()
+                        databaseRow.hourly_tips = hourlyTips
+                        databaseRow.daily_tips = dailyTips
+                        databaseRow.last_tip_time = "{0}.{1}.{2}.{3}".format(day, hour, min, sec)
+                        databaseRow.hourly_volume = hourlyVolume
+                        databaseRow.daily_volume = dailyVolume
+                        databaseRow.tip_count = overall["tips"][channelId]
+                        databaseRow.total_stp_volume = overall["volumeSTP"][channelId]
+                        databaseRow.total_net_volume = overall["volumeNet"][channelId]
 
-                db.session.commit()
+                        # Create event log entry
+                        from database.models import BlackBoxEventLogData
+                        event_log = BlackBoxEventLogData(
+                            test_id=self.test_id,
+                            device_id=self.id,
+                            channel_number=channelId,
+                            channel_name=setup["names"][channelId],
+                            timestamp=eventTime,
+                            days=day,
+                            hours=hour,
+                            minutes=min,
+                            tumbler_volume=setup["tumblerVolume"][channelId],
+                            temperature=temperatureC,
+                            pressure=pressure,
+                            cumulative_tips=overall["tips"][channelId],
+                            volume_this_tip_stp=eventVolume,
+                            total_volume_stp=overall["volumeSTP"][channelId],
+                            tips_this_day=dailyTips,
+                            volume_this_day_stp=dailyVolume,
+                            tips_this_hour=hourlyTips,
+                            volume_this_hour_stp=hourlyVolume,
+                            net_volume_per_gram=overall["volumeNet"][channelId]
+                        )
+                        db.session.add(event_log)
 
-                return result.format(eventData)
-        except:
-            return ""
+                        db.session.commit()
 
-        #Return correct information
-        return result
+                        return result.format(*eventData)
+            except:
+                import traceback
+                traceback.print_exc()
+                return ""
+
+            #Return correct information
+            return result
     
     def disconnect(self):
         """Disconnect from device"""

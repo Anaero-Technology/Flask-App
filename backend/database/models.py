@@ -50,6 +50,36 @@ class ChimeraRawData(db.Model):
    peak_parts = Column(String(500), nullable=True)  # JSON string of peak parts array
    
 
+class BlackBoxEventLogData(db.Model):
+   __tablename__ = "blackboxEventLogData"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   channel_number = Column(Integer, nullable=False)
+
+   channel_name = Column(String, nullable=True)
+   timestamp = Column(Integer, nullable=False)
+   days = Column(Integer, nullable=False)
+   hours = Column(Integer, nullable=False)
+   minutes = Column(Integer, nullable=False)
+
+   tumbler_volume = Column(Float, nullable=False)
+   temperature = Column(Float, nullable=True)
+   pressure = Column(Float, nullable=False)
+
+   cumulative_tips = Column(Integer, nullable=False)
+   volume_this_tip_stp = Column(Float, nullable=False)
+   total_volume_stp = Column(Float, nullable=False)
+
+   tips_this_day = Column(Integer, nullable=False)
+   volume_this_day_stp = Column(Float, nullable=False)
+   tips_this_hour = Column(Integer, nullable=False)
+   volume_this_hour_stp = Column(Float, nullable=False)
+
+   net_volume_per_gram = Column(Float, nullable=False)
+
+
 class Sample(db.Model):
    __tablename__ = "samples"
 
@@ -66,24 +96,6 @@ class Sample(db.Model):
    substrate_percent_ts = Column(Float)
    substrate_percent_vs = Column(Float)
    author = Column(String)
-   reactor  = Column(String)
-   temperature = Column(Float)
-
-class BlackBoxSettings(db.Model):
-   __tablename__ = "blackboxSettings"
-
-   id = Column(Integer, primary_key=True)
-
-  
-class InoculumSample(db.Model):
-   __tablename__ = "inoculum"
-
-   id = Column(Integer, primary_key=True)
-   date_created = Column(DateTime)
-   inoculum_source = Column(String)
-   inoculum_percent_ts = Column(Float)
-   inoculum_percent_vs = Column(Float)
-
 
 class Test(db.Model):
    __tablename__ = "tests"
@@ -106,7 +118,7 @@ class ChannelConfiguration(db.Model):
    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
    channel_number = Column(Integer, nullable=False)  # 1-15
    
-   inoculum_sample_id = Column(Integer, ForeignKey('inoculum.id'), nullable=False)
+   inoculum_sample_id = Column(Integer, ForeignKey('samples.id'), nullable=True)
    inoculum_weight_grams = Column(Float, nullable=False)
    substrate_sample_id = Column(Integer, ForeignKey('samples.id'), nullable=True)
    substrate_weight_grams = Column(Float, nullable=False, default=0)  # 0 for controls

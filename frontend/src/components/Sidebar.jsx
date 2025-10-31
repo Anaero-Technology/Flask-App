@@ -28,20 +28,12 @@ function Sidebar({ onNavigate, currentView }) {
       </div>
 
       <div className="mx-4 my-4 space-y-2">
-        <button 
+        <button
           onClick={() => onNavigate('create-sample')}
           className="w-full px-4 py-2.5 bg-green-500 hover:bg-green-600 text-black rounded-lg flex items-center gap-2 transition-colors"
         >
           <span className="font-bold">+</span>
           <span className="font-medium">Create Sample</span>
-        </button>
-        
-        <button 
-          onClick={() => onNavigate('create-inoculum')}
-          className="w-full px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <span className="font-bold">+</span>
-          <span className="font-medium">Create Inoculum</span>
         </button>
       </div>
 
