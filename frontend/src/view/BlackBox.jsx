@@ -171,8 +171,14 @@ function BlackBox() {
                 const testName = prompt('Enter test name:');
                 if (!testName) return;
 
-                const filename = prompt('Enter filename for logging:');
+                let filename = prompt('Enter filename for logging (max 20 characters):');
                 if (!filename) return;
+
+                // Validate filename length (device firmware has limited buffer)
+                if (filename.length > 20) {
+                    alert('Filename too long! Maximum 20 characters. Please use a shorter name.');
+                    return;
+                }
 
                 response = await fetch(`/api/v1/black_box/${deviceId}/start_logging`, {
                     method: 'POST',
