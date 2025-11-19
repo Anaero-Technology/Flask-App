@@ -630,23 +630,23 @@ def start_test(test_id):
 
             # Start logging based on device type
             if device.device_type in ['black-box', 'black_box']:
-                # Generate filename - keep it very simple and short for BlackBox compatibility
-                # Use only alphanumeric characters, no special chars that might cause issues
+                # Generate filename - keep it very short for BlackBox firmware compatibility
+                # Device firmware has 20-char limit to avoid buffer overflow
                 import re
 
                 # Clean test name: only letters, numbers, and underscores
-                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:15]
+                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:8]
                 # Clean device name
-                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:10]
+                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:5]
                 # Short timestamp
                 timestamp = datetime.now().strftime('%m%d%H%M')  # MMDDHHMM (8 chars)
 
-                # Format: testname_device_timestamp (max ~35 chars)
+                # Format: testname_dev_timestamp (max 8+1+5+1+8 = 23 chars before truncation)
                 filename = f"{clean_test_name}_{clean_device_name}_{timestamp}"
 
-                # Final safety: truncate to 30 chars max (conservative limit)
-                if len(filename) > 30:
-                    filename = filename[:30]
+                # Final safety: truncate to 20 chars max (firmware buffer limit)
+                if len(filename) > 20:
+                    filename = filename[:20]
 
                 print(f"[DEBUG] Generated filename: '{filename}' (length: {len(filename)})")
                 success, message = handler.start_logging(filename)

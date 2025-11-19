@@ -86,15 +86,15 @@ class BlackBoxHandler(SerialHandler):
                                 print(f"⚠️  MISSED TIPS DETECTED: Expected tip {expected_tip}, got {tip_data['tip_number']}")
                                 print(f"   Missing {missed_count} tip(s). Scheduling recovery in background thread...")
 
-                                # Schedule recovery in a separate thread to avoid blocking reader thread
+                                # Recover missed tips in a separate thread to avoid blocking serial reader
+                                # Recover from expected_tip to current_tip - 1 (exclude current tip, it's being processed now)
                                 import threading
                                 recovery_thread = threading.Thread(
                                     target=self._recover_missed_tips_background,
-                                    args=(latest_tip.tip_number + 1, tip_data['tip_number']),
+                                    args=(expected_tip, tip_data['tip_number'] - 1),
                                     daemon=True
                                 )
-                                recovery_thread.start()
-                                return 
+                                recovery_thread.start() 
 
                         # Create new BlackboxRawData entry for the current tip
                         raw_data = BlackboxRawData(
@@ -402,16 +402,16 @@ class BlackBoxHandler(SerialHandler):
                 data = line[8:]
                 lines.append(data)
     
-    def _recover_missed_tips_background(self, from_event: int, current_tip: int):
+    def _recover_missed_tips_background(self, from_tip: int, to_tip: int):
         """Background thread to recover missed tips without blocking reader thread"""
         try:
-            print(f"[Recovery Thread] Downloading from event #{from_event}...")
+            print(f"[Recovery Thread] Recovering tips {from_tip} to {to_tip}...")
 
             if not self.current_log_file:
                 print("[Recovery Thread] No log file")
                 return
 
-            success, lines = self.download_file_from(self.current_log_file, from_event)
+            success, lines = self.download_file_from(self.current_log_file, from_tip)
 
             if not success:
                 print(f"[Recovery Thread] Download failed: {lines}")
@@ -431,8 +431,19 @@ class BlackBoxHandler(SerialHandler):
                             if len(parts) >= 6:
                                 recovered_tip = int(parts[0])
 
-                                # Only save tips that are missing (before current tip)
-                                if recovered_tip <= current_tip:
+                                # Only save tips in the recovery range (from_tip to to_tip inclusive)
+                                if from_tip <= recovered_tip <= to_tip:
+                                    # Create tip_data dict for calculateEventLogTip
+                                    tip_data = {
+                                        "tip_number": recovered_tip,
+                                        "timestamp": parts[1].strip(),
+                                        "seconds_elapsed": int(parts[2]),
+                                        "channel_number": int(parts[3]),
+                                        "temperature": "N/A" if parts[4] == "-" else float(parts[4]),
+                                        "pressure": float(parts[5])
+                                    }
+
+                                    # Save raw data
                                     recovered_data = BlackboxRawData(
                                         test_id=self.test_id,
                                         device_id=self.id,
@@ -444,6 +455,10 @@ class BlackBoxHandler(SerialHandler):
                                         pressure=float(parts[5])
                                     )
                                     db.session.add(recovered_data)
+
+                                    # Calculate and save event log data
+                                    self.calculateEventLogTip(tip_data)
+
                                     recovered += 1
                         except (ValueError, IndexError) as e:
                             print(f"[Recovery Thread] Failed to parse line: {e}")
