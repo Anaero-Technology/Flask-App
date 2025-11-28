@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
 from database.models import ChannelConfiguration, db
@@ -24,7 +25,6 @@ class BlackBoxHandler(SerialHandler):
         # Get device info immediately after connection
         self._get_device_info()
     
-    
     def _print_tips(self, line: str):
         """Prints automatic tip messages and sends SSE notification"""
         try:
@@ -34,9 +34,18 @@ class BlackBoxHandler(SerialHandler):
             # Parse the CSV line: Tip Number, Time Stamp, Seconds Elapsed, Channel Number, Temperature, Pressure
             parts = file_line.split()
 
+            # Parse timestamp: YYYY.MM.DD.HH.MM.SS
+            try:
+                dt_str = parts[1].strip()
+                dt = datetime.strptime(dt_str, "%Y.%m.%d.%H.%M.%S")
+                timestamp = int(dt.timestamp())
+            except ValueError:
+                print(f"[BLACKBOX] Failed to parse timestamp: {parts[1]}")
+                return
+
             tip_data = {
                 "tip_number": int(parts[0]),
-                "timestamp": parts[1].strip(),
+                "timestamp": timestamp,
                 "seconds_elapsed": int(parts[2]),
                 "channel_number": int(parts[3]),
                 "temperature" : "N/A" if parts[4] == "-" else float(parts[4]),
@@ -102,7 +111,7 @@ class BlackBoxHandler(SerialHandler):
                             device_id=self.id,
                             tip_number=tip_data['tip_number'],
                             channel_number=tip_data['channel_number'],
-                            timestamp=int(time.time()),  # Current Unix timestamp
+                            timestamp=tip_data['timestamp'], 
                             seconds_elapsed=tip_data['seconds_elapsed'],
                             temperature=tip_data['temperature'] if tip_data['temperature'] != 'N/A' else None,
                             pressure=tip_data['pressure']
@@ -164,6 +173,8 @@ class BlackBoxHandler(SerialHandler):
     
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
+
+        self.set_time(time.strftime("%Y,%m,%d,%H,%M,%S"))
         response = self.send_command(f"start /{filename}.txt")
         
         if response == "done start" or response == "Setup successfully updated":
@@ -433,10 +444,19 @@ class BlackBoxHandler(SerialHandler):
 
                                 # Only save tips in the recovery range (from_tip to to_tip inclusive)
                                 if from_tip <= recovered_tip <= to_tip:
+                                    # Parse timestamp
+                                    try:
+                                        dt_str = parts[1].strip()
+                                        dt = datetime.strptime(dt_str, "%Y.%m.%d.%H.%M.%S")
+                                        timestamp = int(dt.timestamp())
+                                    except ValueError:
+                                        print(f"[Recovery Thread] Failed to parse timestamp: {parts[1]}")
+                                        continue
+
                                     # Create tip_data dict for calculateEventLogTip
                                     tip_data = {
                                         "tip_number": recovered_tip,
-                                        "timestamp": parts[1].strip(),
+                                        "timestamp": timestamp,
                                         "seconds_elapsed": int(parts[2]),
                                         "channel_number": int(parts[3]),
                                         "temperature": "N/A" if parts[4] == "-" else float(parts[4]),
@@ -449,7 +469,7 @@ class BlackBoxHandler(SerialHandler):
                                         device_id=self.id,
                                         tip_number=recovered_tip,
                                         channel_number=int(parts[3]),
-                                        timestamp=int(time.time()),
+                                        timestamp=timestamp,
                                         seconds_elapsed=int(parts[2]),
                                         temperature=None if parts[4] == "-" else float(parts[4]),
                                         pressure=float(parts[5])
@@ -561,6 +581,7 @@ class BlackBoxHandler(SerialHandler):
                     if setup["inUse"][channelId]:
                         #Get the time, temperature and pressure
                         eventTime = tipData["seconds_elapsed"]
+                        timestamp = tipData["timestamp"]
                         temperatureC = tipData["temperature"]
                         temperatureK = temperatureC + 273
                         pressure = tipData["pressure"]
@@ -624,7 +645,7 @@ class BlackBoxHandler(SerialHandler):
                         overall["volumeNet"][channelId] = totalNetVolume
 
                         #Channel Number, Name, Timestamp, Days, Hours, Minutes, Tumbler Volume (ml), Temperature (C), Pressure (hPA), Cumulative Total Tips, Volume This Tip (STP), Total Volume (STP), Tips This Day, Volume This Day (STP), Tips This Hour, Volume This Hour (STP), Net Volume Per Gram (ml/g)
-                        eventData = [channelId + 1, setup["names"][channelId], eventTime, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
+                        eventData = [channelId + 1, setup["names"][channelId], timestamp, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
 
                         # Update channel configuration
                         databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, channel_number = channelId).first()
@@ -644,7 +665,7 @@ class BlackBoxHandler(SerialHandler):
                             device_id=self.id,
                             channel_number=channelId,
                             channel_name=setup["names"][channelId],
-                            timestamp=eventTime,
+                            timestamp=timestamp,
                             days=day,
                             hours=hour,
                             minutes=min,

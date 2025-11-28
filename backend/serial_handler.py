@@ -75,10 +75,12 @@ class SerialHandler:
                 break
         if response is None:
             raise Exception(f"No info response received from {port}")
-        # Split the response and get the 5th element (index 4)
+        # Split the response and get the device name
         parts = response.split()
         if len(parts) > 4:
-            return parts[4]
+            # Check if parts[4] is a number, if so use parts[5] (chimera)
+            index = 5 if parts[4].isdigit() else 4
+            return parts[index] # device_name
         else:
             raise Exception(f"Invalid response format: {response}")
 

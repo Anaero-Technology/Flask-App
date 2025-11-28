@@ -57,21 +57,25 @@ class ChimeraHandler(SerialHandler):
     def _print_datapoint(self, line: str):
         """Process automatic datapoint messages and send SSE notification"""
         parts = line.split()
-        # Minimum: datapoint DATE TIME CHANNEL SENSOR1 GAS1 VAL1 VAL2 VAL3 VAL4 VAL5 VAL6 (12 parts)
+        # Format: datapoint [date_time] [seconds_elapsed] [channel_number] [each_sensor_data]
+        # Minimum parts: datapoint + date + seconds_elapsed + channel + 1 sensor (8 parts) = 12 parts
         if len(parts) >= 12:
             try:
-                # Format: datapoint DATE TIME CHANNEL [SENSOR GAS VAL1 VAL2 VAL3 VAL4 VAL5 VAL6]...
-                # parts[0] = "datapoint"
-                # parts[1] = date (e.g., "2025/10/2")
-                # parts[2] = time (e.g., "10:9:46")
-                # parts[3] = channel number
-                # Then repeating groups of 8: sensor_num, gas_name, 6 values
+                # Parse date format: YYYY.MM.DD.HH.MM.SS
+                try:
+                    dt_str = parts[1]
+                    dt = datetime.strptime(dt_str, "%Y.%m.%d.%H.%M.%S")
+                    timestamp = int(dt.timestamp())
+                except ValueError:
+                    print(f"[CHIMERA] Failed to parse date format: {parts[1]}")
+                    return
 
+                seconds_elapsed = int(parts[2])
                 channel = int(parts[3])
                 sensor_data = []
 
                 # Parse all sensors (each sensor has 8 parts: num, name, 6 values)
-                i = 4  # Start after channel number
+                i = 4  # Start after seconds_elapsed and channel number
                 while i + 7 < len(parts):  # Need at least 8 parts for a sensor
                     try:
                         sensor_num = int(parts[i])
@@ -98,39 +102,37 @@ class ChimeraHandler(SerialHandler):
 
                 print(f"[CHIMERA DATAPOINT] Channel {channel} - {len(sensor_data)} sensors")
 
-                # Send SSE notification directly
+                # Send SSE notification
                 if self.app:
                     try:
                         with self.app.app_context():
                             from flask_sse import sse
                             sse_data = {
-                                "type": "datapoint_event",
+                                "type": "datapoint",
                                 "device_name": self.device_name,
                                 "port": self.port,
                                 "channel": channel,
-                                "sensor_data": sensor_data
+                                "timestamp": timestamp,
+                                "seconds_elapsed": seconds_elapsed,
+                                "sensor_count": len(sensor_data)
                             }
-                            sse.publish(sse_data, type='datapoint')
-                            print(f"Published SSE notification for channel {channel}")
+                            sse.publish(sse_data, type='chimera_datapoint')
                     except Exception as e:
                         print(f"SSE publish failed: {e}")
 
-                # Save datapoint to database if test_id is set and app context is available
-                # Create one database entry per sensor
+                # Save to database if test_id is set
                 if self.test_id and self.app and hasattr(self, 'id'):
                     try:
                         with self.app.app_context():
                             from database.models import ChimeraRawData, db
 
-                            timestamp = int(time.time())  # Current Unix timestamp
-
-                            # Create one entry per sensor
                             for sensor in sensor_data:
                                 raw_data = ChimeraRawData(
                                     test_id=self.test_id,
                                     device_id=self.id,
                                     channel_number=channel,
                                     timestamp=timestamp,
+                                    seconds_elapsed=seconds_elapsed,
                                     sensor_number=sensor["sensor_number"],
                                     gas_name=sensor["gas_name"],
                                     peak_value=sensor["peak_value"],
@@ -139,10 +141,9 @@ class ChimeraHandler(SerialHandler):
                                 db.session.add(raw_data)
 
                             db.session.commit()
-                            print(f"Saved {len(sensor_data)} chimera datapoints to database: Test {self.test_id}, Channel {channel}")
-
+                            print(f"Saved {len(sensor_data)} sensor readings to database")
                     except Exception as e:
-                        print(f"Failed to save chimera datapoint to database: {e}")
+                        print(f"Failed to save datapoint to database: {e}")
                         try:
                             db.session.rollback()
                         except:
@@ -191,14 +192,31 @@ class ChimeraHandler(SerialHandler):
         if self.connection.is_open:
             response = self.send_command("info")
             if response and response.startswith("info"):
-                # Parse: info [logging_state] [current_channel] [seconds_elapsed] chimera-max [mac_address]
+                # Parse: info [logging_state] [filename] [current_channel] [seconds_elapsed] chimera-max [mac_address]
+                # OR: info [logging_state] [filename] [seconds_elapsed] chimera-max [mac_address] (missing channel)
                 parts = response.split()
-                if len(parts) >= 6:
+                
+                if len(parts) >= 7:
                     self.is_logging = (parts[1] == "true")
-                    self.current_channel = int(parts[2])
+                    self.current_log_file = parts[2] if parts[2] != "none" else None
+                    self.current_channel = int(parts[3])
+                    self.seconds_elapsed = int(parts[4])
+                    # parts[5] should be "chimera-max"
+                    self.mac_address = parts[6]
+                    print(f"[DEBUG] Parsed info (7 parts): logging={self.is_logging}, file={self.current_log_file}")
+                elif len(parts) >= 6:
+                    # Handle format where channel is missing
+                    self.is_logging = (parts[1] == "true")
+                    self.current_log_file = parts[2] if parts[2] != "none" else None
+                    self.current_channel = 0 # Unknown
                     self.seconds_elapsed = int(parts[3])
                     # parts[4] should be "chimera-max"
                     self.mac_address = parts[5]
+                    print(f"[DEBUG] Parsed info (6 parts): logging={self.is_logging}, file={self.current_log_file}")
+                else:
+                    print(f"[DEBUG] Info response too short: {response}")
+            else:
+                print(f"[DEBUG] Invalid info response: {response}")
     
     def get_info(self) -> Dict:
         """Get current device information"""
@@ -217,18 +235,24 @@ class ChimeraHandler(SerialHandler):
             "service_sequence": service_sequence if success else '111111111111111'
         }
     
-    def start_logging(self) -> Tuple[bool, str]:
-        """Start logging"""
-        self.send_command_no_wait("startlogging")
+    def start_logging(self, filename: str) -> Tuple[bool, str]:
+        """Start logging to a specific file"""
+        
+        self.set_time(datetime.now())
+        self.send_command_no_wait(f"startlogging {filename}")
         
         # Read through all queued responses until we find the final result
         while True:
             response = self.get_response(timeout=5.0)
+            if response:
+                print(f"[DEBUG] start_logging received: {response}")
+            
             if not response:
                 return False, "Timeout waiting for start logging response"
                 
             if response == "done startlogging":
                 self.is_logging = True
+                self.current_log_file = filename
                 return True, "Logging started successfully"
             elif response == "failed startlogging logging":
                 return False, "Device is already logging"
