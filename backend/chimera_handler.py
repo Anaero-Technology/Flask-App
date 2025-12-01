@@ -22,7 +22,7 @@ class ChimeraHandler(SerialHandler):
         self.open_time_ms = 0
         self.flush_time_ms = 0
         self.service_sequence = "111111111111111"  # 15 channels
-        self.recirculation_enabled = False
+        self.recirculation_mode = 0  # 0=disabled, 1=automatic, 2=manual
         self.recirculation_days = 1
         self.recirculation_hour = 0
         self.recirculation_minute = 0
@@ -511,33 +511,52 @@ class ChimeraHandler(SerialHandler):
         
         return False, {}, f"Unexpected response: {response}"
     
-    def enable_recirculation(self) -> Tuple[bool, str]:
-        """Enable recirculation"""
-        response = self.send_command("recirculateenable")
+    def set_recirculate(self, mode) -> Tuple[bool, str]:
+        """Set recirculation mode
         
-        if response == "done recirculateenable":
-            self.recirculation_enabled = True
-            return True, "Recirculation enabled successfully"
-        elif response == "failed recirculateenable nofiles":
+        Args:
+            mode: Either an integer (0-2) or string ('disabled', 'automatic', 'manual')
+                  0/'disabled' = disabled
+                  1/'automatic' = automatic
+                  2/'manual' = manual
+        """
+        # Convert string mode to integer
+        mode_map = {
+            'disabled': 0,
+            'automatic': 1,
+            'manual': 2
+        }
+        
+        if isinstance(mode, str):
+            mode = mode.lower()
+            if mode not in mode_map:
+                return False, "Invalid mode. Must be 'disabled', 'automatic', or 'manual'"
+            mode = mode_map[mode]
+        
+        # Validate integer mode
+        if not isinstance(mode, int) or mode < 0 or mode > 2:
+            return False, "Invalid mode. Must be 0 (disabled), 1 (automatic), or 2 (manual)"
+        
+        response = self.send_command(f"setrecirculate {mode}")
+        
+        if response == "done setrecirculate":
+            self.recirculation_mode = mode
+            mode_names = ['disabled', 'automatic', 'manual']
+            return True, f"Recirculation mode set to {mode_names[mode]} successfully"
+        elif response == "failed setrecirculate nofiles":
             return False, "Files not working"
-        elif response == "failed recirculateenable alreadyenabled":
-            return False, "Recirculation already enabled"
+        elif response == "failed setrecirculate invalidmode":
+            return False, "Invalid mode"
         else:
             return False, f"Unexpected response: {response}"
     
+    def enable_recirculation(self) -> Tuple[bool, str]:
+        """Enable recirculation (backward compatibility - sets to automatic mode)"""
+        return self.set_recirculate(1)
+    
     def disable_recirculation(self) -> Tuple[bool, str]:
-        """Disable recirculation"""
-        response = self.send_command("recirculatedisable")
-        
-        if response == "done recirculatedisable":
-            self.recirculation_enabled = False
-            return True, "Recirculation disabled successfully"
-        elif response == "failed recirculatedisable nofiles":
-            return False, "Files not working"
-        elif response == "failed recirculatedisable alreadydisabled":
-            return False, "Recirculation already disabled"
-        else:
-            return False, f"Unexpected response: {response}"
+        """Disable recirculation (backward compatibility - sets to disabled mode)"""
+        return self.set_recirculate(0)
     
     def set_recirculation_days(self, days: int) -> Tuple[bool, str]:
         """Set number of days between recirculation runs"""
@@ -577,6 +596,35 @@ class ChimeraHandler(SerialHandler):
             return False, "Cannot change recirculation time while logging"
         else:
             return False, f"Unexpected response: {response}"
+    
+    def recirculate_flag(self, channel: int, duration: int, pump_power: int) -> Tuple[bool, str]:
+        """Flag a channel for recirculation (manual mode only)
+        
+        Args:
+            channel: Gas channel number (1-15)
+            duration: Number of seconds to pump the gas
+            pump_power: Percentage of pump power to use (1-100)
+        """
+        # Validate parameters
+        if not (1 <= channel <= 15):
+            return False, "Channel must be between 1 and 15"
+        
+        if duration <= 0:
+            return False, "Duration must be greater than 0"
+        
+        if not (1 <= pump_power <= 100):
+            return False, "Pump power must be between 1 and 100"
+        
+        response = self.send_command(f"recirculateflag {channel} {duration} {pump_power}")
+        
+        if response == "done recirculateflag":
+            return True, f"Channel {channel} flagged for recirculation successfully"
+        elif response == "failed recirculateflag invalidvalues":
+            return False, "Invalid values entered"
+        elif response == "failed recirculateflag wrongmode":
+            return False, "Not in manual mode"
+        else:
+            return False, f"Unexpected response: {response}"
 
     def get_recirculation_info(self) -> Tuple[bool, Dict]:
         """Get recirculation information from device"""
@@ -595,13 +643,16 @@ class ChimeraHandler(SerialHandler):
                 last_day = int(parts[7])
 
                 # Update internal state
-                self.recirculation_enabled = recirculating
+                # recirculating is 0=disabled, 1=automatic, 2=manual
+                self.recirculation_mode = recirculating
                 self.recirculation_days = days_between
                 self.recirculation_hour = hour
                 self.recirculation_minute = minute
 
+                mode_names = ['disabled', 'automatic', 'manual']
                 info = {
-                    "recirculation_enabled": recirculating,
+                    "recirculation_mode": recirculating,
+                    "recirculation_mode_name": mode_names[recirculating] if 0 <= recirculating <= 2 else 'unknown',
                     "days_between": days_between,
                     "hour": hour,
                     "minute": minute,

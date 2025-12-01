@@ -44,6 +44,7 @@ class ChimeraRawData(db.Model):
    channel_number = Column(Integer, nullable=False)
 
    timestamp = Column(Integer)
+   seconds_elapsed = Column(Integer)
    sensor_number = Column(Integer, nullable=False)
    gas_name = Column(String(50), nullable=True)
    peak_value = Column(Float, nullable=True)
@@ -96,6 +97,7 @@ class Sample(db.Model):
    substrate_percent_ts = Column(Float)
    substrate_percent_vs = Column(Float)
    author = Column(String)
+   is_inoculum = Column(Boolean, default=False)  # True if this sample can be used as an inoculum (bacteria source)
 
 class Test(db.Model):
    __tablename__ = "tests"

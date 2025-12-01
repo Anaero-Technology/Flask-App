@@ -158,6 +158,11 @@ def start_logging(device_id):
 
         data = request.get_json()
 
+        # Get filename from request
+        filename = data.get('filename')
+        if not filename:
+            return jsonify({"error": "filename is required"}), 400
+
         # Handle test creation/linking
         test_id = data.get('test_id')
         test = None
@@ -181,7 +186,7 @@ def start_logging(device_id):
             db.session.add(test)
             db.session.flush()  # Get the ID without committing
         
-        success, message = handler.start_logging()
+        success, message = handler.start_logging(filename)
         if success:
             # Link test to handler and device
             handler.set_test_id(test.id)
@@ -703,6 +708,68 @@ def set_recirculation_time(device_id):
             return jsonify({"error": "hour and minute are required"}), 400
 
         success, message = handler.set_recirculation_time(hour, minute)
+
+        return jsonify({
+            "success": success,
+            "message": message
+        })
+
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/mode', methods=['POST'])
+def set_recirculation_mode(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data = request.get_json()
+        mode = data.get('mode')
+
+        if mode is None:
+            return jsonify({"error": "mode is required"}), 400
+
+        success, message = handler.set_recirculate(mode)
+
+        return jsonify({
+            "success": success,
+            "message": message
+        })
+
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/flag', methods=['POST'])
+def recirculation_flag(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data = request.get_json()
+        channel = data.get('channel')
+        duration = data.get('duration')
+        pump_power = data.get('pump_power')
+
+        if channel is None or duration is None or pump_power is None:
+            return jsonify({"error": "channel, duration, and pump_power are required"}), 400
+
+        success, message = handler.recirculate_flag(channel, duration, pump_power)
 
         return jsonify({
             "success": success,
