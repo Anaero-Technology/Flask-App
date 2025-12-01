@@ -10,3 +10,20 @@ body {
 * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
+
+/* Cursor styles for interactive elements */
+a,
+button,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+select,
+.cursor-pointer {
+  cursor: pointer;
+}
+
+a:active,
+button:active,
+[role="button"]:active {
+  cursor: pointer;
+}

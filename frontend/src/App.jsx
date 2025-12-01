@@ -10,6 +10,8 @@ import Chimera from './view/Chimera'
 import Settings from './view/Settings'
 import './App.css'
 
+import Plot from './view/Plot'
+
 function App() {
   const [currentView, setCurrentView] = useState('dashboard')
 
@@ -28,7 +30,7 @@ function App() {
       case 'database':
         return <Database />
       case 'plot':
-        return <div className="p-6">Plot - Coming Soon</div>
+        return <Plot />
       case 'upload':
         return <div className="p-6">Upload Data - Coming Soon</div>
       case 'blackbox':
