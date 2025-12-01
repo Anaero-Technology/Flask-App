@@ -8,3 +8,6 @@ backend/instance
 backend/tests
 backend/known_issues.md
 backend/venv
+node_modules
+package-lock.json
+package.json    

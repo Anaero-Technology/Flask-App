@@ -12,10 +12,7 @@ function SampleForm() {
         n_content: '',
         substrate_percent_ts: '',
         substrate_percent_vs: '',
-        author: '',
-        other: '',
-        reactor: '',
-        temperature: ''
+        author: ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -57,10 +54,7 @@ function SampleForm() {
                     n_content: '',
                     substrate_percent_ts: '',
                     substrate_percent_vs: '',
-                    author: '',
-                    other: '',
-                    reactor: '',
-                    temperature: ''
+                    author: ''
                 });
                 
                 alert('Sample created successfully!');
@@ -187,13 +181,18 @@ function SampleForm() {
                                 </div>
                             </div>
 
-                            {/* Substrate Characteristics */}
-                            <div>
+                         
+                        </div>
+
+                        {/* Right Column - Substrate Characteristics */}
+                        <div className="space-y-6">
+                               {/* Substrate Characteristics */}
+                               <div>
                                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Substrate Characteristics</h3>
                                 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-gray-700 mb-4">
                                             %TS (of wet weight)
                                         </label>
                                         <input
@@ -206,7 +205,7 @@ function SampleForm() {
                                         />
                                     </div>
 
-                                    <div>
+                                 <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                             %VS (of wet weight)
                                         </label>
@@ -215,89 +214,6 @@ function SampleForm() {
                                             step="0.01"
                                             name="substrate_percent_vs"
                                             value={formData.substrate_percent_vs}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Column - Reactor & Inoculum */}
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">Reactor</h2>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Type
-                                        </label>
-                                        <select 
-                                            name="reactor"
-                                            value={formData.reactor}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="">Select type</option>
-                                            <option value="BMP">BMP</option>
-                                            <option value="CSTR">CSTR</option>
-                                            <option value="Batch">Batch</option>
-                                            <option value="Fed-batch">Fed-batch</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Temperature (°C)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            name="temperature"
-                                            value={formData.temperature}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Substrate Input Amount (g)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="ash_content"
-                                            value={formData.ash_content}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Inoculum Input Amount (g)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="other"
-                                            value={formData.other}
-                                            onChange={handleChange}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Methane Concentration (%)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            name="author"
-                                            value={formData.author}
                                             onChange={handleChange}
                                             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                         />

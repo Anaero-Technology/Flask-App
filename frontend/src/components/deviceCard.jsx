@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import settingsCog from '../assets/cog.svg';
+import { Settings, Edit2, Save, Circle } from 'lucide-react';
 
-function DeviceCard(props){
+function DeviceCard(props) {
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -30,11 +30,11 @@ function DeviceCard(props){
                 setIsEditingName(false);
             } else {
                 const error = await response.json();
-                alert(`Failed to update name: ${error.error || 'Unknown error'}`);
+                console.error(`Failed to update name: ${error.error || 'Unknown error'}`);
                 setEditedName(props.name);
             }
         } catch (error) {
-            alert(`Failed to update name: ${error.message}`);
+            console.error(`Failed to update name: ${error.message}`);
             setEditedName(props.name);
         } finally {
             setIsUpdating(false);
@@ -51,60 +51,78 @@ function DeviceCard(props){
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-8 mb-4 border border-gray-200 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between gap-6">
-                <div className="flex-1 text-left">
-                    <h2 className="text-3xl font-bold text-gray-800">{props.title}</h2>
-                    {isEditingName ? (
-                        <div className="mt-2 flex items-center gap-2">
-                            <input
-                                type="text"
-                                value={editedName}
-                                onChange={(e) => setEditedName(e.target.value)}
-                                onKeyDown={handleKeyPress}
-                                onBlur={handleNameSubmit}
-                                disabled={isUpdating}
-                                className="text-lg px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
-                                autoFocus
-                            />
-                            {isUpdating && <span className="text-sm text-gray-500">Updating...</span>}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all hover:shadow-md group">
+            <div className="flex flex-col sm:flex-row gap-6 items-start">
+                {/* Image Container */}
+                <div className="w-full sm:w-32 h-32 bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0">
+                    <img
+                        src={props.image}
+                        alt={props.title}
+                        className="max-w-full max-h-full object-contain mix-blend-multiply"
+                    />
+                </div>
+
+                <div className="flex-1 w-full">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-1">
+                                {props.deviceType === 'black-box' ? 'Volumetric' : 'Gas Analysis'}
+                            </h3>
+
+                            {isEditingName ? (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        type="text"
+                                        value={editedName}
+                                        onChange={(e) => setEditedName(e.target.value)}
+                                        onBlur={handleNameSubmit}
+                                        onKeyDown={handleKeyPress}
+                                        disabled={isUpdating}
+                                        className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none px-1"
+                                        autoFocus
+                                    />
+                                    <button onMouseDown={handleNameSubmit} className="text-green-600">
+                                        <Save size={18} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 group/edit">
+                                    <h2 className="text-2xl font-bold text-gray-900">{props.name}</h2>
+                                    <button
+                                        onClick={() => setIsEditingName(true)}
+                                        className="opacity-0 group-hover/edit:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
+                                </div>
+                            )}
+                            <p className="text-sm text-gray-500 font-mono mt-1">{props.port}</p>
                         </div>
-                    ) : (
-                        <p 
-                            className="text-lg text-gray-600 mt-2 cursor-pointer hover:text-blue-600"
-                            onClick={() => setIsEditingName(true)}
-                            title="Click to edit name"
-                        >
-                            {props.name}
-                        </p>
-                    )}
-                    <div className="mt-3 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <span className="text-base text-green-600 font-medium">● Connected</span>
-                            <span className={`text-base font-medium ${props.logging ? 'text-blue-600' : 'text-gray-400'}`}>
-                                {props.logging ? '📊 Logging' : '📊 Not Logging'}
-                            </span>
+
+                        <button className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                            <Settings size={20} />
+                        </button>
+                    </div>
+
+                    <div className="mt-6 flex items-center gap-3">
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                            props.logging
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                        }`}>
+                            <div className={`w-2 h-2 rounded-full ${props.logging ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                            {props.logging ? 'Recording Data' : 'Idle'}
                         </div>
-                        <img 
-                            src={settingsCog}
-                            onClick={() => alert(`Settings for ${props.name}`)}
-                            className="w-8 h-8 cursor-pointer transform transition-transform duration-200 ease-in-out hover:scale-125"
-                            style={{ filter: 'invert(0.4)' }}
-                            aria-label="Settings"
-                            alt="Settings"
-                        />
+
+                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
+                            <Circle size={8} fill="currentColor" />
+                            Connected
+                        </div>
                     </div>
                 </div>
-                
-                <img 
-                    src={props.image} 
-                    alt={props.title}
-                    className="h-28 w-auto rounded-lg object-contain"
-                />
             </div>
         </div>
     )
 }
 
-
-export default DeviceCard
+export default DeviceCard;

@@ -129,9 +129,36 @@ function BlackBox() {
         }
     };
 
+    const stopTest = async (testId) => {
+        if (!confirm('Are you sure you want to stop this test? This will stop logging on all devices in the test.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/v1/tests/${testId}/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(data.message || 'Test stopped successfully');
+                fetchBlackBoxes(); // Refresh to update device states
+            } else {
+                const errorData = await response.json();
+                alert(errorData.error || 'Failed to stop test');
+            }
+        } catch (error) {
+            console.error('Stop test error:', error);
+            alert('Failed to stop test');
+        }
+    };
+
     const toggleLogging = async (deviceId) => {
         const isLogging = loggingStates[deviceId];
-        
+
         try {
             let response;
             if (isLogging) {
@@ -140,16 +167,29 @@ function BlackBox() {
                     method: 'POST'
                 });
             } else {
-                // Start logging - prompt for filename
-                const filename = prompt('Enter filename for logging:');
+                // Start logging - prompt for test name and filename
+                const testName = prompt('Enter test name:');
+                if (!testName) return;
+
+                let filename = prompt('Enter filename for logging (max 20 characters):');
                 if (!filename) return;
-                
+
+                // Validate filename length (device firmware has limited buffer)
+                if (filename.length > 20) {
+                    alert('Filename too long! Maximum 20 characters. Please use a shorter name.');
+                    return;
+                }
+
                 response = await fetch(`/api/v1/black_box/${deviceId}/start_logging`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ filename })
+                    body: JSON.stringify({
+                        filename,
+                        test_name: testName,
+                        test_description: `BlackBox logging session started from device page`
+                    })
                 });
             }
 
@@ -161,9 +201,14 @@ function BlackBox() {
                         [deviceId]: !isLogging
                     }));
                     alert(data.message || (isLogging ? 'Logging stopped' : 'Logging started'));
+                    fetchBlackBoxes(); // Refresh to update active_test_id
                 } else {
                     alert(data.message || 'Operation failed');
                 }
+            } else {
+                // Handle error responses (like 400 for active test conflict)
+                const errorData = await response.json();
+                alert(errorData.error || 'Operation failed');
             }
         } catch (error) {
             console.error('Logging toggle error:', error);
@@ -199,24 +244,40 @@ function BlackBox() {
                         />
                         
                         {/* BlackBox specific controls */}
-                        <div className="bg-gray-50 rounded-lg p-4 mt-4 flex gap-4">
-                            <button
-                                onClick={() => handleFileView(device)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
-                            >
-                                File View
-                            </button>
-                            
-                            <button
-                                onClick={() => toggleLogging(device.device_id)}
-                                className={`px-4 py-2 rounded font-medium ${
-                                    loggingStates[device.device_id] 
-                                        ? 'bg-red-600 text-white hover:bg-red-700' 
-                                        : 'bg-green-600 text-white hover:bg-green-700'
-                                }`}
-                            >
-                                {loggingStates[device.device_id] ? 'Stop Logging' : 'Start Logging'}
-                            </button>
+                        <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                            {device.active_test_id && (
+                                <div className="mb-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-sm">
+                                    <span className="font-semibold">⚠️ Device is part of active test: "{device.active_test_name || 'Unknown'}"</span>
+                                </div>
+                            )}
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => handleFileView(device)}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+                                >
+                                    File View
+                                </button>
+
+                                {device.active_test_id ? (
+                                    <button
+                                        onClick={() => stopTest(device.active_test_id)}
+                                        className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-medium"
+                                    >
+                                        Stop Test
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => toggleLogging(device.device_id)}
+                                        className={`px-4 py-2 rounded font-medium ${
+                                            loggingStates[device.device_id]
+                                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                                : 'bg-green-600 text-white hover:bg-green-700'
+                                        }`}
+                                    >
+                                        {loggingStates[device.device_id] ? 'Stop Logging' : 'Start Logging'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}

@@ -16,15 +16,28 @@ def get_connected_chimeras():
             Device.device_type.in_(['chimera', 'chimera-max']),
             Device.connected == True
         ).all()
-        
-        devices_list = [{
-            "device_id": device.id,
-            "name": device.name,
-            "port": device.serial_port,
-            "mac_address": device.mac_address,
-            "connected": device.connected,
-            "logging": device.logging
-        } for device in connected_chimeras]
+
+        devices_list = []
+        for device in connected_chimeras:
+            device_data = {
+                "device_id": device.id,
+                "name": device.name,
+                "port": device.serial_port,
+                "mac_address": device.mac_address,
+                "connected": device.connected,
+                "logging": device.logging,
+                "active_test_id": device.active_test_id,
+                "active_test_name": None
+            }
+
+            # Get test name if device is in an active test
+            if device.active_test_id:
+                from database.models import Test
+                test = Test.query.get(device.active_test_id)
+                if test:
+                    device_data["active_test_name"] = test.name
+
+            devices_list.append(device_data)
         
         return jsonify(devices_list)
     except Exception as e:
@@ -129,18 +142,31 @@ def start_logging(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Check if device is already part of an active test
+        if device.active_test_id:
+            test = Test.query.get(device.active_test_id)
+            if test and test.status == 'running':
+                return jsonify({
+                    "error": f"Cannot start logging. Device is already part of active test '{test.name}'. Please stop the test first."
+                }), 400
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         data = request.get_json()
-        
+
+        # Get filename from request
+        filename = data.get('filename')
+        if not filename:
+            return jsonify({"error": "filename is required"}), 400
+
         # Handle test creation/linking
         test_id = data.get('test_id')
         test = None
-        
+
         if test_id:
             # Use existing test
             test = Test.query.get(test_id)
@@ -160,7 +186,7 @@ def start_logging(device_id):
             db.session.add(test)
             db.session.flush()  # Get the ID without committing
         
-        success, message = handler.start_logging()
+        success, message = handler.start_logging(filename)
         if success:
             # Link test to handler and device
             handler.set_test_id(test.id)
@@ -203,53 +229,41 @@ def stop_logging(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Check if device is part of an active test
+        if device.active_test_id:
+            test = Test.query.get(device.active_test_id)
+            if test and test.status == 'running':
+                return jsonify({
+                    "error": f"Cannot stop logging. Device is part of active test '{test.name}'. Please stop the test first."
+                }), 400
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
-        # Handle JSON parsing safely - don't require JSON
-        data = {}
-        if request.is_json:
-            data = request.get_json() or {}
-        complete_test = data.get('complete_test', True)  # Default to completing the test
-        
+
         success, message = handler.stop_logging()
         if success:
             device.logging = False
-            
-            # Handle test completion if there's an active test
-            test_completed = False
-            if device.active_test_id and complete_test:
-                test = Test.query.get(device.active_test_id)
-                if test and test.status == 'running':
-                    test.status = 'completed'
-                    test.date_ended = datetime.now()
-                    test_completed = True
-                
-                # Clear test from device and handler
+
+            # Clear any residual test assignment (in case test is not running)
+            if device.active_test_id:
                 device.active_test_id = None
                 handler.set_test_id(None)
-            
+
             db.session.commit()
-            
-            response_data = {
+
+            return jsonify({
                 "success": True,
                 "message": message
-            }
-            
-            if test_completed:
-                response_data["test_completed"] = True
-                response_data["test_id"] = test.id
-            
-            return jsonify(response_data)
+            })
         else:
             return jsonify({
                 "success": False,
                 "message": message
             })
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
@@ -680,26 +694,112 @@ def set_recirculation_time(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         data = request.get_json()
         hour = data.get('hour')
         minute = data.get('minute')
-        
+
         if hour is None or minute is None:
             return jsonify({"error": "hour and minute are required"}), 400
-        
+
         success, message = handler.set_recirculation_time(hour, minute)
-        
+
         return jsonify({
             "success": success,
             "message": message
         })
-        
+
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/mode', methods=['POST'])
+def set_recirculation_mode(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data = request.get_json()
+        mode = data.get('mode')
+
+        if mode is None:
+            return jsonify({"error": "mode is required"}), 400
+
+        success, message = handler.set_recirculate(mode)
+
+        return jsonify({
+            "success": success,
+            "message": message
+        })
+
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/flag', methods=['POST'])
+def recirculation_flag(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data = request.get_json()
+        channel = data.get('channel')
+        duration = data.get('duration')
+        pump_power = data.get('pump_power')
+
+        if channel is None or duration is None or pump_power is None:
+            return jsonify({"error": "channel, duration, and pump_power are required"}), 400
+
+        success, message = handler.recirculate_flag(channel, duration, pump_power)
+
+        return jsonify({
+            "success": success,
+            "message": message
+        })
+
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/info', methods=['GET'])
+def get_recirculation_info(device_id):
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        success, info = handler.get_recirculation_info()
+
+        if success:
+            return jsonify(info)
+        else:
+            return jsonify({"error": "Failed to get recirculation info"}), 500
+
     finally:
         db.session.close()
 

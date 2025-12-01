@@ -266,21 +266,34 @@ def disconnect_device(device_id):
 
 @app.route("/api/v1/devices/connected")
 def list_connected_devices():
-    """List all currently connected devices"""
+    """List all currently connected devices with availability status"""
     try:
         # Simply query the database for connected devices
         connected_devices = Device.query.filter_by(connected=True).all()
-        
-        devices_list = [{
-            "id": device.id,
-            "name": device.name,
-            "device_type": device.device_type,
-            "serial_port": device.serial_port,
-            "mac_address": device.mac_address,
-            "connected": device.connected,
-            "logging": device.logging
-        } for device in connected_devices]
-        
+
+        devices_list = []
+        for device in connected_devices:
+            device_data = {
+                "id": device.id,
+                "name": device.name,
+                "device_type": device.device_type,
+                "serial_port": device.serial_port,
+                "mac_address": device.mac_address,
+                "connected": device.connected,
+                "logging": device.logging,
+                "active_test_id": device.active_test_id,
+                "active_test_name": None
+            }
+
+            # Get test name if device is in an active test
+            if device.active_test_id:
+                from database.models import Test
+                test = Test.query.get(device.active_test_id)
+                if test:
+                    device_data["active_test_name"] = test.name
+
+            devices_list.append(device_data)
+
         return jsonify(devices_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -341,23 +354,11 @@ def discover_device():
 # Register blueprints
 @app.route("/api/v1/samples", methods=['POST'])
 def create_sample():
-    """Create a new sample with associated inoculum data"""
+    """Create a new sample"""
     try:
         from datetime import datetime
         data = request.get_json()
-        
-        # Create inoculum record if data is provided
-        inoculum = None
-        if any([data.get('inoculum_source'), data.get('inoculum_percent_ts'), data.get('inoculum_percent_vs')]):
-            inoculum = InoculumSample(
-                inoculum_source=data.get('inoculum_source'),
-                inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
-                inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
-                date_created=datetime.now()
-            )
-            db.session.add(inoculum)
-            db.session.flush()  # Get the ID without committing
-        
+
         # Create sample record
         sample = Sample(
             sample_name=data.get('sample_name'),
@@ -371,30 +372,29 @@ def create_sample():
             substrate_percent_ts=float(data.get('substrate_percent_ts')) if data.get('substrate_percent_ts') else None,
             substrate_percent_vs=float(data.get('substrate_percent_vs')) if data.get('substrate_percent_vs') else None,
             author=data.get('author'),
-            other=data.get('other'),
-            reactor=data.get('reactor'),
-            temperature=float(data.get('temperature')) if data.get('temperature') else None,
+            is_inoculum=data.get('is_inoculum', False), 
             date_created=datetime.now()
         )
-        
+
         db.session.add(sample)
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
             "sample_id": sample.id,
             "message": "Sample created successfully"
         }), 201
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/samples", methods=['GET'])
-def list_samples():
-    """Get all samples"""
+def list_substrate_samples():
+    """Get all samples (substrates only, not inoculums)"""
     try:
-        samples = Sample.query.all()
+        # Only return non-inoculum samples for substrate selection
+        samples = Sample.query.filter_by(is_inoculum=False).all()
         return jsonify([{
             "id": sample.id,
             "sample_name": sample.sample_name,
@@ -402,61 +402,31 @@ def list_samples():
             "description": sample.description,
             "substrate_type": sample.substrate_type,
             "author": sample.author,
-            "date_created": sample.date_created.isoformat() if sample.date_created else None,
-            "temperature": sample.temperature
+            "date_created": sample.date_created.isoformat() if sample.date_created else None
         } for sample in samples])
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/api/v1/inoculum", methods=['POST'])
-def create_inoculum():
-    """Create a new inoculum record"""
-    try:
-        data = request.get_json()
-        
-        # Validate required fields
-        if not data.get('inoculum_source'):
-            return jsonify({"error": "inoculum_source is required"}), 400
-        
-        # Create inoculum record
-        from datetime import datetime
-        inoculum = InoculumSample(
-            inoculum_source=data.get('inoculum_source'),
-            inoculum_percent_ts=float(data.get('inoculum_percent_ts')) if data.get('inoculum_percent_ts') else None,
-            inoculum_percent_vs=float(data.get('inoculum_percent_vs')) if data.get('inoculum_percent_vs') else None,
-            date_created=datetime.now()
-        )
-        
-        db.session.add(inoculum)
-        db.session.commit()
-        
-        return jsonify({
-            "success": True,
-            "inoculum_id": inoculum.id,
-            "message": "Inoculum created successfully"
-        }), 201
-        
-    except ValueError as e:
         db.session.rollback()
-        return jsonify({"error": f"Invalid number format: {str(e)}"}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
+        print(f"Error fetching samples: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/inoculum", methods=['GET'])
-def list_inoculum():
-    """Get all inoculum records"""
+def list_inoculum_samples():
+    """Get all inoculum samples"""
     try:
-        inoculum_records = InoculumSample.query.all()
+        # Only return inoculum samples for inoculum selection
+        inoculums = Sample.query.filter_by(is_inoculum=True).all()
         return jsonify([{
-            "id": inoculum.id,
-            "date_created": inoculum.date_created.isoformat() if inoculum.date_created else None,
-            "inoculum_source": inoculum.inoculum_source,
-            "inoculum_percent_ts": inoculum.inoculum_percent_ts,
-            "inoculum_percent_vs": inoculum.inoculum_percent_vs
-        } for inoculum in inoculum_records])
+            "id": sample.id,
+            "inoculum_source": sample.substrate_source,  # Display as inoculum_source for compatibility
+            "sample_name": sample.sample_name,
+            "description": sample.description,
+            "date_created": sample.date_created.isoformat() if sample.date_created else None
+        } for sample in inoculums])
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        db.session.rollback()
+        print(f"Error fetching inoculums: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/v1/samples/<int:sample_id>", methods=['PUT'])
 def update_sample(sample_id):
@@ -529,54 +499,6 @@ def delete_sample(sample_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['PUT'])
-def update_inoculum(inoculum_id):
-    """Update an existing inoculum"""
-    try:
-        inoculum = InoculumSample.query.get(inoculum_id)
-        if not inoculum:
-            return jsonify({"error": "Inoculum not found"}), 404
-
-        data = request.get_json()
-        
-        # Update fields
-        if 'inoculum_source' in data:
-            inoculum.inoculum_source = data['inoculum_source']
-        if 'inoculum_percent_ts' in data:
-            inoculum.inoculum_percent_ts = float(data['inoculum_percent_ts']) if data['inoculum_percent_ts'] else None
-        if 'inoculum_percent_vs' in data:
-            inoculum.inoculum_percent_vs = float(data['inoculum_percent_vs']) if data['inoculum_percent_vs'] else None
-
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Inoculum updated successfully"
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/api/v1/inoculum/<int:inoculum_id>", methods=['DELETE'])
-def delete_inoculum(inoculum_id):
-    """Delete an inoculum"""
-    try:
-        inoculum = InoculumSample.query.get(inoculum_id)
-        if not inoculum:
-            return jsonify({"error": "Inoculum not found"}), 404
-
-        db.session.delete(inoculum)
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Inoculum deleted successfully"
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
 
 # Test Management Endpoints
 @app.route("/api/v1/tests", methods=['POST'])
@@ -614,17 +536,41 @@ def create_test():
 def list_tests():
     """Get all tests"""
     try:
-        tests = Test.query.all()
-        return jsonify([{
-            "id": test.id,
-            "name": test.name,
-            "description": test.description,
-            "created_by": test.created_by,
-            "date_created": test.date_created.isoformat() if test.date_created else None,
-            "date_started": test.date_started.isoformat() if test.date_started else None,
-            "date_ended": test.date_ended.isoformat() if test.date_ended else None,
-            "status": test.status
-        } for test in tests])
+        status = request.args.get('status')
+        include_devices = request.args.get('include_devices') == 'true'
+        
+        query = Test.query
+        if status:
+            query = query.filter_by(status=status)
+            
+        tests = query.all()
+        
+        results = []
+        for test in tests:
+            test_data = {
+                "id": test.id,
+                "name": test.name,
+                "description": test.description,
+                "created_by": test.created_by,
+                "date_created": test.date_created.isoformat() if test.date_created else None,
+                "date_started": test.date_started.isoformat() if test.date_started else None,
+                "date_ended": test.date_ended.isoformat() if test.date_ended else None,
+                "status": test.status
+            }
+            
+            if include_devices:
+                devices = Device.query.filter_by(active_test_id=test.id).all()
+                test_data['devices'] = [{
+                    "id": d.id,
+                    "name": d.name,
+                    "device_type": d.device_type,
+                    "serial_port": d.serial_port,
+                    "logging": d.logging
+                } for d in devices]
+                
+            results.append(test_data)
+            
+        return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -665,66 +611,192 @@ def get_test(test_id):
 
 @app.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
 def start_test(test_id):
-    """Start a test and assign it to devices"""
+    """Start a test and assign it to devices, initiating logging"""
     try:
         from datetime import datetime
         test = Test.query.get(test_id)
         if not test:
             return jsonify({"error": "Test not found"}), 404
-        
+
         if test.status != 'setup':
             return jsonify({"error": "Test must be in setup status to start"}), 400
-        
+
         # Get all devices involved in this test
         configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
         device_ids = list(set([config.device_id for config in configurations]))
-        
+
+        # Check if any configurations have chimera_channel set - if so, find the Chimera device
+        chimera_device_ids = set()
+        configs_with_chimera = [c for c in configurations if c.chimera_channel is not None]
+
+        if configs_with_chimera:
+            # Find all Chimera devices that are connected
+            chimera_devices = Device.query.filter(
+                Device.device_type.in_(['chimera', 'chimera-max']),
+                Device.connected == True
+            ).all()
+
+            if chimera_devices:
+                # Add first available Chimera to the test
+                # TODO: In the future, support multiple Chimeras or device selection
+                chimera_device_ids.add(chimera_devices[0].id)
+                print(f"[DEBUG] Found Chimera device to include: {chimera_devices[0].name} (ID: {chimera_devices[0].id})")
+
+        # Combine BlackBox devices and Chimera devices
+        all_device_ids = list(set(device_ids) | chimera_device_ids)
+
+        print(f"[DEBUG] Starting test {test_id} with {len(all_device_ids)} devices: {all_device_ids}")
+        print(f"[DEBUG] BlackBox devices: {device_ids}, Chimera devices: {list(chimera_device_ids)}")
+        print(f"[DEBUG] Channel configurations: {len(configurations)}, with Chimera channel: {len(configs_with_chimera)}")
+
+        # Check all devices are connected
+        for device_id in all_device_ids:
+            device = Device.query.get(device_id)
+            if not device:
+                return jsonify({"error": f"Device {device_id} not found"}), 404
+            if not device.connected:
+                return jsonify({"error": f"Device {device.name} is not connected"}), 400
+            if device.active_test_id and device.active_test_id != test_id:
+                return jsonify({"error": f"Device {device.name} is already in use by another test"}), 400
+
         # Update test status
         test.status = 'running'
         test.date_started = datetime.now()
-        
-        # Assign test to devices
-        for device_id in device_ids:
+
+        # Start logging on each device
+        logging_results = []
+        for device_id in all_device_ids:
             device = Device.query.get(device_id)
-            if device:
-                device.active_test_id = test_id
-        
+            handler = device_manager.get_device(device_id)
+
+            if not handler:
+                db.session.rollback()
+                return jsonify({"error": f"Handler not found for device {device.name}"}), 500
+
+            # Start logging based on device type
+            if device.device_type in ['black-box', 'black_box']:
+                # Generate filename - keep it very short for BlackBox firmware compatibility
+                # Device firmware has 20-char limit to avoid buffer overflow
+                import re
+
+                # Clean test name: only letters, numbers, and underscores
+                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:8]
+                # Clean device name
+                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:5]
+                # Short timestamp
+                timestamp = datetime.now().strftime('%m%d%H%M')  # MMDDHHMM (8 chars)
+
+                # Format: testname_dev_timestamp (max 8+1+5+1+8 = 23 chars before truncation)
+                filename = f"{clean_test_name}_{clean_device_name}_{timestamp}"
+
+                # Final safety: truncate to 20 chars max (firmware buffer limit)
+                if len(filename) > 20:
+                    filename = filename[:20]
+
+                print(f"[DEBUG] Generated filename: '{filename}' (length: {len(filename)})")
+                success, message = handler.start_logging(filename)
+                if not success:
+                    db.session.rollback()
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+
+                logging_results.append({
+                    "device": device.name,
+                    "filename": filename,
+                    "message": message
+                })
+
+            elif device.device_type in ['chimera', 'chimera-max']:
+                print(f"[DEBUG] Starting Chimera logging for device {device.name} (ID: {device.id})")
+                
+                # Generate filename - similar to BlackBox but with 25 char limit
+                import re
+                
+                # Clean test name: only letters, numbers, and underscores
+                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:10]
+                # Clean device name
+                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:5]
+                # Short timestamp
+                timestamp = datetime.now().strftime('%m%d%H%M')  # MMDDHHMM (8 chars)
+                
+                # Format: testname_dev_timestamp
+                filename = f"{clean_test_name}_{clean_device_name}_{timestamp}"
+                
+                # Truncate to 25 chars max
+                if len(filename) > 25:
+                    filename = filename[:25]
+                
+                print(f"[DEBUG] Generated Chimera filename: '{filename}' (length: {len(filename)})")
+                    
+                success, message = handler.start_logging(filename)
+                print(f"[DEBUG] Chimera start_logging result: success={success}, message={message}")
+
+                if not success:
+                    db.session.rollback()
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+
+                logging_results.append({
+                    "device": device.name,
+                    "message": message
+                })
+
+            # Set test ID on handler and update device
+            handler.set_test_id(test_id)
+            device.active_test_id = test_id
+            device.logging = True
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
-            "message": f"Test started with {len(device_ids)} devices"
+            "message": f"Test started with {len(all_device_ids)} devices",
+            "logging_results": logging_results
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>/stop", methods=['POST'])
 def stop_test(test_id):
-    """Stop a test"""
+    """Stop a test and stop logging on all associated devices"""
     try:
         from datetime import datetime
         test = Test.query.get(test_id)
         if not test:
             return jsonify({"error": "Test not found"}), 404
-        
+
+        # Get all devices involved in this test
+        devices = Device.query.filter_by(active_test_id=test_id).all()
+
+        # Stop logging on each device
+        stop_results = []
+        for device in devices:
+            handler = device_manager.get_device(device.id)
+            if handler and handler.is_logging:
+                success, message = handler.stop_logging()
+                stop_results.append({
+                    "device": device.name,
+                    "success": success,
+                    "message": message
+                })
+                if success:
+                    device.logging = False
+
+            # Remove test assignment
+            device.active_test_id = None
+
         # Update test status
         test.status = 'completed'
         test.date_ended = datetime.now()
-        
-        # Remove test from devices
-        devices = Device.query.filter_by(active_test_id=test_id).all()
-        for device in devices:
-            device.active_test_id = None
-        
+
         db.session.commit()
-        
+
         return jsonify({
             "success": True,
-            "message": "Test stopped successfully"
+            "message": "Test stopped successfully",
+            "stop_results": stop_results
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
@@ -756,6 +828,7 @@ def create_channel_configuration(test_id):
                 existing.substrate_sample_id = config_data.get('substrate_sample_id')
                 existing.substrate_weight_grams = config_data.get('substrate_weight_grams', 0)
                 existing.tumbler_volume = config_data['tumbler_volume']
+                existing.chimera_channel = config_data.get('chimera_channel')
                 existing.notes = config_data.get('notes')
                 created_configs.append(existing)
             else:
@@ -769,6 +842,7 @@ def create_channel_configuration(test_id):
                     substrate_sample_id=config_data.get('substrate_sample_id'),
                     substrate_weight_grams=config_data.get('substrate_weight_grams', 0),
                     tumbler_volume=config_data['tumbler_volume'],
+                    chimera_channel=config_data.get('chimera_channel'),
                     notes=config_data.get('notes')
                 )
                 db.session.add(config)
@@ -807,26 +881,45 @@ def upload_csv_configuration():
         csv_reader = csv.DictReader(stream)
         
         configurations = []
+        channel_number = 1  # Start from channel 1
         for row_num, row in enumerate(csv_reader, start=1):
             try:
-                # Check if we've reached the "End of data" marker
+                # Get sample description (should be a string)
                 sample_description = row.get('Sample description', '').strip()
+
+                # Check if we've reached the "End of data" marker
                 if sample_description == 'End of data':
                     break
-                
-                # Skip empty rows or rows with non-numeric sample descriptions
-                if not sample_description or not sample_description.isdigit():
+
+                # Skip empty rows
+                if not sample_description:
                     continue
-                
+
                 # Parse CSV columns based on the format:
-                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml)
-                channel_number = int(sample_description)
+                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml),Chimera channel (optional)
                 in_service = int(row['In service']) == 1
                 inoculum_only = int(row['Inoculum only']) == 1
                 inoculum_weight = float(row['Inoculum mass VS (g)'])
                 substrate_weight = 0 if inoculum_only else float(row['Sample mass VS (g)'])
                 tumbler_volume = float(row['Tumbler volume (ml)'])
-                
+
+                # Parse optional Chimera channel column
+                chimera_channel = None
+                chimera_column_key = None
+                # Try different possible column names
+                for key in ['Chimera channel', 'Chimera Channel', 'chimera_channel', 'chimera channel']:
+                    if key in row:
+                        chimera_column_key = key
+                        break
+
+                if chimera_column_key and row[chimera_column_key].strip():
+                    try:
+                        chimera_val = int(row[chimera_column_key].strip())
+                        if 1 <= chimera_val <= 15:
+                            chimera_channel = chimera_val
+                    except ValueError:
+                        pass  # Invalid value, keep as None
+
                 # Only include channels that are in service
                 if in_service:
                     configurations.append({
@@ -835,8 +928,10 @@ def upload_csv_configuration():
                         'substrate_weight_grams': substrate_weight,
                         'tumbler_volume': tumbler_volume,
                         'is_control': inoculum_only,
-                        'notes': f"Imported from CSV - {'Control (inoculum only)' if inoculum_only else 'Test sample'}"
+                        'chimera_channel': chimera_channel,
+                        'notes': sample_description  # Store sample description in notes
                     })
+                    channel_number += 1  # Increment channel number for next in-service row
             except (ValueError, KeyError) as e:
                 return jsonify({"error": f"Invalid data in row {row_num}: {str(e)}"}), 400
         
@@ -853,9 +948,11 @@ def upload_csv_configuration():
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 from routes.wifi import wifi_bp
+from routes.data import data_bp
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
 app.register_blueprint(wifi_bp)
+app.register_blueprint(data_bp)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=6000)

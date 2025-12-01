@@ -3,6 +3,7 @@ import json
 import socket
 import threading
 import subprocess
+import platform
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -21,7 +22,7 @@ class ChimeraHandler(SerialHandler):
         self.open_time_ms = 0
         self.flush_time_ms = 0
         self.service_sequence = "111111111111111"  # 15 channels
-        self.recirculation_enabled = False
+        self.recirculation_mode = 0  # 0=disabled, 1=automatic, 2=manual
         self.recirculation_days = 1
         self.recirculation_hour = 0
         self.recirculation_minute = 0
@@ -38,6 +39,7 @@ class ChimeraHandler(SerialHandler):
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
         self.register_automatic_handler("connect", self._handle_wifi_connect)
+        self.register_automatic_handler("calibration", self._handle_calibration)
         
     def connect(self):
         super().connect(self.port)
@@ -55,21 +57,25 @@ class ChimeraHandler(SerialHandler):
     def _print_datapoint(self, line: str):
         """Process automatic datapoint messages and send SSE notification"""
         parts = line.split()
-        # Minimum: datapoint DATE TIME CHANNEL SENSOR1 GAS1 VAL1 VAL2 VAL3 VAL4 VAL5 VAL6 (12 parts)
+        # Format: datapoint [date_time] [seconds_elapsed] [channel_number] [each_sensor_data]
+        # Minimum parts: datapoint + date + seconds_elapsed + channel + 1 sensor (8 parts) = 12 parts
         if len(parts) >= 12:
             try:
-                # Format: datapoint DATE TIME CHANNEL [SENSOR GAS VAL1 VAL2 VAL3 VAL4 VAL5 VAL6]...
-                # parts[0] = "datapoint"
-                # parts[1] = date (e.g., "2025/10/2")
-                # parts[2] = time (e.g., "10:9:46")
-                # parts[3] = channel number
-                # Then repeating groups of 8: sensor_num, gas_name, 6 values
+                # Parse date format: YYYY.MM.DD.HH.MM.SS
+                try:
+                    dt_str = parts[1]
+                    dt = datetime.strptime(dt_str, "%Y.%m.%d.%H.%M.%S")
+                    timestamp = int(dt.timestamp())
+                except ValueError:
+                    print(f"[CHIMERA] Failed to parse date format: {parts[1]}")
+                    return
 
+                seconds_elapsed = int(parts[2])
                 channel = int(parts[3])
                 sensor_data = []
 
                 # Parse all sensors (each sensor has 8 parts: num, name, 6 values)
-                i = 4  # Start after channel number
+                i = 4  # Start after seconds_elapsed and channel number
                 while i + 7 < len(parts):  # Need at least 8 parts for a sensor
                     try:
                         sensor_num = int(parts[i])
@@ -96,39 +102,37 @@ class ChimeraHandler(SerialHandler):
 
                 print(f"[CHIMERA DATAPOINT] Channel {channel} - {len(sensor_data)} sensors")
 
-                # Send SSE notification directly
+                # Send SSE notification
                 if self.app:
                     try:
                         with self.app.app_context():
                             from flask_sse import sse
                             sse_data = {
-                                "type": "datapoint_event",
+                                "type": "datapoint",
                                 "device_name": self.device_name,
                                 "port": self.port,
                                 "channel": channel,
-                                "sensor_data": sensor_data
+                                "timestamp": timestamp,
+                                "seconds_elapsed": seconds_elapsed,
+                                "sensor_count": len(sensor_data)
                             }
-                            sse.publish(sse_data, type='datapoint')
-                            print(f"Published SSE notification for channel {channel}")
+                            sse.publish(sse_data, type='chimera_datapoint')
                     except Exception as e:
                         print(f"SSE publish failed: {e}")
 
-                # Save datapoint to database if test_id is set and app context is available
-                # Create one database entry per sensor
+                # Save to database if test_id is set
                 if self.test_id and self.app and hasattr(self, 'id'):
                     try:
                         with self.app.app_context():
                             from database.models import ChimeraRawData, db
 
-                            timestamp = int(time.time())  # Current Unix timestamp
-
-                            # Create one entry per sensor
                             for sensor in sensor_data:
                                 raw_data = ChimeraRawData(
                                     test_id=self.test_id,
                                     device_id=self.id,
                                     channel_number=channel,
                                     timestamp=timestamp,
+                                    seconds_elapsed=seconds_elapsed,
                                     sensor_number=sensor["sensor_number"],
                                     gas_name=sensor["gas_name"],
                                     peak_value=sensor["peak_value"],
@@ -137,10 +141,9 @@ class ChimeraHandler(SerialHandler):
                                 db.session.add(raw_data)
 
                             db.session.commit()
-                            print(f"Saved {len(sensor_data)} chimera datapoints to database: Test {self.test_id}, Channel {channel}")
-
+                            print(f"Saved {len(sensor_data)} sensor readings to database")
                     except Exception as e:
-                        print(f"Failed to save chimera datapoint to database: {e}")
+                        print(f"Failed to save datapoint to database: {e}")
                         try:
                             db.session.rollback()
                         except:
@@ -149,7 +152,37 @@ class ChimeraHandler(SerialHandler):
             except (ValueError, IndexError) as e:
                 print(f"Failed to parse datapoint: {e}")
                 pass
- 
+
+    def _handle_calibration(self, line: str):
+        """Process automatic calibration messages and send SSE updates"""
+        try:
+            parts = line.split()
+            if len(parts) >= 2:
+                stage = parts[1]
+
+                # Ignore calibration info messages
+                if stage == 'info':
+                    return
+
+                time_ms = int(parts[2]) if len(parts) >= 3 else 0
+
+                # Send SSE notification
+                if self.app:
+                    with self.app.app_context():
+                        from flask_sse import sse
+                        sse.publish(
+                            {
+                                "device_id": self.id,
+                                "stage": stage,
+                                "time_ms": time_ms
+                            },
+                            type='calibration_progress'
+                        )
+
+        except (ValueError, IndexError) as e:
+            print(f"Failed to parse calibration message: {e}")
+            pass
+
     def set_name(self, name: str) -> bool:
         self.device_name = name
         return True
@@ -159,39 +192,67 @@ class ChimeraHandler(SerialHandler):
         if self.connection.is_open:
             response = self.send_command("info")
             if response and response.startswith("info"):
-                # Parse: info [logging_state] [current_channel] [seconds_elapsed] chimera-max [mac_address]
+                # Parse: info [logging_state] [filename] [current_channel] [seconds_elapsed] chimera-max [mac_address]
+                # OR: info [logging_state] [filename] [seconds_elapsed] chimera-max [mac_address] (missing channel)
                 parts = response.split()
-                if len(parts) >= 6:
+                
+                if len(parts) >= 7:
                     self.is_logging = (parts[1] == "true")
-                    self.current_channel = int(parts[2])
+                    self.current_log_file = parts[2] if parts[2] != "none" else None
+                    self.current_channel = int(parts[3])
+                    self.seconds_elapsed = int(parts[4])
+                    # parts[5] should be "chimera-max"
+                    self.mac_address = parts[6]
+                    print(f"[DEBUG] Parsed info (7 parts): logging={self.is_logging}, file={self.current_log_file}")
+                elif len(parts) >= 6:
+                    # Handle format where channel is missing
+                    self.is_logging = (parts[1] == "true")
+                    self.current_log_file = parts[2] if parts[2] != "none" else None
+                    self.current_channel = 0 # Unknown
                     self.seconds_elapsed = int(parts[3])
                     # parts[4] should be "chimera-max"
                     self.mac_address = parts[5]
+                    print(f"[DEBUG] Parsed info (6 parts): logging={self.is_logging}, file={self.current_log_file}")
+                else:
+                    print(f"[DEBUG] Info response too short: {response}")
+            else:
+                print(f"[DEBUG] Invalid info response: {response}")
     
     def get_info(self) -> Dict:
         """Get current device information"""
         self._get_device_info()
+
+        # Get service sequence
+        success, service_sequence, _ = self.get_service()
+
         return {
             "device_name": self.device_name,
             "mac_address": self.mac_address,
             "is_logging": self.is_logging,
             "current_channel": self.current_channel,
             "seconds_elapsed": self.seconds_elapsed,
-            "port": self.port
+            "port": self.port,
+            "service_sequence": service_sequence if success else '111111111111111'
         }
     
-    def start_logging(self) -> Tuple[bool, str]:
-        """Start logging"""
-        self.send_command_no_wait("startlogging")
+    def start_logging(self, filename: str) -> Tuple[bool, str]:
+        """Start logging to a specific file"""
+        
+        self.set_time(datetime.now())
+        self.send_command_no_wait(f"startlogging {filename}")
         
         # Read through all queued responses until we find the final result
         while True:
             response = self.get_response(timeout=5.0)
+            if response:
+                print(f"[DEBUG] start_logging received: {response}")
+            
             if not response:
                 return False, "Timeout waiting for start logging response"
                 
             if response == "done startlogging":
                 self.is_logging = True
+                self.current_log_file = filename
                 return True, "Logging started successfully"
             elif response == "failed startlogging logging":
                 return False, "Device is already logging"
@@ -450,33 +511,52 @@ class ChimeraHandler(SerialHandler):
         
         return False, {}, f"Unexpected response: {response}"
     
-    def enable_recirculation(self) -> Tuple[bool, str]:
-        """Enable recirculation"""
-        response = self.send_command("recirculateenable")
+    def set_recirculate(self, mode) -> Tuple[bool, str]:
+        """Set recirculation mode
         
-        if response == "done recirculateenable":
-            self.recirculation_enabled = True
-            return True, "Recirculation enabled successfully"
-        elif response == "failed recirculateenable nofiles":
+        Args:
+            mode: Either an integer (0-2) or string ('disabled', 'automatic', 'manual')
+                  0/'disabled' = disabled
+                  1/'automatic' = automatic
+                  2/'manual' = manual
+        """
+        # Convert string mode to integer
+        mode_map = {
+            'disabled': 0,
+            'automatic': 1,
+            'manual': 2
+        }
+        
+        if isinstance(mode, str):
+            mode = mode.lower()
+            if mode not in mode_map:
+                return False, "Invalid mode. Must be 'disabled', 'automatic', or 'manual'"
+            mode = mode_map[mode]
+        
+        # Validate integer mode
+        if not isinstance(mode, int) or mode < 0 or mode > 2:
+            return False, "Invalid mode. Must be 0 (disabled), 1 (automatic), or 2 (manual)"
+        
+        response = self.send_command(f"setrecirculate {mode}")
+        
+        if response == "done setrecirculate":
+            self.recirculation_mode = mode
+            mode_names = ['disabled', 'automatic', 'manual']
+            return True, f"Recirculation mode set to {mode_names[mode]} successfully"
+        elif response == "failed setrecirculate nofiles":
             return False, "Files not working"
-        elif response == "failed recirculateenable alreadyenabled":
-            return False, "Recirculation already enabled"
+        elif response == "failed setrecirculate invalidmode":
+            return False, "Invalid mode"
         else:
             return False, f"Unexpected response: {response}"
     
+    def enable_recirculation(self) -> Tuple[bool, str]:
+        """Enable recirculation (backward compatibility - sets to automatic mode)"""
+        return self.set_recirculate(1)
+    
     def disable_recirculation(self) -> Tuple[bool, str]:
-        """Disable recirculation"""
-        response = self.send_command("recirculatedisable")
-        
-        if response == "done recirculatedisable":
-            self.recirculation_enabled = False
-            return True, "Recirculation disabled successfully"
-        elif response == "failed recirculatedisable nofiles":
-            return False, "Files not working"
-        elif response == "failed recirculatedisable alreadydisabled":
-            return False, "Recirculation already disabled"
-        else:
-            return False, f"Unexpected response: {response}"
+        """Disable recirculation (backward compatibility - sets to disabled mode)"""
+        return self.set_recirculate(0)
     
     def set_recirculation_days(self, days: int) -> Tuple[bool, str]:
         """Set number of days between recirculation runs"""
@@ -501,9 +581,9 @@ class ChimeraHandler(SerialHandler):
         """Set recirculation time"""
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             return False, "Invalid time values"
-        
+
         response = self.send_command(f"recirculatesettime {hour} {minute}")
-        
+
         if response == "done recirculatesettime":
             self.recirculation_hour = hour
             self.recirculation_minute = minute
@@ -517,6 +597,76 @@ class ChimeraHandler(SerialHandler):
         else:
             return False, f"Unexpected response: {response}"
     
+    def recirculate_flag(self, channel: int, duration: int, pump_power: int) -> Tuple[bool, str]:
+        """Flag a channel for recirculation (manual mode only)
+        
+        Args:
+            channel: Gas channel number (1-15)
+            duration: Number of seconds to pump the gas
+            pump_power: Percentage of pump power to use (1-100)
+        """
+        # Validate parameters
+        if not (1 <= channel <= 15):
+            return False, "Channel must be between 1 and 15"
+        
+        if duration <= 0:
+            return False, "Duration must be greater than 0"
+        
+        if not (1 <= pump_power <= 100):
+            return False, "Pump power must be between 1 and 100"
+        
+        response = self.send_command(f"recirculateflag {channel} {duration} {pump_power}")
+        
+        if response == "done recirculateflag":
+            return True, f"Channel {channel} flagged for recirculation successfully"
+        elif response == "failed recirculateflag invalidvalues":
+            return False, "Invalid values entered"
+        elif response == "failed recirculateflag wrongmode":
+            return False, "Not in manual mode"
+        else:
+            return False, f"Unexpected response: {response}"
+
+    def get_recirculation_info(self) -> Tuple[bool, Dict]:
+        """Get recirculation information from device"""
+        response = self.send_command("recirculateinfo")
+
+        if response and response.startswith("recirculateinfo "):
+            # Parse: recirculateinfo [recirculating] [days_between] [hour] [minute] [last_year] [last_month] [last_day]
+            parts = response.split()
+            if len(parts) >= 8:
+                recirculating = parts[1] == "1"
+                days_between = int(parts[2])
+                hour = int(parts[3])
+                minute = int(parts[4])
+                last_year = int(parts[5])
+                last_month = int(parts[6])
+                last_day = int(parts[7])
+
+                # Update internal state
+                # recirculating is 0=disabled, 1=automatic, 2=manual
+                self.recirculation_mode = recirculating
+                self.recirculation_days = days_between
+                self.recirculation_hour = hour
+                self.recirculation_minute = minute
+
+                mode_names = ['disabled', 'automatic', 'manual']
+                info = {
+                    "recirculation_mode": recirculating,
+                    "recirculation_mode_name": mode_names[recirculating] if 0 <= recirculating <= 2 else 'unknown',
+                    "days_between": days_between,
+                    "hour": hour,
+                    "minute": minute,
+                    "last_recirculation_date": {
+                        "year": last_year,
+                        "month": last_month,
+                        "day": last_day
+                    }
+                }
+
+                return True, info
+
+        return False, {}
+
     def set_test_id(self, test_id):
         """Set the current test ID for database logging"""
         self.test_id = test_id
@@ -552,12 +702,23 @@ class ChimeraHandler(SerialHandler):
             print(f"[CHIMERA WIFI] Error: {e}")
 
     def _connect_to_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
-        """Connect to WiFi network (Linux only)"""
+        """Connect to WiFi network"""
         try:
-            result = subprocess.run(
-                ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
-                capture_output=True, text=True, timeout=30
-            )
+            system = platform.system()
+
+            if system == 'Darwin':  # macOS
+                result = subprocess.run(
+                    ['networksetup', '-setairportnetwork', 'en0', ssid, password],
+                    capture_output=True, text=True, timeout=30
+                )
+            elif system == 'Linux':
+                result = subprocess.run(
+                    ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                    capture_output=True, text=True, timeout=30
+                )
+            else:
+                return False, "Unsupported OS"
+
             return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
         except Exception as e:
             return False, str(e)
@@ -574,26 +735,67 @@ class ChimeraHandler(SerialHandler):
             return None
 
     def _get_wifi_ssids(self) -> List[str]:
-        """Get list of available WiFi SSIDs (Linux only)"""
+        """Get list of available WiFi SSIDs"""
         try:
-            # Use nmcli (NetworkManager)
-            result = subprocess.run(
-                ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            system = platform.system()
 
-            if result.returncode == 0:
+            if system == 'Darwin':  # macOS
+                result = subprocess.run(
+                    ['system_profiler', 'SPAirPortDataType'],
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+
+                if result.returncode != 0:
+                    return []
+
                 ssids = []
-                lines = result.stdout.strip().split('\n')
+                lines = result.stdout.split('\n')
+                in_other_networks = False
+
                 for line in lines:
-                    ssid = line.strip()
-                    if ssid and ssid != '--':
-                        ssids.append(ssid)
+                    stripped = line.strip()
+
+                    if 'Other Local Wi-Fi Networks:' in line:
+                        in_other_networks = True
+                        continue
+
+                    if not in_other_networks:
+                        continue
+
+                    # New network entry (ends with :)
+                    if stripped.endswith(':') and not any(x in stripped for x in ['PHY Mode', 'Channel', 'Network Type', 'Security', 'Signal']):
+                        ssid = stripped[:-1]  # Remove trailing ':'
+                        # Filter out system entries
+                        if ssid not in ['awdl0', 'llw0', 'Current Network Information'] and not ssid.startswith('en'):
+                            if ssid and ssid.strip():
+                                ssids.append(ssid)
+
                 return ssids
 
-            return []
+            elif system == 'Linux':
+                # Use nmcli (NetworkManager)
+                result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                if result.returncode == 0:
+                    ssids = []
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        ssid = line.strip()
+                        if ssid and ssid != '--':
+                            ssids.append(ssid)
+                    return ssids
+
+                return []
+
+            else:
+                return []
 
         except Exception as e:
             print(f"[CHIMERA IP MONITOR] Error scanning WiFi SSIDs: {e}")
