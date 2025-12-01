@@ -1,52 +1,28 @@
 #!/bin/bash
-
-set -e  # Exit on any error
+set -e
 
 echo "Setting up Flask backend..."
 
-# Check if virtual environment exists, create if not
+# Virtual environment
 if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
     python3 -m venv venv
 fi
-
-# Activate virtual environment
-echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Install Python dependencies
-echo "Installing Python dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
+# Dependencies
+pip install --upgrade pip -q
+pip install -r requirements.txt -q
 
-# Check if .env exists
+# Env file
 if [ ! -f ".env" ]; then
-    echo "Warning: .env file not found. Copying from .env.example..."
-    if [ -f ".env.example" ]; then
-        cp .env.example .env
-        echo "Please configure .env file before running the server."
-    else
-        echo "Error: .env.example not found. Please create .env file manually."
-        exit 1
-    fi
+    cp .env.example .env 2>/dev/null || { echo "Create .env file manually"; exit 1; }
 fi
 
-# Check if Redis is installed
-if ! command -v redis-server &> /dev/null; then
-    echo "Redis not found. Installing Redis..."
-    sudo apt-get update
-    sudo apt-get install -y redis-server
-    sudo systemctl enable redis-server
-fi
-
-# Start Redis if not running
+# Start Redis in background (no sudo)
 if ! pgrep -x "redis-server" > /dev/null; then
-    echo "Starting Redis server..."
-    sudo systemctl start redis-server
-else
-    echo "Redis server is already running."
+    echo "Starting Redis..."
+    redis-server --daemonize yes
 fi
 
-echo "Starting Flask server..." 
+echo "Starting Flask server..."
 gunicorn --worker-class gevent --worker-connections 1000 --timeout 30 -w 1 -b :6000 app:app
-echo "Server stopped."
