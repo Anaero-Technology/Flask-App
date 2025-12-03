@@ -949,10 +949,13 @@ from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 from routes.wifi import wifi_bp
 from routes.data import data_bp
+from routes.plc import plc_bp
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
 app.register_blueprint(wifi_bp)
 app.register_blueprint(data_bp)
+app.register_blueprint(plc_bp)
+app.register_blueprint(sse, url_prefix='/stream')
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=6000)

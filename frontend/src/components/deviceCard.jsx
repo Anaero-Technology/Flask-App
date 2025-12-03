@@ -1,10 +1,34 @@
-import React, { useState } from "react";
-import { Settings, Edit2, Save, Circle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart } from 'lucide-react';
 
 function DeviceCard(props) {
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [duration, setDuration] = useState("0h 0m 0s");
+
+    useEffect(() => {
+        if (!props.testStartTime) return;
+
+        const calculateDuration = () => {
+            const start = new Date(props.testStartTime).getTime();
+            const now = new Date().getTime();
+            const seconds = Math.floor((now - start) / 1000);
+
+            if (seconds < 0) return "0h 0m 0s";
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h}h ${m}m ${s}s`;
+        };
+
+        setDuration(calculateDuration());
+        const interval = setInterval(() => {
+            setDuration(calculateDuration());
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [props.testStartTime]);
 
     const handleNameSubmit = async () => {
         if (editedName === props.name) {
@@ -14,7 +38,10 @@ function DeviceCard(props) {
 
         setIsUpdating(true);
         try {
-            const deviceType = props.deviceType === 'black-box' ? 'black_box' : 'chimera';
+            let deviceType = 'chimera';
+            if (props.deviceType === 'black-box') deviceType = 'black_box';
+            else if (props.deviceType === 'plc') deviceType = 'plc';
+
             const response = await fetch(`/api/v1/${deviceType}/${props.deviceId}/name`, {
                 method: 'POST',
                 headers: {
@@ -50,11 +77,23 @@ function DeviceCard(props) {
         }
     };
 
+    const isCompact = props.compact;
+
+    const getDeviceLabel = () => {
+        switch (props.deviceType) {
+            case 'black-box': return 'Gas Flow meter';
+            case 'chimera': return 'Gas Monitor';
+            case 'chimera-max': return 'Gas Monitor'
+            case 'plc': return 'PLC';
+            default: return 'Unknown';
+        }
+    };
+
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all hover:shadow-md group">
-            <div className="flex flex-col sm:flex-row gap-6 items-start">
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'}`}>
+            <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
                 {/* Image Container */}
-                <div className="w-full sm:w-32 h-32 bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0">
+                <div className={`${isCompact ? 'w-16 h-16' : 'w-full sm:w-32 h-32'} bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0`}>
                     <img
                         src={props.image}
                         alt={props.title}
@@ -62,11 +101,11 @@ function DeviceCard(props) {
                     />
                 </div>
 
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full min-w-0">
                     <div className="flex justify-between items-start">
-                        <div>
-                            <h3 className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-1">
-                                {props.deviceType === 'black-box' ? 'Volumetric' : 'Gas Analysis'}
+                        <div className="min-w-0">
+                            <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-0.5 truncate">
+                                {getDeviceLabel()}
                             </h3>
 
                             {isEditingName ? (
@@ -78,46 +117,67 @@ function DeviceCard(props) {
                                         onBlur={handleNameSubmit}
                                         onKeyDown={handleKeyPress}
                                         disabled={isUpdating}
-                                        className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none px-1"
+                                        className={`${isCompact ? 'text-lg' : 'text-2xl'} font-bold text-gray-900 border-b-2 border-blue-500 focus:outline-none px-1 w-full`}
                                         autoFocus
                                     />
-                                    <button onMouseDown={handleNameSubmit} className="text-green-600">
-                                        <Save size={18} />
+                                    <button onMouseDown={handleNameSubmit} className="text-green-600 shrink-0">
+                                        <Save size={16} />
                                     </button>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2 group/edit">
-                                    <h2 className="text-2xl font-bold text-gray-900">{props.name}</h2>
+                                    <h2 className={`${isCompact ? 'text-lg' : 'text-2xl'} font-bold text-gray-900 truncate`} title={props.name}>{props.name}</h2>
                                     <button
                                         onClick={() => setIsEditingName(true)}
-                                        className="opacity-0 group-hover/edit:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity"
+                                        className="opacity-0 group-hover/edit:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity shrink-0"
                                     >
-                                        <Edit2 size={16} />
+                                        <Edit2 size={14} />
                                     </button>
                                 </div>
                             )}
-                            <p className="text-sm text-gray-500 font-mono mt-1">{props.port}</p>
+                            <p className="text-xs text-gray-500 font-mono mt-0.5 truncate">{props.port}</p>
                         </div>
 
-                        <button className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                            <Settings size={20} />
-                        </button>
+                        {!isCompact && props.activeTestId && (
+                            <button
+                                onClick={() => props.onViewPlot && props.onViewPlot(props.activeTestId, props.deviceId)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-blue-600 transition-all shadow-sm shrink-0"
+                            >
+                                <LineChart size={16} />
+                                <span>View Plot</span>
+                            </button>
+                        )}
                     </div>
-
-                    <div className="mt-6 flex items-center gap-3">
-                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                            props.logging
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-600'
-                        }`}>
-                            <div className={`w-2 h-2 rounded-full ${props.logging ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                            {props.logging ? 'Recording Data' : 'Idle'}
+                    <div className={`flex flex-wrap items-center gap-2 ${isCompact ? 'mt-2' : 'mt-6'}`}>
+                        <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${props.logging
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                            }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${props.logging ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                            {props.logging ? 'Recording' : 'Idle'}
                         </div>
 
-                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
-                            <Circle size={8} fill="currentColor" />
-                            Connected
-                        </div>
+                        {props.activeTestName && (
+                            <>
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-100">
+                                    <FlaskConical size={10} />
+                                    <span className="truncate max-w-[120px]" title={props.activeTestName}>{props.activeTestName}</span>
+                                </div>
+                                {props.testStartTime && (
+                                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
+                                        <Clock size={10} />
+                                        <span className="font-mono">{duration}</span>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {!isCompact && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                                <Circle size={6} fill="currentColor" />
+                                Connected
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

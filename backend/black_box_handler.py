@@ -53,23 +53,43 @@ class BlackBoxHandler(SerialHandler):
              }
             
 
-            print("Processed Data:", self.calculateEventLogTip(tip_data))
+            # Calculate event log data (returns CSV string)
+            result_str = self.calculateEventLogTip(tip_data)
+            print("Processed Data:", result_str)
             
             print(f"[AUTOMATIC TIP] Tip #{tip_data['tip_number']} - "
                 f"Channel: {tip_data['channel_number']}, "
                 f"Temp: {tip_data['temperature']}°C, "
                 f"Pressure: {tip_data['pressure']} PSI")
             
+            # Extract volume and cumulative tips from result string if successful
+            volume = 0.0
+            cumulative_tips = 0
+            if result_str:
+                try:
+                    res_parts = result_str.split(',')
+                    if len(res_parts) >= 11:
+                        cumulative_tips = int(res_parts[9])
+                        volume = float(res_parts[10])
+                except:
+                    pass
+
             # Send SSE notification directly
             if self.app:
                 try:
                     with self.app.app_context():
                         from flask_sse import sse
                         sse_data = {
-                            "type": "tip_event",
+                            "type": "tip",
                             "device_name": self.device_name,
-                            "port": self.port,
-                            "tip_data": tip_data
+                            "channel": tip_data['channel_number'],
+                            "timestamp": tip_data['timestamp'],
+                            "details": {
+                                "volume": volume,
+                                "cumulative_tips": cumulative_tips,
+                                "pressure": tip_data['pressure'],
+                                "temperature": tip_data['temperature']
+                            }
                         }
                         sse.publish(sse_data, type='tip')
                         print(f"Published SSE notification: {sse_data}")

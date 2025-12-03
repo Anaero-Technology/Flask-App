@@ -8,7 +8,7 @@ const Layout = ({ children, currentView, onNavigate }) => {
       <Sidebar currentView={currentView} onNavigate={onNavigate} />
 
       {/* Main Content Area */}
-      <main className="flex-1 ml-64 overflow-y-auto p-8">
+      <main className="flex-1 ml-64 overflow-y-auto p-4">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

@@ -1,17 +1,18 @@
 import React from 'react';
 import logo from '../assets/logo.png';
-import { 
-  LayoutDashboard, 
-  FlaskConical, 
-  Database, 
-  LineChart, 
-  Upload, 
-  Box, 
-  Activity, 
-  Monitor, 
+import {
+  LayoutDashboard,
+  FlaskConical,
+  Database,
+  LineChart,
+  Upload,
+  Box,
+  Activity,
+  Monitor,
   Settings,
   PlusCircle,
-  User
+  User,
+  Cpu
 } from 'lucide-react';
 
 function Sidebar({ onNavigate, currentView }) {
@@ -27,6 +28,7 @@ function Sidebar({ onNavigate, currentView }) {
   const secondaryItems = [
     { id: 'blackbox', label: 'BlackBox', icon: Box },
     { id: 'chimera', label: 'Chimera', icon: Activity },
+    { id: 'plc', label: 'PLC', icon: Cpu },
     { id: 'monitor', label: 'Monitor', icon: Monitor },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -34,13 +36,13 @@ function Sidebar({ onNavigate, currentView }) {
   const NavItem = ({ item }) => {
     const Icon = item.icon;
     const isActive = currentView === item.id;
-    
+
     return (
-      <li 
+      <li
         className={`
           px-4 py-3 mx-2 mb-1 rounded-lg flex items-center cursor-pointer transition-all duration-200 group
-          ${isActive 
-            ? 'bg-blue-50 text-blue-700 shadow-sm' 
+          ${isActive
+            ? 'bg-blue-50 text-blue-700 shadow-sm'
             : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
         `}
         onClick={() => onNavigate(item.id)}

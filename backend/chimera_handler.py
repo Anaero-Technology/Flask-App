@@ -102,21 +102,29 @@ class ChimeraHandler(SerialHandler):
 
                 print(f"[CHIMERA DATAPOINT] Channel {channel} - {len(sensor_data)} sensors")
 
-                # Send SSE notification
-                if self.app:
+                # Send SSE notification with all sensors grouped
+                if self.app and sensor_data:
                     try:
                         with self.app.app_context():
                             from flask_sse import sse
+                            # Group all gases into one event
                             sse_data = {
-                                "type": "datapoint",
+                                "type": "gas_analysis",
                                 "device_name": self.device_name,
-                                "port": self.port,
                                 "channel": channel,
                                 "timestamp": timestamp,
-                                "seconds_elapsed": seconds_elapsed,
-                                "sensor_count": len(sensor_data)
+                                "details": {
+                                    "gases": [
+                                        {
+                                            "gas": sensor["gas_name"],
+                                            "peak": sensor["peak_value"],
+                                            "sensor": sensor["sensor_number"]
+                                        }
+                                        for sensor in sensor_data
+                                    ]
+                                }
                             }
-                            sse.publish(sse_data, type='chimera_datapoint')
+                            sse.publish(sse_data, type='gas_analysis')
                     except Exception as e:
                         print(f"SSE publish failed: {e}")
 

@@ -10,7 +10,7 @@ import {
 import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
 
-function Plot() {
+function Plot({ initialParams, onNavigate }) {
     const toast = useToast();
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -33,9 +33,23 @@ function Plot() {
         fetchTests();
     }, []);
 
+    // Handle initial params
+    useEffect(() => {
+        if (initialParams && initialParams.testId) {
+            fetch(`/api/v1/tests/${initialParams.testId}`)
+                .then(res => res.json())
+                .then(test => {
+                    setSelectedTest(test);
+                    setShowPlotView(true);
+                    // We'll set the device ID after devices are loaded in fetchTestDetails
+                })
+                .catch(err => console.error("Failed to load initial test", err));
+        }
+    }, [initialParams]);
+
     useEffect(() => {
         if (selectedTest) {
-            fetchTestDetails(selectedTest.id);
+            fetchTestDetails(selectedTest.id, initialParams?.deviceId);
         }
     }, [selectedTest]);
 
@@ -352,7 +366,7 @@ function Plot() {
         }
     };
 
-    const fetchTestDetails = async (testId) => {
+    const fetchTestDetails = async (testId, targetDeviceId = null) => {
         setError(null);
         try {
             const response = await fetch(`/api/v1/tests/${testId}`);
@@ -367,7 +381,16 @@ function Plot() {
                 setDevices(testDevices);
 
                 if (testDevices.length > 0) {
-                    setSelectedDeviceId(testDevices[0].id);
+                    if (targetDeviceId) {
+                        const found = testDevices.find(d => d.id === targetDeviceId);
+                        if (found) {
+                            setSelectedDeviceId(targetDeviceId);
+                        } else {
+                            setSelectedDeviceId(testDevices[0].id);
+                        }
+                    } else {
+                        setSelectedDeviceId(testDevices[0].id);
+                    }
                 }
             }
         } catch (error) {
@@ -497,8 +520,9 @@ function Plot() {
                     }
                     groups[d.gas_name].x.push(getXValue(d));
                     groups[d.gas_name].y.push(d.peak_value);
+                    const peakValue = typeof d.peak_value === 'number' ? d.peak_value.toFixed(2) : 'N/A';
                     groups[d.gas_name].text.push(
-                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value.toFixed(2)}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
                     );
                     groups[d.gas_name].customdata.push(d);
                 });
@@ -520,8 +544,9 @@ function Plot() {
                     }
                     groups[d.channel_number].x.push(getXValue(d));
                     groups[d.channel_number].y.push(d.peak_value);
+                    const peakValue = typeof d.peak_value === 'number' ? d.peak_value.toFixed(2) : 'N/A';
                     groups[d.channel_number].text.push(
-                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value.toFixed(2)}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
                     );
                     groups[d.channel_number].customdata.push(d);
                 });
@@ -681,26 +706,32 @@ function Plot() {
         return (
             <div className="flex h-screen bg-gray-100 overflow-hidden">
                 {/* Sidebar Settings Panel */}
-                <div className="w-80 bg-white shadow-lg flex flex-col z-10 border-r border-gray-200">
+                <div className="w-70 bg-white shadow-lg flex flex-col z-10 border-r border-gray-200">
                     <div className="p-6 border-b border-gray-200">
                         <button
                             onClick={() => {
-                                setShowPlotView(false);
-                                setSelectedTest(null);
-                                setTestDetails(null);
-                                setDevices([]);
-                                setSelectedDeviceId(null);
-                                setSelectedPoints([]);
+                                if (initialParams) {
+                                    // Navigated from dashboard, go back to dashboard
+                                    onNavigate('dashboard');
+                                } else {
+                                    // Normal plot view, just close the plot
+                                    setShowPlotView(false);
+                                    setSelectedTest(null);
+                                    setTestDetails(null);
+                                    setDevices([]);
+                                    setSelectedDeviceId(null);
+                                    setSelectedPoints([]);
+                                }
                             }}
                             className="text-gray-600 hover:text-gray-900 flex items-center gap-2 mb-4"
                         >
-                            <span>←</span> Back to Tests
+                            <span>←</span> {initialParams ? 'Back to Dashboard' : 'Back to Tests'}
                         </button>
                         <h2 className="text-xl font-bold text-gray-800">{selectedTest.name}</h2>
                         <p className="text-sm text-gray-500 mt-1">Plot Settings</p>
                     </div>
 
-                    <div className="p-6 flex-1 overflow-y-auto space-y-8">
+                    <div className="p-6 flex-1 overflow-y-auto space-y-7">
                         {/* Device Selection */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-3">Device</label>

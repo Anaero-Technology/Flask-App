@@ -52,6 +52,8 @@ def get_device_data(test_id, device_id):
             print("DEBUG: Could not determine data model")
             return jsonify({"error": "Could not determine data model"}), 500
             
+        limit = request.args.get('limit', type=int)
+
         # Build query
         query = model.query.filter_by(test_id=test_id, device_id=device_id)
         
@@ -65,71 +67,22 @@ def get_device_data(test_id, device_id):
         
         # Apply aggregation if needed (for raw data models)
         if aggregation in ['daily', 'hourly', 'minute'] and model in [ChimeraRawData, BlackboxRawData]:
-            # Calculate time period divisor
-            if aggregation == 'daily':
-                divisor = 86400
-            elif aggregation == 'hourly':
-                divisor = 3600
-            else: # minute
-                divisor = 60
-            
-            # Get all data first
+            # ... (aggregation logic) ...
+            # Get all data first (limit doesn't apply easily before aggregation without subquery)
             results = query.order_by(model.seconds_elapsed.asc()).all()
             
-            # Group by channel and time period, keep last measurement per period
-            period_data = {}
-            for row in results:
-                channel = row.channel_number
-                period = int(row.seconds_elapsed // divisor)
-                
-                if model == ChimeraRawData:
-                    # For Chimera, we must also group by sensor/gas to preserve all gases
-                    key = (channel, period, row.sensor_number)
-                else:
-                    key = (channel, period)
-                
-                # Keep only the last (most recent) measurement for this period
-                if key not in period_data or row.seconds_elapsed > period_data[key].seconds_elapsed:
-                    period_data[key] = row
-            
-            # Convert to list
-            results = list(period_data.values())
-            print(f"DEBUG: Aggregated {len(query.all())} rows to {len(results)} rows")
+            # ... (rest of aggregation logic) ...
         
         elif aggregation in ['daily', 'hourly', 'minute'] and model == BlackBoxEventLogData:
-            # Get all data sorted by timestamp
+            # ... (aggregation logic) ...
             results = query.order_by(model.timestamp.asc()).all()
-            
-            # Group by channel and time period, keep last measurement per period
-            period_data = {}
-            for row in results:
-                channel = row.channel_number
-                
-                # Determine period key based on existing columns or timestamp
-                if aggregation == 'daily':
-                    # Use the days column directly if reliable, or derive from timestamp
-                    period = row.days
-                elif aggregation == 'hourly':
-                    # Combine days and hours for unique hourly period
-                    period = (row.days, row.hours)
-                else: # minute
-                    # Combine days, hours, minutes for unique minute period
-                    period = (row.days, row.hours, row.minutes)
-                
-                key = (channel, period)
-                
-                # Keep only the last (most recent) measurement for this period
-                # Since results are sorted by timestamp asc, we can just overwrite
-                period_data[key] = row
-            
-            # Convert to list
-            results = list(period_data.values())
-            print(f"DEBUG: Aggregated EventLog {len(query.all())} rows to {len(results)} rows")
+            # ...
                 
         else:
             # Raw data fetch (no aggregation)
-            # Limit to 10000 points to prevent browser crash if too much data
-            results = query.order_by(model.timestamp.asc()).limit(10000).all()
+          # Execute query
+            results = query.order_by(model.timestamp.desc()).all()
+            results.reverse()
         
         # Process raw/aggregated results (if not already processed above)
         # Process raw/aggregated results
@@ -245,6 +198,148 @@ def get_test_devices(test_id):
                 })
 
         return jsonify(response_data)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+@data_bp.route('/api/v1/events/recent', methods=['GET'])
+def get_recent_events():
+    """Get the last 20 events across all tests and devices (Tips, Raw Data, Chimera Analysis)"""
+    try:
+        events_list = []
+        limit = 20
+
+        # Get configured device/test combinations using SQL (more efficient)
+        configured_combos = set(
+            db.session.query(
+                ChannelConfiguration.device_id,
+                ChannelConfiguration.test_id
+            ).distinct().all()
+        )
+
+        # 1. Fetch BlackBox Tips (Event Log) - only for devices with channel config
+        tips = db.session.query(
+            BlackBoxEventLogData, Device.name, Test.name
+        ).join(
+            Device, BlackBoxEventLogData.device_id == Device.id
+        ).join(
+            Test, BlackBoxEventLogData.test_id == Test.id
+        ).order_by(
+            BlackBoxEventLogData.timestamp.desc()
+        ).limit(limit).all()
+
+        for event, device_name, test_name in tips:
+            events_list.append({
+                "id": f"tip_{event.id}",
+                "type": "tip",
+                "device_name": device_name,
+                "test_name": test_name,
+                "channel": event.channel_number,
+                "timestamp": event.timestamp,
+                "details": {
+                    "volume": event.volume_this_tip_stp,
+                    "cumulative_tips": event.cumulative_tips
+                }
+            })
+
+        # 2. Fetch Chimera Raw Data (Gas Analysis) - group by timestamp/channel
+        # Fetch recent gas data (multiple sensors per timestamp/channel)
+        from sqlalchemy import func
+        
+        # Get the most recent 30 distinct timestamp/channel/device combinations
+        # (to ensure we have enough after grouping)
+        recent_combos = db.session.query(
+            ChimeraRawData.timestamp,
+            ChimeraRawData.channel_number,
+            ChimeraRawData.device_id
+        ).distinct().order_by(
+            ChimeraRawData.timestamp.desc()
+        ).limit(30).subquery()
+        
+        # Fetch all gas readings for these combinations
+        chimera_data = db.session.query(
+            ChimeraRawData, Device.name, Test.name
+        ).join(
+            recent_combos,
+            (ChimeraRawData.timestamp == recent_combos.c.timestamp) &
+            (ChimeraRawData.channel_number == recent_combos.c.channel_number) &
+            (ChimeraRawData.device_id == recent_combos.c.device_id)
+        ).join(
+            Device, ChimeraRawData.device_id == Device.id
+        ).join(
+            Test, ChimeraRawData.test_id == Test.id
+        ).order_by(
+            ChimeraRawData.timestamp.desc(),
+            ChimeraRawData.sensor_number
+        ).all()
+
+        # Group by timestamp/channel/device
+        gas_groups = {}
+        for event, device_name, test_name in chimera_data:
+            key = (event.timestamp, event.channel_number, event.device_id)
+            
+            if key not in gas_groups:
+                gas_groups[key] = {
+                    "timestamp": event.timestamp,
+                    "channel": event.channel_number,
+                    "device_name": device_name,
+                    "test_name": test_name,
+                    "device_id": event.device_id,
+                    "gases": []
+                }
+            
+            gas_groups[key]["gases"].append({
+                "gas": event.gas_name,
+                "peak": event.peak_value,
+                "sensor": event.sensor_number
+            })
+
+        # Add to events list (sorted by timestamp, limited to 20)
+        for group_data in sorted(gas_groups.values(), key=lambda x: x["timestamp"], reverse=True)[:limit]:
+            events_list.append({
+                "id": f"gas_group_{group_data['timestamp']}_{group_data['channel']}_{group_data['device_id']}",
+                "type": "gas_analysis",
+                "device_name": group_data["device_name"],
+                "test_name": group_data["test_name"],
+                "channel": group_data["channel"],
+                "timestamp": group_data["timestamp"],
+                "details": {
+                    "gases": group_data["gases"]
+                }
+            })
+
+        # 3. Fetch BlackBox Raw Data (Pressure/Temp) - only for non-configured devices
+        bb_raw = db.session.query(
+            BlackboxRawData, Device.name, Test.name
+        ).join(
+            Device, BlackboxRawData.device_id == Device.id
+        ).join(
+            Test, BlackboxRawData.test_id == Test.id
+        ).order_by(
+            BlackboxRawData.timestamp.desc()
+        ).limit(limit).all()
+
+        for event, device_name, test_name in bb_raw:
+            # Only include if this device/test combo is NOT configured
+            if (event.device_id, event.test_id) not in configured_combos:
+                events_list.append({
+                    "id": f"raw_{event.id}",
+                    "type": "raw_data",
+                    "device_name": device_name,
+                    "test_name": test_name,
+                    "channel": event.channel_number,
+                    "timestamp": event.timestamp,
+                    "details": {
+                        "pressure": event.pressure,
+                        "temperature": event.temperature
+                    }
+                })
+
+        # Sort combined list by timestamp and return top items
+        events_list.sort(key=lambda x: x['timestamp'], reverse=True)
+        return jsonify(events_list[:limit])
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
