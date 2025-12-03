@@ -8,3 +8,4 @@ pyserial
 python-dotenv
 gunicorn
 flask-sse
+gevent
