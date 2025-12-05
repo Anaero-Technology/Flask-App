@@ -726,15 +726,53 @@ class ChimeraHandler(SerialHandler):
                     ['networksetup', '-setairportnetwork', 'en0', ssid, password],
                     capture_output=True, text=True, timeout=30
                 )
+                return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
+            
             elif system == 'Linux':
+                # First, try to delete any existing connection with this SSID
+                # This avoids conflicts with stale connection profiles
+                subprocess.run(
+                    ['nmcli', 'connection', 'delete', ssid],
+                    capture_output=True, text=True, timeout=10
+                )
+                
+                # Now connect with fresh credentials
+                # Use --ask=no to prevent interactive prompts
                 result = subprocess.run(
-                    ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                    ['nmcli', 'device', 'wifi', 'connect', ssid, 'password', password],
                     capture_output=True, text=True, timeout=30
                 )
+                
+                if result.returncode == 0:
+                    return True, "Connected successfully"
+                
+                # If that fails, try creating a new connection profile explicitly
+                if result.returncode != 0:
+                    # Try with explicit connection creation
+                    result2 = subprocess.run(
+                        ['nmcli', 'connection', 'add',
+                         'type', 'wifi',
+                         'con-name', ssid,
+                         'ssid', ssid,
+                         'wifi-sec.key-mgmt', 'wpa-psk',
+                         'wifi-sec.psk', password],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    
+                    if result2.returncode == 0:
+                        # Activate the connection
+                        result3 = subprocess.run(
+                            ['nmcli', 'connection', 'up', ssid],
+                            capture_output=True, text=True, timeout=30
+                        )
+                        if result3.returncode == 0:
+                            return True, "Connected successfully"
+                        return False, result3.stderr.strip() if result3.stderr else "Failed to activate connection"
+                    
+                return False, result.stderr.strip() if result.stderr else "Connection failed"
             else:
                 return False, "Unsupported OS"
 
-            return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
         except Exception as e:
             return False, str(e)
 
@@ -878,7 +916,7 @@ class ChimeraHandler(SerialHandler):
 
         print(f"[CHIMERA IP MONITOR] Stopped monitoring thread for {self.device_name}")
 
-    def start_ip_monitor(self):
+    def start_ip_monitor(self) :
         """Start the IP monitoring daemon thread"""
         if not self.ip_monitor_running:
             self.ip_monitor_running = True
