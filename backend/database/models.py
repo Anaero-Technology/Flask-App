@@ -136,7 +136,7 @@ class ChannelConfiguration(db.Model):
    hourly_volume = Column(Float, nullable=False, default=0.0)
    daily_volume = Column(Float, nullable=False, default=0.0)
 
-   
+
    chimera_channel = Column(Integer, nullable=True)  # Optional chimera channel (1-15) linked to this BlackBox channel
 
    notes = Column(String)
@@ -145,5 +145,47 @@ class ChannelConfiguration(db.Model):
    __table_args__ = (
        db.UniqueConstraint('test_id', 'device_id', 'channel_number', name='unique_test_device_channel'),
    )
-  
+
+
+class ChimeraConfiguration(db.Model):
+   """Global Chimera settings per test/device"""
+   __tablename__ = "chimera_configurations"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)  # The chimera device
+
+   # Global timing settings
+   flush_time_seconds = Column(Float, nullable=False, default=30.0)
+
+   # Recirculation settings - mode can be 'off', 'volume', or 'periodic'
+   recirculation_mode = Column(String, nullable=False, default='off')
+   recirculation_days = Column(Integer, nullable=True)  # Days between recirculation for periodic mode
+   recirculation_hour = Column(Integer, nullable=True)  # Hour (0-23) for periodic recirculation
+   recirculation_minute = Column(Integer, nullable=True)  # Minute (0-59) for periodic recirculation
+   last_recirculation_time = Column(DateTime, nullable=True)
+
+   # Service sequence - which channels are in service (15 chars, '1' or '0')
+   service_sequence = Column(String(15), nullable=False, default='111111111111111')
+
+   __table_args__ = (
+       db.UniqueConstraint('test_id', 'device_id', name='unique_test_chimera_device'),
+   )
+
+
+class ChimeraChannelConfiguration(db.Model):
+   """Per-channel settings for Chimera"""
+   __tablename__ = "chimera_channel_configurations"
+
+   id = Column(Integer, primary_key=True)
+   chimera_config_id = Column(Integer, ForeignKey('chimera_configurations.id'), nullable=False)
+   channel_number = Column(Integer, nullable=False)  # 1-15
+
+   open_time_seconds = Column(Float, nullable=False, default=600.0)
+   volume_threshold_ml = Column(Float, nullable=True)  # For volume mode
+   volume_since_last_recirculation = Column(Float, nullable=False, default=0.0)  # Tracking for volume triggers
+
+   __table_args__ = (
+       db.UniqueConstraint('chimera_config_id', 'channel_number', name='unique_chimera_config_channel'),
+   )
 

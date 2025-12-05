@@ -195,20 +195,41 @@ class BlackBoxHandler(SerialHandler):
         """Start logging to a specific file"""
 
         self.set_time(time.strftime("%Y,%m,%d,%H,%M,%S"))
-        response = self.send_command(f"start /{filename}.txt")
-        
-        if response == "done start" or response == "Setup successfully updated":
-            self.is_logging = True
-            self.current_log_file = filename
-            return True, "Successfully started logging"
-        elif response == "failed start nofiles":
-            return False, "SD card not working"
-        elif response == "failed start alreadyexists":
-            return False, "File already exists"
-        elif response == "already start":
-            return False, "Device already logging"
-        else:
-            return False, "Unknown error"
+        self.send_command_no_wait(f"start /{filename}.txt")
+
+        # Read responses until we get the final result
+        # The device sends intermediate messages like "Setup successfully updated",
+        # "Testing Reset", etc. before the final "done start" or "failed start ..."
+        start_time = time.time()
+        while time.time() - start_time < 30.0:  # 30 second timeout for Arduino init
+            response = self.read_line(timeout=2.0)
+            if not response:
+                continue
+
+            print(f"[start_logging] Received: {response}")
+
+            # Final success responses
+            if response == "done start":
+                self.is_logging = True
+                self.current_log_file = filename
+                return True, "Successfully started logging"
+
+            # Final failure responses
+            elif response == "failed start nofiles":
+                return False, "SD card not working"
+            elif response == "failed start alreadyexists":
+                return False, "File already exists"
+            elif response == "failed start noarduino":
+                return False, "Arduino not responding - check hardware connection"
+            elif response == "already start":
+                return False, "Device already logging"
+            elif response.startswith("failed start"):
+                return False, f"Start failed: {response}"
+
+            # Intermediate messages - continue waiting
+            # "Setup successfully updated", "Testing Reset", "Waiting for clear response...", etc.
+
+        return False, "Timeout waiting for start logging response"
     
     def stop_logging(self) -> Tuple[bool, str]:
         """Stop logging"""
@@ -534,14 +555,19 @@ class BlackBoxHandler(SerialHandler):
     def calculateEventLogTip(self, tipData):
         '''Convert from setup information and events to a fully processed event, day and hour logs with net volumes'''
 
+        print(f"[DEBUG calculateEventLogTip] Called with tipData: {tipData}")
+        print(f"[DEBUG calculateEventLogTip] self.test_id={self.test_id}, self.id={getattr(self, 'id', 'NOT SET')}, self.app={self.app is not None}")
+
         if not self.app:
-            print("No app found")
-            return 
+            print("[DEBUG calculateEventLogTip] No app found - returning early")
+            return
 
         with self.app.app_context():
             try:
                 tableData = db.session.query(ChannelConfiguration).filter_by(test_id = self.test_id).all()
-                print(f"Loaded {len(tableData)} channel configurations for test_id {self.test_id}")
+                print(f"[DEBUG calculateEventLogTip] Loaded {len(tableData)} channel configurations for test_id {self.test_id}")
+                for row in tableData:
+                    print(f"[DEBUG calculateEventLogTip]   Config: device_id={row.device_id}, channel={row.channel_number}")
             except Exception as e:
                 print(f" Error loading channel configurations: {type(e).__name__}: {e}")
                 return ""
@@ -558,7 +584,7 @@ class BlackBoxHandler(SerialHandler):
                      "gasConstants" : [0.0] * 15}
 
             #Dicionary to store overall running information for all channels
-            overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
+            overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "volumeRecirculation" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
 
             hourlyTips = 0
             dailyTips = 0
@@ -576,6 +602,21 @@ class BlackBoxHandler(SerialHandler):
                     overall["tips"][channel] = row.tip_count
                     overall["volumeSTP"][channel] = row.total_stp_volume
                     overall["volumeNet"][channel] = row.total_net_volume
+
+                    # Get volume_since_last_recirculation from ChimeraChannelConfiguration if mapped
+                    overall["volumeRecirculation"][channel] = 0.0  # Default
+                    if row.chimera_channel:
+                        from database.models import ChimeraConfiguration, ChimeraChannelConfiguration
+                        # Find the chimera config for this test
+                        chimera_config = ChimeraConfiguration.query.filter_by(test_id=self.test_id).first()
+                        if chimera_config:
+                            chimera_channel_config = ChimeraChannelConfiguration.query.filter_by(
+                                chimera_config_id=chimera_config.id,
+                                channel_number=row.chimera_channel
+                            ).first()
+                            if chimera_channel_config:
+                                overall["volumeRecirculation"][channel] = chimera_channel_config.volume_since_last_recirculation
+
                     setup["gasConstants"][channel] = (273 * setup["tumblerVolume"][channel]) / 1013.25
 
                     if row.substrate_weight_grams > 0:
@@ -597,13 +638,22 @@ class BlackBoxHandler(SerialHandler):
             try:
                     #Get the channel number
                     channelId = tipData["channel_number"]
+                    print(f"[DEBUG calculateEventLogTip] channelId from tip: {channelId}")
+                    print(f"[DEBUG calculateEventLogTip] setup['inUse'] = {setup['inUse']}")
+                    print(f"[DEBUG calculateEventLogTip] Checking if channel {channelId} is in use: {setup['inUse'][channelId] if channelId < len(setup['inUse']) else 'INDEX OUT OF BOUNDS'}")
                     #If this channel should be logging
                     if setup["inUse"][channelId]:
+                        print(f"[DEBUG calculateEventLogTip] Channel {channelId} IS in use - processing tip")
                         #Get the time, temperature and pressure
                         eventTime = tipData["seconds_elapsed"]
                         timestamp = tipData["timestamp"]
                         temperatureC = tipData["temperature"]
-                        temperatureK = temperatureC + 273
+                        # Handle N/A temperature - use a default of 25°C (298K) for volume calculation
+                        if temperatureC == "N/A" or temperatureC is None:
+                            temperatureK = 298  # Default to 25°C
+                            temperatureC = None  # Store as None in database
+                        else:
+                            temperatureK = temperatureC + 273
                         pressure = tipData["pressure"]
 
                         #Find the time as parts
@@ -627,6 +677,7 @@ class BlackBoxHandler(SerialHandler):
                         #Add tip to overall, day and hour as well as the volume for each
                         overall["tips"][channelId] = overall["tips"][channelId] + 1
                         overall["volumeSTP"][channelId] = overall["volumeSTP"][channelId] + eventVolume
+                        overall["volumeRecirculation"][channelId] = overall["volumeRecirculation"][channelId] + eventVolume
 
                         hourlyTips = hourlyTips + 1
                         dailyTips = dailyTips + 1
@@ -668,7 +719,13 @@ class BlackBoxHandler(SerialHandler):
                         eventData = [channelId + 1, setup["names"][channelId], timestamp, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
 
                         # Update channel configuration
-                        databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, channel_number = channelId).first()
+                        databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, device_id = self.id, channel_number = channelId).first()
+                        print(f"[DEBUG calculateEventLogTip] Query for config: test_id={self.test_id}, device_id={self.id}, channel_number={channelId}")
+                        print(f"[DEBUG calculateEventLogTip] databaseRow found: {databaseRow is not None}")
+                        if not databaseRow:
+                            print(f"[DEBUG calculateEventLogTip] Warning: No channel configuration found for test {self.test_id}, device {self.id}, channel {channelId}")
+                            return ""
+
                         databaseRow.hourly_tips = hourlyTips
                         databaseRow.daily_tips = dailyTips
                         databaseRow.last_tip_time = "{0}.{1}.{2}.{3}".format(day, hour, min, sec)
@@ -677,6 +734,20 @@ class BlackBoxHandler(SerialHandler):
                         databaseRow.tip_count = overall["tips"][channelId]
                         databaseRow.total_stp_volume = overall["volumeSTP"][channelId]
                         databaseRow.total_net_volume = overall["volumeNet"][channelId]
+
+                        # Update volume_since_last_recirculation in ChimeraChannelConfiguration if mapped
+                        chimera_channel_config = None
+                        chimera_config = None
+                        if databaseRow.chimera_channel:
+                            from database.models import ChimeraConfiguration, ChimeraChannelConfiguration
+                            chimera_config = ChimeraConfiguration.query.filter_by(test_id=self.test_id).first()
+                            if chimera_config:
+                                chimera_channel_config = ChimeraChannelConfiguration.query.filter_by(
+                                    chimera_config_id=chimera_config.id,
+                                    channel_number=databaseRow.chimera_channel
+                                ).first()
+                                if chimera_channel_config:
+                                    chimera_channel_config.volume_since_last_recirculation = overall["volumeRecirculation"][channelId]
 
                         # Create event log entry
                         from database.models import BlackBoxEventLogData
@@ -704,10 +775,69 @@ class BlackBoxHandler(SerialHandler):
                         db.session.add(event_log)
 
                         db.session.commit()
+                        print(f"[DEBUG calculateEventLogTip] SUCCESS: Event log saved! event_log.id={event_log.id}")
+
+                        # Check for volume-based recirculation trigger using ChimeraConfiguration
+                        if chimera_config and chimera_channel_config and databaseRow.chimera_channel:
+                            print(f"[DEBUG Recirculation] Checking recirculation: mode={chimera_config.recirculation_mode}, threshold={chimera_channel_config.volume_threshold_ml}, chimera_channel={databaseRow.chimera_channel}")
+                            print(f"[DEBUG Recirculation] Current volume since last recirculation: {overall['volumeRecirculation'][channelId]:.2f}")
+
+                            if (chimera_config.recirculation_mode == 'volume' and
+                                chimera_channel_config.volume_threshold_ml):
+
+                                # Check if volume threshold has been exceeded
+                                if overall["volumeRecirculation"][channelId] >= chimera_channel_config.volume_threshold_ml:
+                                    print(f"🔄 Volume threshold reached for BlackBox channel {channelId+1}: {overall['volumeRecirculation'][channelId]:.2f} >= {chimera_channel_config.volume_threshold_ml}")
+                                    print(f"   Triggering recirculation for Chimera channel {databaseRow.chimera_channel}")
+
+                                    # Get the Chimera device handler for this test
+                                    from device_manager import DeviceManager
+                                    dm = DeviceManager()  # Get singleton instance
+                                    chimera_handler = None
+                                    print(f"[DEBUG Recirculation] Looking for Chimera handler in {len(dm._active_handlers)} active handlers")
+                                    for port, handler in dm._active_handlers.items():
+                                        print(f"[DEBUG Recirculation]   Checking handler: port={port}, type={handler.device_type}, test_id={getattr(handler, 'test_id', 'N/A')}")
+                                        if (handler.device_type in ['chimera', 'chimera-max'] and
+                                            getattr(handler, 'test_id', None) == self.test_id):
+                                            chimera_handler = handler
+                                            print(f"[DEBUG Recirculation]   Found matching Chimera handler!")
+                                            break
+
+                                    if chimera_handler:
+                                        try:
+                                            # Get open time from channel config, use flush time from chimera config
+                                            recirculation_duration = int(chimera_channel_config.open_time_seconds)
+                                            recirculation_pump_power = 50  # percent (could be made configurable)
+
+                                            print(f"[DEBUG Recirculation] Calling recirculate_flag(channel={databaseRow.chimera_channel}, duration={recirculation_duration}, pump_power={recirculation_pump_power})")
+                                            success, message = chimera_handler.recirculate_flag(
+                                                databaseRow.chimera_channel,
+                                                recirculation_duration,
+                                                recirculation_pump_power
+                                            )
+
+                                            if success:
+                                                print(f"   ✓ Recirculation command sent: {message}")
+                                                # Reset the volume counter to 0 for this channel
+                                                overall["volumeRecirculation"][channelId] = 0.0
+                                                chimera_channel_config.volume_since_last_recirculation = 0.0
+                                                db.session.commit()
+                                                print(f"   ✓ Reset recirculation volume counter to 0 for Chimera channel {databaseRow.chimera_channel}")
+                                            else:
+                                                print(f"   ✗ Recirculation command failed: {message}")
+                                        except Exception as e:
+                                            print(f"   ✗ Failed to send recirculation command: {e}")
+                                            import traceback
+                                            traceback.print_exc()
+                                    else:
+                                        print(f"   ✗ No Chimera device found for test {self.test_id}")
 
                         return result.format(*eventData)
+                    else:
+                        print(f"[DEBUG calculateEventLogTip] Channel {channelId} is NOT in use - skipping tip processing")
             except:
                 import traceback
+                print("[DEBUG calculateEventLogTip] EXCEPTION occurred:")
                 traceback.print_exc()
                 return ""
 

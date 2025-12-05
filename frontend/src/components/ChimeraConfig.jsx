@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronDown, Clock, Settings, RefreshCw, Activity, Server, Save, Play } from 'lucide-react';
 
 // Calibration Progress Bar Component
 function CalibrationProgressBar({ progress }) {
@@ -27,16 +28,24 @@ function CalibrationProgressBar({ progress }) {
     }, [progress.stage, progress.time_ms, progress.startTime]);
 
     return (
-        <div className="mt-4">
-            <div className="text-sm font-medium text-gray-700 mb-2">{progress.message}</div>
-            <div className="w-full bg-gray-200 rounded-full h-4">
+        <div className="mt-4 bg-orange-50 p-4 rounded-lg border border-orange-100">
+            <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-orange-800 flex items-center gap-2">
+                    <Activity size={16} className="animate-pulse" />
+                    {progress.message}
+                </div>
+                <div className="text-xs font-bold text-orange-600">
+                    {currentProgress.toFixed(0)}%
+                </div>
+            </div>
+            <div className="w-full bg-orange-200 rounded-full h-2 overflow-hidden">
                 <div
-                    className="bg-orange-600 h-4 rounded-full transition-all duration-100"
+                    className="bg-orange-500 h-2 rounded-full transition-all duration-100 ease-out"
                     style={{ width: `${currentProgress}%` }}
                 />
             </div>
-            <div className="text-xs text-gray-500 mt-1">
-                {currentProgress.toFixed(0)}% - {progress.stage}
+            <div className="text-xs text-orange-600 mt-2 font-mono">
+                Stage: {progress.stage}
             </div>
         </div>
     );
@@ -47,6 +56,9 @@ function ChimeraConfig({ device }) {
     const [loading, setLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const [calibrationProgress, setCalibrationProgress] = useState(null);
+    const [serviceSequence, setServiceSequence] = useState('111111111111111');
+    // Per-channel settings: { 1: { openTime: 1 }, 2: {...}, ... }
+    const [channelSettings, setChannelSettings] = useState({});
 
     useEffect(() => {
         fetchDeviceConfig();
@@ -135,11 +147,32 @@ function ChimeraConfig({ device }) {
             }
 
             setDeviceConfig(config);
+            if (config.service_sequence) {
+                setServiceSequence(config.service_sequence);
+            }
         } catch (error) {
             console.error('Error fetching device config:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const toggleChannel = (index) => {
+        setServiceSequence(prev => {
+            const arr = prev.split('');
+            arr[index] = arr[index] === '1' ? '0' : '1';
+            return arr.join('');
+        });
+    };
+
+    const updateChannelSetting = (channelNum, field, value) => {
+        setChannelSettings(prev => ({
+            ...prev,
+            [channelNum]: {
+                ...prev[channelNum],
+                [field]: value
+            }
+        }));
     };
 
     const updateTiming = async (openTimeMs, flushTimeMs) => {
@@ -284,122 +317,130 @@ function ChimeraConfig({ device }) {
 
     if (loading) {
         return (
-            <div className="mb-8 bg-gray-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4">{device.name} (Chimera)</h3>
-                <div className="text-gray-500">Loading configuration...</div>
+            <div className="mb-8 bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
+                <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+                <div className="h-4 bg-gray-100 rounded w-1/2"></div>
             </div>
         );
     }
 
     return (
-        <div className="mb-8 bg-gray-50 rounded-lg">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm transition-all hover:shadow-md">
             {/* Collapsible Header */}
             <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer border-b border-gray-100 hover:bg-gray-100 transition-colors"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <h3 className="text-lg font-semibold">{device.name} (Chimera)</h3>
-                <svg
-                    className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+                        <Server size={20} />
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-gray-900">{device.name}</h3>
+                        <p className="text-xs text-gray-500">Chimera Control Unit</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className={`p-1 rounded-full transition-transform duration-200 ${isExpanded ? 'bg-gray-200 rotate-180' : 'bg-transparent'}`}>
+                        <ChevronDown size={20} className="text-gray-500" />
+                    </div>
+                </div>
             </div>
 
             {/* Collapsible Content */}
             {isExpanded && (
-                <div className="p-4 pt-0">
-                    {/* Grid with 2 blocks per row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <div className="p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
                         {/* Timing Configuration */}
-                        <div className="bg-white p-4 rounded border border-gray-200">
-                            <h4 className="font-semibold mb-3 text-gray-700">Timing Configuration</h4>
-                            <div className="text-sm text-gray-600 mb-3">
-                                Configure how long valves stay open and the flush duration between measurements.
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                                <Clock size={18} className="text-blue-500" />
+                                <h4 className="font-semibold text-gray-900">Timing Configuration</h4>
                             </div>
-                            <div className="flex gap-4 items-end flex-wrap">
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Open Time (seconds)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Open Time (s)</label>
                                     <input
                                         type="number"
                                         id={`openTime-${device.id}`}
                                         step="0.1"
                                         min="0.1"
-                                        className="border border-gray-300 rounded px-3 py-2 w-32 text-sm"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                                         defaultValue={(deviceConfig.open_time || 1000) / 1000}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Flush Time (seconds)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Flush Time (s)</label>
                                     <input
                                         type="number"
                                         id={`flushTime-${device.id}`}
                                         step="0.1"
                                         min="0.1"
-                                        className="border border-gray-300 rounded px-3 py-2 w-32 text-sm"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                                         defaultValue={(deviceConfig.flush_time || 2000) / 1000}
                                     />
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        const openTime = document.getElementById(`openTime-${device.id}`).value;
-                                        const flushTime = document.getElementById(`flushTime-${device.id}`).value;
-                                        updateTiming(parseInt(openTime * 1000), parseInt(flushTime * 1000));
-                                    }}
-                                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 font-medium"
-                                >
-                                    Update Timing
-                                </button>
                             </div>
-                            <div className="mt-2 text-xs text-gray-500">
-                                Current: Open {(deviceConfig.open_time || 1000) / 1000}s, Flush {(deviceConfig.flush_time || 2000) / 1000}s
-                            </div>
+
+                            <button
+                                onClick={() => {
+                                    const openTime = document.getElementById(`openTime-${device.id}`).value;
+                                    const flushTime = document.getElementById(`flushTime-${device.id}`).value;
+                                    updateTiming(parseInt(openTime * 1000), parseInt(flushTime * 1000));
+                                }}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                <Save size={16} />
+                                Update Timing
+                            </button>
                         </div>
 
                         {/* Sensor Calibration */}
-                        <div className="bg-white p-4 rounded border border-gray-200">
-                            <h4 className="font-semibold mb-3 text-gray-700">Sensor Calibration</h4>
-                            <div className="text-sm text-gray-600 mb-3">
-                                Calibrate gas sensors with a known gas concentration.
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                                <Settings size={18} className="text-orange-500" />
+                                <h4 className="font-semibold text-gray-900">Sensor Calibration</h4>
                             </div>
-                            <div className="flex gap-4 items-end flex-wrap">
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Sensor Number (1-8)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Sensor (1-8)</label>
                                     <input
                                         type="number"
                                         id={`sensorNumber-${device.id}`}
                                         min="1"
                                         max="8"
-                                        className="border border-gray-300 rounded px-3 py-2 w-32 text-sm"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Gas Percentage</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Gas %</label>
                                     <input
                                         type="number"
                                         id={`gasPercentage-${device.id}`}
                                         step="0.1"
-                                        className="border border-gray-300 rounded px-3 py-2 w-32 text-sm"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
                                     />
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        const sensorNumber = document.getElementById(`sensorNumber-${device.id}`).value;
-                                        const gasPercentage = document.getElementById(`gasPercentage-${device.id}`).value;
-                                        if (sensorNumber && gasPercentage) {
-                                            calibrateSensor(parseInt(sensorNumber), parseFloat(gasPercentage));
-                                        } else {
-                                            alert('Please enter both sensor number and gas percentage');
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 font-medium"
-                                >
-                                    Calibrate
-                                </button>
                             </div>
+
+                            <button
+                                onClick={() => {
+                                    const sensorNumber = document.getElementById(`sensorNumber-${device.id}`).value;
+                                    const gasPercentage = document.getElementById(`gasPercentage-${device.id}`).value;
+                                    if (sensorNumber && gasPercentage) {
+                                        calibrateSensor(parseInt(sensorNumber), parseFloat(gasPercentage));
+                                    } else {
+                                        alert('Please enter both sensor number and gas percentage');
+                                    }
+                                }}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors"
+                            >
+                                <Play size={16} />
+                                Start Calibration
+                            </button>
 
                             {/* Calibration Progress Bar */}
                             {calibrationProgress && (
@@ -407,150 +448,157 @@ function ChimeraConfig({ device }) {
                             )}
                         </div>
 
-                        {/* Recirculation Configuration */}
-                        <div className="bg-white p-4 rounded border border-gray-200">
-                            <h4 className="font-semibold mb-3 text-gray-700">Recirculation Configuration</h4>
-                            <div className="text-sm text-gray-600 mb-3">
-                                Enable periodic recirculation to mix gas in the headspace during long-term experiments.
-                            </div>
-                            <div className="space-y-3">
-                                {/* Status and Control Buttons */}
-                                <div className="flex gap-3 items-center flex-wrap">
-                                    <div className="flex gap-2 items-center">
-                                        <span className="text-sm font-medium">Status:</span>
-                                        <span className={`text-sm font-semibold ${deviceConfig.recirculation_enabled ? 'text-green-600' : 'text-red-600'}`}>
-                                            {deviceConfig.recirculation_enabled ? 'Enabled' : 'Disabled'}
-                                        </span>
-                                    </div>
+                        {/* Chimera Recirculation Settings */}
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw size={18} className="text-green-500" />
+                                    <h4 className="font-semibold text-gray-900">Recirculation Settings</h4>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${deviceConfig.recirculation_enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {deviceConfig.recirculation_enabled ? 'ENABLED' : 'DISABLED'}
+                                    </span>
                                     <button
-                                        onClick={() => toggleRecirculation(true)}
-                                        className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 font-medium"
+                                        onClick={() => toggleRecirculation(!deviceConfig.recirculation_enabled)}
+                                        className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${deviceConfig.recirculation_enabled
+                                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                                : 'bg-green-50 text-green-600 hover:bg-green-100'
+                                            }`}
                                     >
-                                        Enable
-                                    </button>
-                                    <button
-                                        onClick={() => toggleRecirculation(false)}
-                                        className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 font-medium"
-                                    >
-                                        Disable
+                                        {deviceConfig.recirculation_enabled ? 'Disable' : 'Enable'}
                                     </button>
                                 </div>
+                            </div>
 
-                                {/* Last Recirculation Date */}
-                                {deviceConfig.last_recirculation_date && (
-                                    <div className="text-xs text-gray-600">
-                                        Last recirculation: {deviceConfig.last_recirculation_date.year}/{deviceConfig.last_recirculation_date.month}/{deviceConfig.last_recirculation_date.day}
-                                    </div>
-                                )}
-                                <div className="flex gap-3 items-end">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Days Between Runs</label>
+                            {/* Periodic Schedule Settings */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                {/* Frequency */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Frequency (Days)</label>
+                                    <div className="flex gap-2">
                                         <input
                                             type="number"
                                             id={`recirculationDays-${device.id}`}
                                             min="1"
-                                            className="border border-gray-300 rounded px-3 py-2 w-32 text-sm"
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
                                             defaultValue={deviceConfig.recirculation_days || 1}
                                         />
+                                        <button
+                                            onClick={() => {
+                                                const days = document.getElementById(`recirculationDays-${device.id}`).value;
+                                                if (days) {
+                                                    updateRecirculationDays(days);
+                                                } else {
+                                                    alert('Please enter number of days');
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                                        >
+                                            Set
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => {
-                                            const days = document.getElementById(`recirculationDays-${device.id}`).value;
-                                            if (days) {
-                                                updateRecirculationDays(days);
-                                            } else {
-                                                alert('Please enter number of days');
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 font-medium"
-                                    >
-                                        Update Days
-                                    </button>
+                                    {deviceConfig.last_recirculation_date && (
+                                        <p className="text-xs text-gray-400 mt-2">
+                                            Last run: {deviceConfig.last_recirculation_date.year}/{deviceConfig.last_recirculation_date.month}/{deviceConfig.last_recirculation_date.day}
+                                        </p>
+                                    )}
                                 </div>
-                                <div className="flex gap-3 items-end flex-wrap">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Hour (0-23)</label>
+
+                                {/* Schedule Time */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Schedule Time (HH:MM)</label>
+                                    <div className="flex gap-2">
                                         <input
                                             type="number"
                                             id={`recirculationHour-${device.id}`}
                                             min="0"
                                             max="23"
-                                            className="border border-gray-300 rounded px-3 py-2 w-20 text-sm"
+                                            placeholder="HH"
+                                            className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
                                             defaultValue={deviceConfig.recirculation_hour || 0}
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Minute (0-59)</label>
+                                        <span className="self-center text-gray-400">:</span>
                                         <input
                                             type="number"
                                             id={`recirculationMinute-${device.id}`}
                                             min="0"
                                             max="59"
-                                            className="border border-gray-300 rounded px-3 py-2 w-20 text-sm"
+                                            placeholder="MM"
+                                            className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
                                             defaultValue={deviceConfig.recirculation_minute || 0}
                                         />
+                                        <button
+                                            onClick={() => {
+                                                const hour = document.getElementById(`recirculationHour-${device.id}`).value;
+                                                const minute = document.getElementById(`recirculationMinute-${device.id}`).value;
+                                                if (hour !== '' && minute !== '') {
+                                                    updateRecirculationTime(hour, minute);
+                                                } else {
+                                                    alert('Please enter both hour and minute');
+                                                }
+                                            }}
+                                            className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                                        >
+                                            Set
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => {
-                                            const hour = document.getElementById(`recirculationHour-${device.id}`).value;
-                                            const minute = document.getElementById(`recirculationMinute-${device.id}`).value;
-                                            if (hour !== '' && minute !== '') {
-                                                updateRecirculationTime(hour, minute);
-                                            } else {
-                                                alert('Please enter both hour and minute');
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 font-medium"
-                                    >
-                                        Update Time
-                                    </button>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Service Configuration */}
-                        <div className="bg-white p-4 rounded border border-gray-200">
-                            <h4 className="font-semibold mb-3 text-gray-700">Service Configuration</h4>
-                            <div className="text-sm text-gray-600 mb-3">
-                                Enable/disable service for each of the 15 channels.
-                            </div>
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-5 gap-3">
+                            {/* Channel Selection - always visible */}
+                            <div className="border-t border-gray-100 pt-4">
+                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+                                    Channels in Service
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                                     {Array.from({ length: 15 }, (_, i) => {
                                         const channelNum = i + 1;
-                                        const currentSequence = deviceConfig.service_sequence || '111111111111111';
-                                        const isEnabled = currentSequence[i] === '1';
+                                        const isEnabled = serviceSequence[i] === '1';
+                                        const settings = channelSettings[channelNum] || {};
                                         return (
-                                            <div key={channelNum} className="flex items-center space-x-2">
-                                                <input
-                                                    type="checkbox"
-                                                    id={`channel${channelNum}-${device.id}`}
-                                                    defaultChecked={isEnabled}
-                                                    className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                                                />
-                                                <label
-                                                    htmlFor={`channel${channelNum}-${device.id}`}
-                                                    className={`text-sm font-medium ${isEnabled ? 'text-green-600' : 'text-red-600'}`}
-                                                >
-                                                    Ch {channelNum}
+                                            <div
+                                                key={channelNum}
+                                                className={`p-3 rounded-lg border transition-colors ${
+                                                    isEnabled
+                                                        ? 'border-green-300 bg-green-50'
+                                                        : 'border-gray-200 bg-gray-50'
+                                                }`}
+                                            >
+                                                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isEnabled}
+                                                        onChange={() => toggleChannel(i)}
+                                                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                    />
+                                                    <span className="text-sm font-semibold text-gray-700">CH {channelNum}</span>
                                                 </label>
+                                                {isEnabled && (
+                                                    <div className="pl-6">
+                                                        <label className="block text-xs text-gray-500 mb-1">Open Time (s)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0.1"
+                                                            step="0.1"
+                                                            value={settings.openTime || ''}
+                                                            onChange={(e) => updateChannelSetting(channelNum, 'openTime', e.target.value)}
+                                                            placeholder="e.g., 1"
+                                                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
-                                <div className="flex justify-end items-center pt-2">
+                                <div className="flex justify-end">
                                     <button
-                                        onClick={() => {
-                                            let sequence = '';
-                                            for (let i = 1; i <= 15; i++) {
-                                                const checkbox = document.getElementById(`channel${i}-${device.id}`);
-                                                sequence += checkbox.checked ? '1' : '0';
-                                            }
-                                            updateService(sequence);
-                                        }}
-                                        className="px-4 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 font-medium"
+                                        onClick={() => updateService(serviceSequence)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                                     >
-                                        Update Service
+                                        <Save size={16} />
+                                        Save Channel Selection
                                     </button>
                                 </div>
                             </div>

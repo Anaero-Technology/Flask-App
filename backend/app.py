@@ -621,33 +621,77 @@ def start_test(test_id):
         if test.status != 'setup':
             return jsonify({"error": "Test must be in setup status to start"}), 400
 
-        # Get all devices involved in this test
+        # Get device_ids from request body (explicitly selected devices)
+        request_data = request.get_json() or {}
+        device_ids = request_data.get('device_ids', [])
+
+        # If no explicit device selection, fallback to devices in configurations
+        if not device_ids:
+            configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
+            device_ids = list(set([config.device_id for config in configurations]))
+
+        # Get all configurations for channel setup (still needed for BlackBox config)
         configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
-        device_ids = list(set([config.device_id for config in configurations]))
 
-        # Check if any configurations have chimera_channel set - if so, find the Chimera device
-        chimera_device_ids = set()
-        configs_with_chimera = [c for c in configurations if c.chimera_channel is not None]
+        # Only configure Chimera devices that are explicitly selected in device_ids
+        # Find Chimera devices in the selected device_ids
+        chimera_devices = Device.query.filter(
+            Device.id.in_(device_ids),
+            Device.device_type.in_(['chimera', 'chimera-max'])
+        ).all()
 
-        if configs_with_chimera:
-            # Find all Chimera devices that are connected
-            chimera_devices = Device.query.filter(
-                Device.device_type.in_(['chimera', 'chimera-max']),
-                Device.connected == True
-            ).all()
+        for chimera_device in chimera_devices:
+            # Check ChimeraConfiguration for settings
+            chimera_config = ChimeraConfiguration.query.filter_by(
+                test_id=test_id,
+                device_id=chimera_device.id
+            ).first()
 
-            if chimera_devices:
-                # Add first available Chimera to the test
-                # TODO: In the future, support multiple Chimeras or device selection
-                chimera_device_ids.add(chimera_devices[0].id)
-                print(f"[DEBUG] Found Chimera device to include: {chimera_devices[0].name} (ID: {chimera_devices[0].id})")
+            chimera_handler = device_manager.get_device(chimera_device.id)
+            if chimera_handler and chimera_config:
+                # 1. Set flush time (convert seconds to milliseconds)
+                # First get current timing to preserve open_time
+                success, current_timing, _ = chimera_handler.get_timing()
+                current_open_time_ms = current_timing.get('open_time_ms', 600000) if success else 600000
+                flush_time_ms = int(chimera_config.flush_time_seconds * 1000)
+                success, msg = chimera_handler.set_timing(current_open_time_ms, flush_time_ms)
+                print(f"[DEBUG] Chimera timing set: open={current_open_time_ms}ms, flush={flush_time_ms}ms - {msg}")
 
-        # Combine BlackBox devices and Chimera devices
-        all_device_ids = list(set(device_ids) | chimera_device_ids)
+                # 2. Set service sequence (which channels are in service)
+                success, msg = chimera_handler.set_service(chimera_config.service_sequence)
+                print(f"[DEBUG] Chimera service sequence set to {chimera_config.service_sequence} - {msg}")
 
-        print(f"[DEBUG] Starting test {test_id} with {len(all_device_ids)} devices: {all_device_ids}")
-        print(f"[DEBUG] BlackBox devices: {device_ids}, Chimera devices: {list(chimera_device_ids)}")
-        print(f"[DEBUG] Channel configurations: {len(configurations)}, with Chimera channel: {len(configs_with_chimera)}")
+                # 3. Set per-channel timing for all in-service channels
+                channel_configs = ChimeraChannelConfiguration.query.filter_by(
+                    chimera_config_id=chimera_config.id
+                ).all()
+                for channel_cfg in channel_configs:
+                    success, msg = chimera_handler.set_channel_timing(
+                        channel_cfg.channel_number,
+                        channel_cfg.open_time_seconds
+                    )
+                    print(f"[DEBUG] Chimera channel {channel_cfg.channel_number} timing set to {channel_cfg.open_time_seconds}s - {msg}")
+
+                # 4. Set recirculation mode if not 'off'
+                if chimera_config.recirculation_mode != 'off':
+                    # Map mode: 'volume' -> 2, 'periodic' -> 1, 'off' -> 0
+                    mode_map = {'off': 0, 'periodic': 1, 'volume': 2}
+                    chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
+                    print(chimera_handler.set_recirculate(chimera_mode))
+                    print(f"[DEBUG] Chimera recirculation mode set to {chimera_mode} ({chimera_config.recirculation_mode})")
+
+                    # If periodic mode, also set the schedule
+                    if chimera_config.recirculation_mode == 'periodic':
+                        if chimera_config.recirculation_days:
+                            chimera_handler.set_recirculation_days(chimera_config.recirculation_days)
+                        if chimera_config.recirculation_hour is not None:
+                            chimera_handler.set_recirculation_time(
+                                chimera_config.recirculation_hour,
+                                chimera_config.recirculation_minute or 0
+                            )
+
+        # Use exactly the device_ids that were explicitly selected by the user
+        all_device_ids = device_ids
 
         # Check all devices are connected
         for device_id in all_device_ids:
@@ -707,7 +751,7 @@ def start_test(test_id):
 
             elif device.device_type in ['chimera', 'chimera-max']:
                 print(f"[DEBUG] Starting Chimera logging for device {device.name} (ID: {device.id})")
-                
+
                 # Generate filename - similar to BlackBox but with 25 char limit
                 import re
                 
@@ -859,6 +903,99 @@ def create_channel_configuration(test_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
+
+@app.route("/api/v1/tests/<int:test_id>/chimera-configuration", methods=['POST'])
+def create_chimera_configuration(test_id):
+    """Create or update Chimera configuration for a test"""
+    try:
+        data = request.get_json()
+        device_id = data.get('device_id')
+
+        if not device_id:
+            return jsonify({"error": "device_id is required"}), 400
+
+        # Check if configuration already exists
+        existing = ChimeraConfiguration.query.filter_by(
+            test_id=test_id,
+            device_id=device_id
+        ).first()
+
+        if existing:
+            # Update existing
+            existing.flush_time_seconds = data.get('flush_time_seconds', 30.0)
+            existing.recirculation_mode = data.get('recirculation_mode', 'off')
+            existing.recirculation_days = data.get('recirculation_days')
+            existing.recirculation_hour = data.get('recirculation_hour')
+            existing.recirculation_minute = data.get('recirculation_minute')
+            existing.service_sequence = data.get('service_sequence', '111111111111111')
+            chimera_config = existing
+        else:
+            # Create new
+            chimera_config = ChimeraConfiguration(
+                test_id=test_id,
+                device_id=device_id,
+                flush_time_seconds=data.get('flush_time_seconds', 30.0),
+                recirculation_mode=data.get('recirculation_mode', 'off'),
+                recirculation_days=data.get('recirculation_days'),
+                recirculation_hour=data.get('recirculation_hour'),
+                recirculation_minute=data.get('recirculation_minute'),
+                service_sequence=data.get('service_sequence', '111111111111111')
+            )
+            db.session.add(chimera_config)
+
+        db.session.flush()  # Get the ID for channel configs
+
+        # Handle per-channel configurations for ALL channels in service
+        service_sequence = data.get('service_sequence', '111111111111111')
+        channel_settings = data.get('channel_settings', {})
+
+        for i in range(15):
+            channel_num = i + 1
+            is_in_service = service_sequence[i] == '1' if i < len(service_sequence) else True
+
+            # Get settings for this channel (may be empty)
+            settings = channel_settings.get(str(channel_num), {})
+
+            # Check if channel config exists
+            existing_channel = ChimeraChannelConfiguration.query.filter_by(
+                chimera_config_id=chimera_config.id,
+                channel_number=channel_num
+            ).first()
+
+            if is_in_service:
+                # Create or update channel config for in-service channels
+                open_time = float(settings.get('openTime', 600.0)) if settings.get('openTime') else 600.0
+                volume_threshold = float(settings.get('volumeThreshold')) if settings.get('volumeThreshold') else None
+
+                if existing_channel:
+                    existing_channel.open_time_seconds = open_time
+                    existing_channel.volume_threshold_ml = volume_threshold
+                else:
+                    channel_config = ChimeraChannelConfiguration(
+                        chimera_config_id=chimera_config.id,
+                        channel_number=channel_num,
+                        open_time_seconds=open_time,
+                        volume_threshold_ml=volume_threshold
+                    )
+                    db.session.add(channel_config)
+            else:
+                # Remove channel config if not in service
+                if existing_channel:
+                    db.session.delete(existing_channel)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "chimera_config_id": chimera_config.id,
+            "message": "Chimera configuration saved"
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/v1/tests/upload-csv", methods=['POST'])
 def upload_csv_configuration():
     """Parse CSV file and return channel configurations"""
@@ -949,12 +1086,10 @@ from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 from routes.wifi import wifi_bp
 from routes.data import data_bp
-from routes.plc import plc_bp
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
 app.register_blueprint(wifi_bp)
 app.register_blueprint(data_bp)
-app.register_blueprint(plc_bp)
 app.register_blueprint(sse, url_prefix='/stream')
 
 if __name__ == "__main__":

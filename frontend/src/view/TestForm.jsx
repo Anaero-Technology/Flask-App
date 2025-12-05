@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import {
+    FlaskConical,
+    Play,
+    Save,
+    AlertCircle,
+    CheckCircle,
+    Info,
+    Server,
+    Beaker,
+    Settings
+} from 'lucide-react';
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
-import ChimeraConfig from '../components/ChimeraConfig';
+import ChimeraTestConfig from '../components/ChimeraTestConfig';
 
 function TestForm() {
     const [testName, setTestName] = useState('');
@@ -14,8 +25,35 @@ function TestForm() {
     const [showChannelConfig, setShowChannelConfig] = useState(false);
     const [selectedDevices, setSelectedDevices] = useState([]);
     const [chimeraChannelError, setChimeraChannelError] = useState('');
-    const [activeTestId, setActiveTestId] = useState(null);
-    const [activeTestName, setActiveTestName] = useState('');
+
+    // Global Chimera recirculation settings (applies to all chimera channels)
+    const [recirculationMode, setRecirculationMode] = useState('off'); // 'off', 'volume', or 'periodic'
+    const [serviceSequence, setServiceSequence] = useState('111111111111111'); // 15 channels
+    const [recirculationDays, setRecirculationDays] = useState(1);
+    const [recirculationHour, setRecirculationHour] = useState(0);
+    const [recirculationMinute, setRecirculationMinute] = useState(0);
+    // Per-channel settings: { 1: { volumeThreshold: 1000, openTime: 1 }, 2: {...}, ... }
+    const [channelSettings, setChannelSettings] = useState({});
+    const [applyAllOpenTimeValue, setApplyAllOpenTimeValue] = useState(600);
+    const [flushTime, setFlushTime] = useState(30); // Global flush time in seconds
+
+    const toggleServiceChannel = (index) => {
+        setServiceSequence(prev => {
+            const arr = prev.split('');
+            arr[index] = arr[index] === '1' ? '0' : '1';
+            return arr.join('');
+        });
+    };
+
+    const updateChannelSetting = (channelNum, field, value) => {
+        setChannelSettings(prev => ({
+            ...prev,
+            [channelNum]: {
+                ...prev[channelNum],
+                [field]: value
+            }
+        }));
+    };
 
     useEffect(() => {
         fetchDevices();
@@ -23,29 +61,26 @@ function TestForm() {
         fetchInoculums();
     }, []);
 
+    // Auto-switch to off if volume mode is selected but no BlackBox is available
+    useEffect(() => {
+        if (recirculationMode === 'volume') {
+            const selected = devices.filter(d => selectedDevices.includes(d.id));
+            const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+            if (!hasBlackBox) {
+                setRecirculationMode('off');
+            }
+        }
+    }, [selectedDevices, devices, recirculationMode]);
+
     const fetchDevices = async () => {
         try {
             const response = await fetch('/api/v1/devices/connected');
             const data = await response.json();
             setDevices(data);
-            // Auto-select only free devices initially
-            const freeDevices = data.filter(d => !d.active_test_id);
-            setSelectedDevices(freeDevices.map(d => d.id));
 
-            // Check if any device has an active test to restore the active test state
-            const devicesWithActiveTest = data.filter(d => d.active_test_id);
-            if (devicesWithActiveTest.length > 0 && !activeTestId) {
-                // Get the test info from the first device with an active test
-                const testId = devicesWithActiveTest[0].active_test_id;
-                const testName = devicesWithActiveTest[0].active_test_name || `Test #${testId}`;
-                setActiveTestId(testId);
-                setActiveTestName(testName);
-                console.log(`Restored active test: ${testName} (ID: ${testId})`);
-            } else if (devicesWithActiveTest.length === 0 && activeTestId) {
-                // No devices have active test anymore, clear the state
-                setActiveTestId(null);
-                setActiveTestName('');
-            }
+            // Remove any selected devices that are now busy
+            const freeDeviceIds = data.filter(d => !d.active_test_id).map(d => d.id);
+            setSelectedDevices(prev => prev.filter(id => freeDeviceIds.includes(id)));
         } catch (error) {
             console.error('Error fetching devices:', error);
         }
@@ -61,6 +96,12 @@ function TestForm() {
                 }
                 return prev.filter(id => id !== deviceId);
             } else {
+                // Check if device is busy before adding
+                const device = devices.find(d => d.id === deviceId);
+                if (device && device.active_test_id != null) {
+                    // Device is busy, don't allow selection
+                    return prev;
+                }
                 return [...prev, deviceId];
             }
         });
@@ -139,18 +180,36 @@ function TestForm() {
         }
     };
 
-    // Helper to check if Chimera channel should be shown
-    const shouldShowChimeraChannel = () => {
+    // Helper to check if any Chimera is selected
+    const hasChimeraSelected = () => {
         const selected = devices.filter(d => selectedDevices.includes(d.id));
-        const hasChimera = selected.some(d => ['chimera', 'chimera-max'].includes(d.device_type));
-        const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
-        console.log('Device check:', {
-            selectedDevices: selected.map(d => ({ id: d.id, name: d.name, type: d.device_type })),
-            hasChimera,
-            hasBlackBox,
-            showChimera: hasChimera && hasBlackBox
-        });
-        return hasChimera && hasBlackBox;
+        return selected.some(d => ['chimera', 'chimera-max'].includes(d.device_type));
+    };
+
+    // Helper to check if any BlackBox is selected
+    const hasBlackBoxSelected = () => {
+        const selected = devices.filter(d => selectedDevices.includes(d.id));
+        return selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+    };
+
+    // Helper to check if Chimera channel field should be shown in BlackBox config (needs both)
+    const shouldShowChimeraChannel = () => {
+        return hasChimeraSelected() && hasBlackBoxSelected();
+    };
+
+    // Apply open time to all enabled channels
+    const applyAllOpenTime = (openTime) => {
+        const newSettings = {};
+        for (let i = 0; i < 15; i++) {
+            if (serviceSequence[i] === '1') {
+                const channelNum = i + 1;
+                newSettings[channelNum] = {
+                    ...channelSettings[channelNum],
+                    openTime: openTime
+                };
+            }
+        }
+        setChannelSettings(prev => ({ ...prev, ...newSettings }));
     };
 
     const getTestValidationStatus = () => {
@@ -161,8 +220,19 @@ function TestForm() {
         }
 
         const configCount = Object.keys(configurations).length;
-        if (configCount === 0) {
-            missing.push('at least one channel configuration');
+        const deviceCount = selectedDevices.length;
+
+        if (deviceCount === 0) {
+            missing.push('at least one device selected');
+        } else if (configCount === 0) {
+            // Check if any selected device is a BlackBox (which requires config)
+            const hasBlackBox = devices
+                .filter(d => selectedDevices.includes(d.id))
+                .some(d => ['black-box', 'black_box'].includes(d.device_type));
+
+            if (hasBlackBox) {
+                missing.push('configuration for BlackBox channels');
+            }
         }
 
         return {
@@ -220,7 +290,7 @@ function TestForm() {
 
             const testId = testResult.test_id;
 
-            // Create channel configurations
+            // Create channel configurations (BlackBox)
             const configArray = Object.entries(configurations).map(([key, config]) => {
                 const [deviceId, channelNumber] = key.split('-');
                 return {
@@ -249,10 +319,38 @@ function TestForm() {
                 }
             }
 
-            // Start the test immediately
+            // Create Chimera configuration if any Chimera device is selected
+            const chimeraDevices = devices.filter(d =>
+                selectedDevices.includes(d.id) && ['chimera', 'chimera-max'].includes(d.device_type)
+            );
+
+            for (const chimeraDevice of chimeraDevices) {
+                const chimeraConfigResponse = await fetch(`/api/v1/tests/${testId}/chimera-configuration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_id: chimeraDevice.id,
+                        flush_time_seconds: flushTime,
+                        recirculation_mode: recirculationMode,
+                        recirculation_days: recirculationMode === 'periodic' ? recirculationDays : null,
+                        recirculation_hour: recirculationMode === 'periodic' ? recirculationHour : null,
+                        recirculation_minute: recirculationMode === 'periodic' ? recirculationMinute : null,
+                        service_sequence: serviceSequence,
+                        channel_settings: channelSettings
+                    })
+                });
+
+                if (!chimeraConfigResponse.ok) {
+                    const chimeraConfigError = await chimeraConfigResponse.json();
+                    throw new Error(chimeraConfigError.error);
+                }
+            }
+
+            // Start the test immediately, passing selected devices explicitly
             const startResponse = await fetch(`/api/v1/tests/${testId}/start`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_ids: selectedDevices })
             });
 
             if (!startResponse.ok) {
@@ -262,11 +360,7 @@ function TestForm() {
 
             alert('Test started successfully!');
 
-            // Set active test state
-            setActiveTestId(testId);
-            setActiveTestName(testName);
-
-            // Reset form fields but keep test running
+            // Reset form fields
             setTestName('');
             setTestDescription('');
             setConfigurations({});
@@ -275,38 +369,6 @@ function TestForm() {
         } catch (error) {
             console.error('Error starting test:', error);
             alert(`Failed to start test: ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const stopTest = async () => {
-        if (!confirm(`Are you sure you want to stop test "${activeTestName}"? This will stop logging on all devices.`)) {
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const response = await fetch(`/api/v1/tests/${activeTestId}/stop`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error);
-            }
-
-            alert('Test stopped successfully!');
-
-            // Clear active test state
-            setActiveTestId(null);
-            setActiveTestName('');
-            fetchDevices(); // Refresh devices to show updated status
-
-        } catch (error) {
-            console.error('Error stopping test:', error);
-            alert(`Failed to stop test: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -321,370 +383,238 @@ function TestForm() {
 
 
     return (
-        <div className="p-6">
-            <h1 className="text-4xl font-bold text-black pl-6 m-6">Start New Test</h1>
-            
-            <div className="bg-white rounded-lg shadow-sm p-6">
-                {/* Test Information */}
-                <div className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4">Test Information</h2>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="max-w-7xl mx-auto space-y-8">
+            <div className="flex flex-col space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+                            Start New Test
+                        </h1>
+                    </div>
+                </div>
+
+                {/* Test Details Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
+                        <Info size={16} className="text-gray-500" />
+                        <h2 className="font-semibold text-gray-900 text-sm">Test Details</h2>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Test Name <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
                                 value={testName}
                                 onChange={(e) => setTestName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                placeholder="Enter test name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                                placeholder="e.g., BMP_Test_Batch_1"
                                 required
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Description
                             </label>
                             <input
                                 type="text"
                                 value={testDescription}
                                 onChange={(e) => setTestDescription(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                placeholder="Enter test description"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                                placeholder="Optional details..."
                             />
                         </div>
                     </div>
                 </div>
 
-                {/* Device Selection */}
-                <div className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4">Select Devices for Experiment</h2>
-                    {devices.length > 0 ? (
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="mb-4">
-                                <div className="text-sm text-gray-600">
-                                    {selectedDevices.length} of {devices.length} device(s) selected
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Device Selection Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Server size={16} className="text-gray-500" />
+                            <h2 className="font-semibold text-gray-900 text-sm">Select Devices</h2>
+                        </div>
+                        <span className="text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                            {selectedDevices.length} Selected
+                        </span>
+                    </div>
+                    <div className="p-4">
+                        {devices.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {devices.map(device => {
-                                    const isBusy = device.active_test_id;
+                                    const isSelected = selectedDevices.includes(device.id);
+                                    const isBusy = device.active_test_id != null; // Device is busy if it has ANY active test
+
                                     return (
-                                        <label
+                                        <div
                                             key={device.id}
-                                            className={`flex items-center gap-3 p-3 rounded border ${
-                                                isBusy
-                                                    ? 'bg-red-50 border-red-300 cursor-not-allowed opacity-70'
-                                                    : 'bg-white border-gray-300 hover:bg-gray-50 cursor-pointer'
-                                            }`}
+                                            onClick={() => !isBusy && toggleDeviceSelection(device.id)}
+                                            className={`
+                                                    relative rounded-lg border transition-all duration-200 p-3 cursor-pointer
+                                                    flex flex-col gap-2 group hover:shadow-sm
+                                                    ${isBusy
+                                                    ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'
+                                                    : isSelected
+                                                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500'
+                                                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                                }
+                                                `}
                                         >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedDevices.includes(device.id)}
-                                                onChange={() => !isBusy && toggleDeviceSelection(device.id)}
-                                                disabled={isBusy}
-                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
-                                            />
-                                            <div className="flex-1">
-                                                <div className="font-medium text-gray-900">{device.name}</div>
-                                                <div className="text-xs text-gray-500">
-                                                    {device.device_type === 'black-box' ? 'Black Box' : 'Chimera'}
-                                                    {isBusy && <span className="text-red-600 ml-2 font-semibold">• In Use</span>}
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`
+                                                            p-1.5 rounded-md transition-colors
+                                                            ${isBusy
+                                                            ? 'bg-gray-200 text-gray-500'
+                                                            : isSelected
+                                                                ? 'bg-blue-100 text-blue-600'
+                                                                : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-500'
+                                                        }
+                                                        `}>
+                                                        {device.device_type === 'chimera' ? <Server size={16} /> : <Beaker size={16} />}
+                                                    </div>
+                                                    <span className={`font-medium text-sm truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                                        {device.name}
+                                                    </span>
                                                 </div>
+
+                                                {/* Selection/Status Indicator */}
+                                                {isBusy ? (
+                                                    <AlertCircle size={14} className="text-amber-500" />
+                                                ) : isSelected && (
+                                                    <div className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                                                        <CheckCircle size={10} />
+                                                    </div>
+                                                )}
                                             </div>
-                                        </label>
+
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-500 capitalize">{device.device_type}</span>
+                                                <span className={`flex items-center gap-1 ${device.status === 'connected' ? 'text-green-600' : 'text-gray-400'}`}>
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${device.status === 'connected' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                                    {isBusy ? 'In Use' : device.status}
+                                                </span>
+                                            </div>
+                                        </div>
                                     );
                                 })}
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                            No devices found. Make sure devices are connected and discovered.
-                        </div>
-                    )}
-                </div>
-
-                {/* Device Channels */}
-                <div className="mb-8">
-                    {devices.length > 0 ? (
-                        devices.filter(device => selectedDevices.includes(device.id)).map(device => (
-                            device.device_type === 'black-box' ? (
-                                <BlackBoxTestConfig
-                                    key={device.id}
-                                    device={device}
-                                    configurations={configurations}
-                                    samples={samples}
-                                    inoculums={inoculums}
-                                    selectedChannel={selectedChannel}
-                                    onChannelClick={handleChannelClick}
-                                    onConfigurationChange={handleConfigurationChange}
-                                    showChannelConfig={showChannelConfig}
-                                    onSaveChannelConfig={handleSaveChannelConfig}
-                                    onClearChannelConfig={handleClearChannelConfig}
-                                    showChimeraChannel={shouldShowChimeraChannel()}
-                                    chimeraChannelError={chimeraChannelError}
-                                    setChimeraChannelError={setChimeraChannelError}
-                                />
-                            ) : (
-                                <ChimeraConfig
-                                    key={device.id}
-                                    device={device}
-                                />
-                            )
-                        ))
-                    ) : selectedDevices.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                            No devices selected. Please select at least one device above to configure.
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            No devices found. Make sure devices are connected and discovered.
-                        </div>
-                    )}
-                </div>
-
-                {/* Create Test Button */}
-                <div className="flex flex-col items-end gap-2">
-                    {activeTestId ? (
-                        // Show Stop Test button when test is running
-                        <>
-                            <div className="text-sm text-green-600 font-semibold mb-1">
-                                ✓ Test "{activeTestName}" is running
+                        ) : (
+                            <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                <Server size={24} className="mx-auto mb-2 text-gray-300" />
+                                <p className="text-sm">No devices found.</p>
                             </div>
-                            <button
-                                onClick={stopTest}
-                                disabled={loading}
-                                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Stopping Test...' : 'Stop Test'}
-                            </button>
-                        </>
-                    ) : (
-                        // Show Start Test button when no test is running
-                        (() => {
-                            const validation = getTestValidationStatus();
-                            return (
-                                <>
-                                    {!validation.isValid && (
-                                        <div className="text-sm text-red-600">
-                                            Missing: {validation.missing.join(', ')}
-                                        </div>
-                                    )}
-                                    <button
-                                        onClick={startTest}
-                                        disabled={loading}
-                                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {loading ? 'Starting Test...' : 'Start Test'}
-                                    </button>
-                                </>
-                            );
-                        })()
-                    )}
+                        )}
+                    </div>
                 </div>
-            </div>
 
-        </div>
-    );
-}
-
-// Inline Channel Configuration Form Component
-function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear, showChimeraChannel, chimeraChannelError, setChimeraChannelError }) {
-    const [config, setConfig] = useState(currentConfig || {
-        inoculum_sample_id: '',
-        inoculum_weight_grams: '',
-        substrate_sample_id: '',
-        substrate_weight_grams: '',
-        tumbler_volume: '',
-        chimera_channel: null,
-        notes: ''
-    });
-
-    // Update form when currentConfig changes
-    React.useEffect(() => {
-        setConfig(currentConfig || {
-            inoculum_sample_id: '',
-            inoculum_weight_grams: '',
-            substrate_sample_id: '',
-            substrate_weight_grams: '',
-            tumbler_volume: '',
-            chimera_channel: null,
-            notes: ''
-        });
-        setChimeraChannelError('');
-    }, [currentConfig, setChimeraChannelError]);
-
-    const handleConfirm = () => {
-        // Validate chimera channel if provided
-        if (config.chimera_channel !== null && config.chimera_channel !== '' && config.chimera_channel !== undefined) {
-            const channelNum = parseInt(config.chimera_channel);
-            if (isNaN(channelNum) || channelNum < 1 || channelNum > 15) {
-                setChimeraChannelError('Chimera channel must be between 1 and 15');
-                return;
-            }
-        }
-
-        setChimeraChannelError('');
-
-        // Convert chimera_channel to null if empty or invalid
-        const chimeraChannel = config.chimera_channel === '' || config.chimera_channel === null || config.chimera_channel === undefined
-            ? null
-            : parseInt(config.chimera_channel);
-
-        // Save the configuration
-        onSave({
-            ...config,
-            inoculum_weight_grams: config.inoculum_weight_grams ? parseFloat(config.inoculum_weight_grams) : '',
-            substrate_weight_grams: config.substrate_weight_grams ? parseFloat(config.substrate_weight_grams) : '',
-            tumbler_volume: config.tumbler_volume ? parseFloat(config.tumbler_volume) : '',
-            chimera_channel: chimeraChannel
-        });
-    };
-
-    return (
-        <div className="space-y-4">
-            {/* Inoculum Selection */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Inoculum Sample <span className="text-red-500">*</span>
-                </label>
-                <select
-                    value={config.inoculum_sample_id}
-                    onChange={(e) => setConfig(prev => ({ ...prev, inoculum_sample_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                >
-                    <option value="">Select inoculum...</option>
-                    {inoculums.map(inoculum => (
-                        <option key={inoculum.id} value={inoculum.id}>
-                            {inoculum.inoculum_source}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Inoculum Weight */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Inoculum Weight (g) <span className="text-red-500">*</span>
-                </label>
-                <input
-                    type="number"
-                    step="0.1"
-                    value={config.inoculum_weight_grams}
-                    onChange={(e) => setConfig(prev => ({ ...prev, inoculum_weight_grams: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    placeholder="0.0"
-                />
-            </div>
-
-            {/* Substrate Selection */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Substrate Sample (optional)
-                </label>
-                <select
-                    value={config.substrate_sample_id || ''}
-                    onChange={(e) => setConfig(prev => ({ ...prev, substrate_sample_id: e.target.value || null }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                >
-                    <option value="">No substrate (control)</option>
-                    {samples.map(sample => (
-                        <option key={sample.id} value={sample.id}>
-                            {sample.sample_name}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Substrate Weight */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Substrate Weight (g)
-                </label>
-                <input
-                    type="number"
-                    step="0.1"
-                    value={config.substrate_weight_grams}
-                    onChange={(e) => setConfig(prev => ({ ...prev, substrate_weight_grams: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    placeholder="0.0"
-                />
-            </div>
-
-            {/* Tumbler Volume */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tumbler Volume (mL) <span className="text-red-500">*</span>
-                </label>
-                <input
-                    type="number"
-                    step="0.1"
-                    value={config.tumbler_volume}
-                    onChange={(e) => setConfig(prev => ({ ...prev, tumbler_volume: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    placeholder="0.0"
-                />
-                <p className="text-xs text-gray-500 mt-1">Volume of gas required for a tip to occur</p>
-            </div>
-
-            {/* Chimera Channel - Only show when both chimera and black-box devices are selected */}
-            {showChimeraChannel && (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Chimera Channel (optional)
-                    </label>
-                    <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        max="15"
-                        value={config.chimera_channel === null ? '' : config.chimera_channel}
-                        onChange={(e) => {
-                            setConfig(prev => ({ ...prev, chimera_channel: e.target.value }));
-                            setChimeraChannelError('');
-                        }}
-                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 text-sm ${
-                            chimeraChannelError
-                                ? 'border-red-500 focus:ring-red-500'
-                                : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                        placeholder="Leave empty if not used"
+                {/* Chimera Settings - Show if any Chimera device is selected */}
+                {hasChimeraSelected() && (
+                    <ChimeraTestConfig
+                        flushTime={flushTime}
+                        setFlushTime={setFlushTime}
+                        recirculationMode={recirculationMode}
+                        setRecirculationMode={setRecirculationMode}
+                        recirculationDays={recirculationDays}
+                        setRecirculationDays={setRecirculationDays}
+                        recirculationHour={recirculationHour}
+                        setRecirculationHour={setRecirculationHour}
+                        recirculationMinute={recirculationMinute}
+                        setRecirculationMinute={setRecirculationMinute}
+                        serviceSequence={serviceSequence}
+                        setServiceSequence={setServiceSequence}
+                        channelSettings={channelSettings}
+                        setChannelSettings={setChannelSettings}
+                        applyAllOpenTime={applyAllOpenTime}
+                        applyAllOpenTimeValue={applyAllOpenTimeValue}
+                        setApplyAllOpenTimeValue={setApplyAllOpenTimeValue}
+                        hasBlackBoxSelected={hasBlackBoxSelected()}
                     />
-                    {chimeraChannelError && (
-                        <p className="text-xs text-red-600 mt-1">{chimeraChannelError}</p>
-                    )}
-                    {!chimeraChannelError && (
-                        <p className="text-xs text-gray-500 mt-1">Must be between 1 and 15 (leave empty if not used)</p>
-                    )}
+                )}
+
+                {/* Channel Configuration */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[200px] flex flex-col">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
+                        <Settings size={16} className="text-gray-500" />
+                        <h2 className="font-semibold text-gray-900 text-sm">Channel Configuration</h2>
+                    </div>
+                    <div className="p-4 flex-1 bg-gray-50/50">
+                        {devices.length > 0 ? (
+                            selectedDevices.length > 0 ? (
+                                <div className="space-y-4">
+                                    {devices.filter(device => selectedDevices.includes(device.id) && device.device_type === 'black-box').map(device => (
+                                        <div key={device.id} className="animate-fadeIn">
+                                            <BlackBoxTestConfig
+                                                device={device}
+                                                configurations={configurations}
+                                                samples={samples}
+                                                inoculums={inoculums}
+                                                selectedChannel={selectedChannel}
+                                                onChannelClick={handleChannelClick}
+                                                onConfigurationChange={handleConfigurationChange}
+                                                showChannelConfig={showChannelConfig}
+                                                onSaveChannelConfig={handleSaveChannelConfig}
+                                                onClearChannelConfig={handleClearChannelConfig}
+                                                showChimeraChannel={shouldShowChimeraChannel()}
+                                                chimeraChannelError={chimeraChannelError}
+                                                setChimeraChannelError={setChimeraChannelError}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center p-8 border-2 border-dashed border-gray-200 rounded-xl bg-white">
+                                    <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                                        <Server size={24} className="text-gray-300" />
+                                    </div>
+                                    <h3 className="text-sm font-medium text-gray-900 mb-1">No Devices Selected</h3>
+                                    <p className="text-xs text-gray-500 max-w-xs mx-auto">Select a device above to configure its channels.</p>
+                                </div>
+                            )
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                <p>Connect devices to begin configuration.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between sticky bottom-0">
+                        <div className="text-sm text-gray-500">
+                            {Object.keys(configurations).length} channels configured
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {(() => {
+                                const validation = getTestValidationStatus();
+                                return (
+                                    <div className="flex items-center gap-4">
+                                        {!validation.isValid && (
+                                            <span className="text-sm text-red-600 flex items-center gap-1.5 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
+                                                <AlertCircle size={14} />
+                                                Missing: {validation.missing.join(', ')}
+                                            </span>
+                                        )}
+                                        <button
+                                            onClick={startTest}
+                                            disabled={loading || !validation.isValid}
+                                            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        >
+                                            <Play size={18} fill="currentColor" />
+                                            {loading ? 'Starting...' : 'Start Test'}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
                 </div>
-            )}
-
-            {/* Notes */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                </label>
-                <textarea
-                    value={config.notes}
-                    onChange={(e) => setConfig(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    rows="2"
-                    placeholder="Optional notes..."
-                />
-            </div>
-
-            {/* Confirm Button */}
-            <div className="pt-2">
-                <button
-                    onClick={handleConfirm}
-                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                >
-                    Confirm
-                </button>
             </div>
         </div>
     );
 }
+
+
 
 export default TestForm;

@@ -471,7 +471,35 @@ class ChimeraHandler(SerialHandler):
             return False, "Cannot change service states while logging"
         else:
             return False, f"Unexpected response: {response}"
-    
+
+    def set_channel_timing(self, channel: int, open_time_seconds: int) -> Tuple[bool, str]:
+        """Set the open time for a specific channel
+
+        Args:
+            channel: Channel number (1-15)
+            open_time_seconds: Open time in seconds
+        """
+        if not (1 <= channel <= 15):
+            return False, "Channel must be between 1 and 15"
+
+        if open_time_seconds <= 0:
+            return False, "Open time must be greater than 0"
+
+        response = self.send_command(f"channeltiming {channel} {open_time_seconds}")
+
+        if response == "done timeset":
+            return True, f"Channel {channel} timing set to {open_time_seconds}s"
+        """
+        elif response == "failed timeset invalidchannel":
+            return False, "Invalid channel number"
+        elif response == "failed timeset invalidtime":
+            return False, "Invalid time value"
+        elif response == "failed timeset logging":
+            return False, "Cannot change channel timing while logging"
+        """
+        else:
+            return False, f"Unexpected response: {response}"
+
     def get_past_values(self) -> Tuple[bool, Dict[int, List[float]], str]:
         """Get most recent values for each sensor for each channel"""
         response = self.send_command("getpast")
@@ -519,41 +547,19 @@ class ChimeraHandler(SerialHandler):
         
         return False, {}, f"Unexpected response: {response}"
     
-    def set_recirculate(self, mode) -> Tuple[bool, str]:
-        """Set recirculation mode
-        
-        Args:
-            mode: Either an integer (0-2) or string ('disabled', 'automatic', 'manual')
-                  0/'disabled' = disabled
-                  1/'automatic' = automatic
-                  2/'manual' = manual
-        """
-        # Convert string mode to integer
-        mode_map = {
-            'disabled': 0,
-            'automatic': 1,
-            'manual': 2
-        }
-        
-        if isinstance(mode, str):
-            mode = mode.lower()
-            if mode not in mode_map:
-                return False, "Invalid mode. Must be 'disabled', 'automatic', or 'manual'"
-            mode = mode_map[mode]
-        
-        # Validate integer mode
-        if not isinstance(mode, int) or mode < 0 or mode > 2:
-            return False, "Invalid mode. Must be 0 (disabled), 1 (automatic), or 2 (manual)"
-        
-        response = self.send_command(f"setrecirculate {mode}")
-        
-        if response == "done setrecirculate":
+    def set_recirculate(self, mode: int) -> Tuple[bool, str]:
+        """Set recirculation mode: 0=disabled, 1=automatic, 2=manual"""
+        if mode not in [0, 1, 2]:
+            return False, "Invalid mode. Must be 0, 1, or 2"
+
+        response = self.send_command(f"recirculateset {mode}")
+
+        if response == "done recirculateset":
             self.recirculation_mode = mode
-            mode_names = ['disabled', 'automatic', 'manual']
-            return True, f"Recirculation mode set to {mode_names[mode]} successfully"
-        elif response == "failed setrecirculate nofiles":
+            return True, f"Recirculation mode set to {mode}"
+        elif response == "failed recirculateset nofiles":
             return False, "Files not working"
-        elif response == "failed setrecirculate invalidmode":
+        elif response == "failed recirculateset invalidmode":
             return False, "Invalid mode"
         else:
             return False, f"Unexpected response: {response}"

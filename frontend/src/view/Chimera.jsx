@@ -23,7 +23,7 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 setChimeras(data);
-                
+
                 // Initialize logging states
                 const states = {};
                 data.forEach(device => {
@@ -39,8 +39,8 @@ function Chimera() {
     };
 
     const handleNameUpdate = (deviceId, newName) => {
-        setChimeras(prevDevices => 
-            prevDevices.map(device => 
+        setChimeras(prevDevices =>
+            prevDevices.map(device =>
                 device.device_id === deviceId ? { ...device, name: newName } : device
             )
         );
@@ -191,9 +191,18 @@ function Chimera() {
                     body: JSON.stringify({})
                 });
             } else {
-                // Start logging - prompt for test name
+                // Start logging - prompt for test name and filename
                 const testName = prompt('Enter test name:');
                 if (!testName) return;
+
+                let filename = prompt('Enter filename for logging (max 20 characters):');
+                if (!filename) return;
+
+                // Validate filename length (device firmware has limited buffer)
+                if (filename.length > 20) {
+                    alert('Filename too long! Maximum 20 characters. Please use a shorter name.');
+                    return;
+                }
 
                 response = await fetch(`/api/v1/chimera/${deviceId}/start_logging`, {
                     method: 'POST',
@@ -201,6 +210,7 @@ function Chimera() {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
+                        filename,
                         test_name: testName,
                         test_description: `Chimera logging session started from device page`
                     })
@@ -389,20 +399,20 @@ function Chimera() {
                         No connected Chimera devices found
                     </div>
                 )}
-                
+
                 {chimeras.map((device) => (
                     <div key={device.device_id} className="mb-6">
-                        <DeviceCard 
+                        <DeviceCard
                             deviceId={device.device_id}
                             deviceType="chimera"
-                            title="Chimera" 
+                            title="Chimera"
                             name={device.name}
                             logging={loggingStates[device.device_id]}
                             port={device.port}
                             image={ChimeraImage}
                             onNameUpdate={handleNameUpdate}
                         />
-                        
+
                         {/* Chimera specific controls */}
                         <div className="bg-gray-50 rounded-lg p-4 mt-4">
                             {device.active_test_id && (
@@ -435,11 +445,10 @@ function Chimera() {
                                 ) : (
                                     <button
                                         onClick={() => toggleLogging(device.device_id)}
-                                        className={`px-4 py-2 rounded font-medium ${
-                                            loggingStates[device.device_id]
+                                        className={`px-4 py-2 rounded font-medium ${loggingStates[device.device_id]
                                                 ? 'bg-red-600 text-white hover:bg-red-700'
                                                 : 'bg-green-600 text-white hover:bg-green-700'
-                                        }`}
+                                            }`}
                                     >
                                         {loggingStates[device.device_id] ? 'Stop Logging' : 'Start Logging'}
                                     </button>
@@ -451,9 +460,9 @@ function Chimera() {
                         <ChimeraPlot deviceId={device.device_id} />
                     </div>
                 ))}
-                
+
                 <div className="flex justify-center mt-6">
-                    <img 
+                    <img
                         src={refreshIcon}
                         onClick={fetchChimeras}
                         className={`w-8 h-8 cursor-pointer hover:scale-110 transition-transform ${loading ? 'animate-spin' : ''}`}
@@ -478,7 +487,7 @@ function Chimera() {
                                 ×
                             </button>
                         </div>
-                        
+
                         {loadingFiles ? (
                             <div className="text-center py-8">Loading files...</div>
                         ) : (
@@ -515,7 +524,7 @@ function Chimera() {
                                         ))}
                                     </div>
                                 )}
-                                
+
                                 <div className="mt-6 flex justify-end">
                                     <button
                                         onClick={() => fetchFiles(selectedDevice.device_id)}
@@ -546,7 +555,7 @@ function Chimera() {
                             </button>
                         </div>
 
-                        <ChimeraConfig device={{...selectedDevice, id: selectedDevice.device_id}} />
+                        <ChimeraConfig device={{ ...selectedDevice, id: selectedDevice.device_id }} />
                     </div>
                 </div>
             )}
