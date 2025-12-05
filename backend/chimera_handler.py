@@ -854,6 +854,16 @@ class ChimeraHandler(SerialHandler):
             print(f"[CHIMERA IP MONITOR] Error scanning WiFi SSIDs: {e}")
             return []
 
+    def clear_ssids(self) -> Tuple[bool, str]:
+        """Clear all WiFi SSIDs from the Chimera's stored list"""
+        response = self.send_command("clearssids")
+        
+        if response == "done clearssids":
+            self.last_known_ssids.clear()  # Also clear our local tracking
+            return True, "SSID list cleared"
+        else:
+            return False, f"Unexpected response: {response}"
+
     def _ip_monitor_daemon(self):
         """Background daemon that monitors IP connection and sends ipset command to chimera"""
         print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
@@ -880,24 +890,27 @@ class ChimeraHandler(SerialHandler):
                         else:
                             print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
 
-                    # Get WiFi SSIDs and send new ones to chimera
+                    # Clear and resend all WiFi SSIDs every cycle
                     ssids = self._get_wifi_ssids()
                     if ssids:
                         print(f"[CHIMERA IP MONITOR] Found {len(ssids)} WiFi networks")
 
                         if self.connection and self.connection.is_open:
+                            # Clear old SSIDs first
+                            try:
+                                self.connection.write(b"clearssids\n")
+                                time.sleep(0.1)
+                            except Exception as e:
+                                print(f"[CHIMERA IP MONITOR] Failed to clear SSIDs: {e}")
+                            
+                            # Send all current SSIDs
                             for ssid in ssids:
-                                # Only send if we haven't sent this SSID before
-                                if ssid not in self.last_known_ssids:
-                                    command = f"ssidadd {ssid}\n"
-                                    try:
-                                        self.connection.write(command.encode())
-                                        print(f"[CHIMERA IP MONITOR] Sent: ssidadd {ssid}")
-                                        self.last_known_ssids.add(ssid)
-                                        # Small delay between commands to avoid overwhelming the device
-                                        time.sleep(0.1)
-                                    except Exception as e:
-                                        print(f"[CHIMERA IP MONITOR] Failed to send ssidadd command for {ssid}: {e}")
+                                command = f"ssidadd {ssid}\n"
+                                try:
+                                    self.connection.write(command.encode())
+                                    time.sleep(0.1)
+                                except Exception as e:
+                                    print(f"[CHIMERA IP MONITOR] Failed to send ssidadd: {e}")
                         else:
                             print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ssidadd commands")
                     else:
