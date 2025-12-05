@@ -489,6 +489,8 @@ class ChimeraHandler(SerialHandler):
 
         if response == "done timeset":
             return True, f"Channel {channel} timing set to {open_time_seconds}s"
+        else:
+            return False, f"Unexpected response: {response}"
         """
         elif response == "failed timeset invalidchannel":
             return False, "Invalid channel number"
@@ -497,8 +499,7 @@ class ChimeraHandler(SerialHandler):
         elif response == "failed timeset logging":
             return False, "Cannot change channel timing while logging"
         """
-        else:
-            return False, f"Unexpected response: {response}"
+        
 
     def get_past_values(self) -> Tuple[bool, Dict[int, List[float]], str]:
         """Get most recent values for each sensor for each channel"""

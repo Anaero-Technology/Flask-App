@@ -6,6 +6,7 @@ import serial.tools.list_ports
 from device_manager import DeviceManager
 from config import Config
 import atexit
+import threading
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
@@ -18,6 +19,77 @@ DeviceManager.set_app(app)  # Set app reference for db
 # Create tables
 with app.app_context():
     db.create_all()
+
+
+def auto_connect_devices():
+    """Auto-scan and connect to devices on startup.
+    Keeps retrying every 10 seconds until a Chimera is found.
+    """
+    import time
+    import concurrent.futures
+    
+    time.sleep(2)  # Brief delay to ensure app is fully ready
+    
+    chimera_found = False
+    
+    def check_port(port_info):
+        """Check a single port for valid device. Returns True if Chimera found."""
+        nonlocal chimera_found
+        
+        # Skip Bluetooth ports to avoid blocking issues
+        if 'Bluetooth' in port_info.device or 'Bluetooth' in port_info.description:
+            return False
+        
+        try:
+            # Connect to the device
+            connected = device_manager.connect(port_info.device)
+            
+            if not connected:
+                return False
+            
+            device = device_manager.get_device_by_port(port_info.device)
+            if device and hasattr(device, 'device_type'):
+                if device.device_type in ['chimera', 'chimera-max']:
+                    print(f"[AUTO-CONNECT] ✓ Connected to Chimera on {port_info.device}")
+                    chimera_found = True
+                    return True
+                elif device.device_type in ['black-box', 'black_box']:
+                    print(f"[AUTO-CONNECT] ✓ Connected to BlackBox on {port_info.device}")
+                else:
+                    print(f"[AUTO-CONNECT] ✓ Connected to {device.device_type} on {port_info.device}")
+        except Exception as e:
+            pass
+        return False
+    
+    while not chimera_found:
+        print("[AUTO-CONNECT] Scanning for Chimera device...")
+        
+        with app.app_context():
+            try:
+                # Get all available serial ports
+                ports = list(serial.tools.list_ports.comports())
+                
+                # Check all ports in parallel with a thread pool
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(ports) or 1)) as executor:
+                    executor.map(check_port, ports)
+                
+                if chimera_found:
+                    print("[AUTO-CONNECT] Chimera found, stopping scan")
+                else:
+                    print("[AUTO-CONNECT] No Chimera found, retrying in 5 seconds...")
+            except Exception as e:
+                print(f"[AUTO-CONNECT] Error during auto-connect: {e}")
+        
+        if not chimera_found:
+            time.sleep(5) 
+    
+    print("[AUTO-CONNECT] Device scan complete")
+
+
+# Start auto-connect in background thread (won't block app startup)
+auto_connect_thread = threading.Thread(target=auto_connect_devices, daemon=True)
+auto_connect_thread.start()
+
 
 @app.route("/api/v1/ports")
 def list_ports():
