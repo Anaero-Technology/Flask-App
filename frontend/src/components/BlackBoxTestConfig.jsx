@@ -388,19 +388,7 @@ function BlackBoxTestConfig({
 
                             {/* Channel Grid */}
                             <div className="mb-6">
-                                <div className="flex justify-end mb-2">
-                                    <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 cursor-pointer transition-colors shadow-sm">
-                                        <Upload size={12} />
-                                        {uploadingCsv ? 'Uploading...' : 'Upload CSV'}
-                                        <input
-                                            type="file"
-                                            accept=".csv"
-                                            onChange={handleCsvUpload}
-                                            disabled={uploadingCsv}
-                                            className="hidden"
-                                        />
-                                    </label>
-                                </div>
+
                                 {renderChannelGrid()}
                             </div>
 
@@ -427,6 +415,31 @@ function BlackBoxTestConfig({
                                         <span>Not in service</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Bulk Actions - Upload CSV */}
+                            <div className="mt-4">
+                                <label className="flex items-center justify-between w-full p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md cursor-pointer transition-all group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
+                                            <Upload size={18} />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-gray-700  tracking-wide">Bulk Config</span>
+                                            <span className="text-xs text-gray-400 font-medium">Upload CSV File</span>
+                                        </div>
+                                    </div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${uploadingCsv ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
+                                        {uploadingCsv ? 'Uploading...' : 'Select File'}
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleCsvUpload}
+                                        disabled={uploadingCsv}
+                                        className="hidden"
+                                    />
+                                </label>
                             </div>
                         </div>
 
