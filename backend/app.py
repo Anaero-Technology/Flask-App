@@ -744,23 +744,22 @@ def start_test(test_id):
                     )
                     print(f"[DEBUG] Chimera channel {channel_cfg.channel_number} timing set to {channel_cfg.open_time_seconds}s - {msg}")
 
-                # 4. Set recirculation mode if not 'off'
-                if chimera_config.recirculation_mode != 'off':
-                    # Map mode: 'volume' -> 2, 'periodic' -> 1, 'off' -> 0
-                    mode_map = {'off': 0, 'periodic': 1, 'volume': 2}
-                    chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
-                    print(chimera_handler.set_recirculate(chimera_mode))
-                    print(f"[DEBUG] Chimera recirculation mode set to {chimera_mode} ({chimera_config.recirculation_mode})")
+                # 4. Set recirculation mode 
+                # Map mode: 'volume' -> 2, 'periodic' -> 1, 'off' -> 0
+                mode_map = {'off': 0, 'periodic': 1, 'volume': 2}
+                chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
+                print(chimera_handler.set_recirculate(chimera_mode))
+                print(f"[DEBUG] Chimera recirculation mode set to {chimera_mode} ({chimera_config.recirculation_mode})")
 
-                    # If periodic mode, also set the schedule
-                    if chimera_config.recirculation_mode == 'periodic':
-                        if chimera_config.recirculation_days:
-                            chimera_handler.set_recirculation_days(chimera_config.recirculation_days)
-                        if chimera_config.recirculation_hour is not None:
-                            chimera_handler.set_recirculation_time(
-                                chimera_config.recirculation_hour,
-                                chimera_config.recirculation_minute or 0
-                            )
+                # If periodic mode, also set the schedule
+                if chimera_config.recirculation_mode == 'periodic':
+                    if chimera_config.recirculation_days:
+                        chimera_handler.set_recirculation_days(chimera_config.recirculation_days)
+                    if chimera_config.recirculation_hour is not None:
+                        chimera_handler.set_recirculation_time(
+                            chimera_config.recirculation_hour,
+                            chimera_config.recirculation_minute or 0
+                        )
 
         # Use exactly the device_ids that were explicitly selected by the user
         all_device_ids = device_ids
