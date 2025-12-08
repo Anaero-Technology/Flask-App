@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import ChimeraTestConfig from '../components/ChimeraTestConfig';
+import { useToast } from '../components/Toast';
 
 function TestForm() {
+    const toast = useToast();
     const [testName, setTestName] = useState('');
     const [testDescription, setTestDescription] = useState('');
     const [devices, setDevices] = useState([]);
@@ -245,7 +247,7 @@ function TestForm() {
         const validation = getTestValidationStatus();
 
         if (!validation.isValid) {
-            alert(`Cannot start test. Missing: ${validation.missing.join(', ')}`);
+            toast.warning(`Cannot start test. Missing: ${validation.missing.join(', ')}`);
             return;
         }
 
@@ -254,7 +256,7 @@ function TestForm() {
         const busyDevices = selectedDeviceObjs.filter(d => d.active_test_id);
 
         if (busyDevices.length > 0) {
-            alert(`Cannot start test. The following devices are currently in use: ${busyDevices.map(d => d.name).join(', ')}`);
+            toast.error(`Cannot start test. The following devices are currently in use: ${busyDevices.map(d => d.name).join(', ')}`);
             return;
         }
 
@@ -267,7 +269,7 @@ function TestForm() {
         );
 
         if (busyConfigDevices.length > 0) {
-            alert(`Cannot start test. The following configured devices are in use: ${busyConfigDevices.map(d => d.name).join(', ')}`);
+            toast.error(`Cannot start test. The following configured devices are in use: ${busyConfigDevices.map(d => d.name).join(', ')}`);
             return;
         }
 
@@ -358,7 +360,7 @@ function TestForm() {
                 throw new Error(startError.error);
             }
 
-            alert('Test started successfully!');
+            toast.success('Test started successfully!');
 
             // Reset form fields
             setTestName('');
@@ -368,7 +370,7 @@ function TestForm() {
 
         } catch (error) {
             console.error('Error starting test:', error);
-            alert(`Failed to start test: ${error.message}`);
+            toast.error(`Failed to start test: ${error.message}`);
         } finally {
             setLoading(false);
         }
