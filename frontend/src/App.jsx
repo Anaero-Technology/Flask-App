@@ -7,7 +7,6 @@ import Database from './view/Database'
 import TestForm from './view/TestForm'
 import BlackBox from './view/BlackBox'
 import Chimera from './view/Chimera'
-import PLC from './view/PLC'
 import Settings from './view/Settings'
 import './App.css'
 
@@ -24,8 +23,8 @@ function App() {
     }
   }
 
-  const handleViewPlot = (testId, deviceId) => {
-    setPlotParams({ testId, deviceId })
+  const handleViewPlot = (testId, deviceId, source = 'dashboard') => {
+    setPlotParams({ testId, deviceId, source })
     setCurrentView('plot')
   }
 
@@ -38,7 +37,7 @@ function App() {
       case 'test':
         return <TestForm />
       case 'database':
-        return <Database />
+        return <Database onViewPlot={handleViewPlot} />
       case 'plot':
         return <Plot initialParams={plotParams} onNavigate={handleNavigate} />
       case 'upload':

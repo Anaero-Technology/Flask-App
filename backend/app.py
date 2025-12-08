@@ -631,14 +631,31 @@ def list_tests():
             }
             
             if include_devices:
-                devices = Device.query.filter_by(active_test_id=test.id).all()
-                test_data['devices'] = [{
-                    "id": d.id,
-                    "name": d.name,
-                    "device_type": d.device_type,
-                    "serial_port": d.serial_port,
-                    "logging": d.logging
-                } for d in devices]
+                # Get devices from active assignment OR configuration
+                # 1. Active devices
+                device_ids = set([d.id for d in Device.query.filter_by(active_test_id=test.id).all()])
+                
+                # 2. Configured devices (for completed tests)
+                configs = ChannelConfiguration.query.filter_by(test_id=test.id).all()
+                for c in configs:
+                    device_ids.add(c.device_id)
+                    
+                chimera_configs = ChimeraConfiguration.query.filter_by(test_id=test.id).all()
+                for c in chimera_configs:
+                    device_ids.add(c.device_id)
+                
+                # Fetch device details
+                if device_ids:
+                    devices = Device.query.filter(Device.id.in_(list(device_ids))).all()
+                    test_data['devices'] = [{
+                        "id": d.id,
+                        "name": d.name,
+                        "device_type": d.device_type,
+                        "serial_port": d.serial_port,
+                        "logging": d.logging
+                    } for d in devices]
+                else:
+                    test_data['devices'] = []
                 
             results.append(test_data)
             
@@ -1151,6 +1168,236 @@ def upload_csv_configuration():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/v1/tests/<int:test_id>", methods=['DELETE'])
+def delete_test(test_id):
+    """Delete a test and all associated data"""
+    try:
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+
+        if test.status == 'running':
+            return jsonify({"error": "Cannot delete a running test. Stop it first."}), 400
+
+        # Delete associated data (cascading deletes should handle this if models are set up correctly, 
+        # but explicit deletion is safer)
+        
+        # 1. Delete Channel Configurations
+        ChannelConfiguration.query.filter_by(test_id=test_id).delete()
+        
+        # 2. Delete Chimera Configurations (and cascade to ChimeraChannelConfiguration)
+        chimera_configs = ChimeraConfiguration.query.filter_by(test_id=test_id).all()
+        for cc in chimera_configs:
+            ChimeraChannelConfiguration.query.filter_by(chimera_config_id=cc.id).delete()
+            db.session.delete(cc)
+            
+        # 3. Delete Data (Event Logs, Raw Data) - This might be heavy, consider async or restrictions
+        BlackBoxEventLogData.query.filter_by(test_id=test_id).delete()
+        BlackboxRawData.query.filter_by(test_id=test_id).delete()
+        ChimeraRawData.query.filter_by(test_id=test_id).delete()
+
+        # 4. Clear device active_test_id if pointing to this test (should be cleared on stop, but safety check)
+        devices = Device.query.filter_by(active_test_id=test_id).all()
+        for device in devices:
+            device.active_test_id = None
+            device.logging = False
+
+        # 5. Delete Test
+        db.session.delete(test)
+        db.session.commit()
+
+        return jsonify({"success": True, "message": "Test deleted successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/tests/<int:test_id>/download", methods=['GET'])
+def download_test_data(test_id):
+    """Download test data. Auto-detects available data:
+    - Both GFM and Chimera -> ZIP file with 2 CSVs
+    - Only GFM -> GFM CSV
+    - Only Chimera -> Chimera CSV
+    """
+    try:
+        import io
+        import csv
+        import zipfile
+        from datetime import datetime
+        from flask import send_file
+
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+
+        # 1. Fetch BlackBox Event Log Data
+        bb_events = db.session.query(
+            BlackBoxEventLogData, Device.name
+        ).join(
+            Device, BlackBoxEventLogData.device_id == Device.id
+        ).filter(
+            BlackBoxEventLogData.test_id == test_id
+        ).order_by(BlackBoxEventLogData.timestamp).all()
+
+        # 2. Fetch BlackBox Raw Data
+        bb_raw = db.session.query(
+            BlackboxRawData, Device.name
+        ).join(
+            Device, BlackboxRawData.device_id == Device.id
+        ).filter(
+            BlackboxRawData.test_id == test_id
+        ).order_by(BlackboxRawData.timestamp).all()
+
+        # 3. Fetch Chimera Data
+        chimera_data = db.session.query(
+            ChimeraRawData, Device.name
+        ).join(
+            Device, ChimeraRawData.device_id == Device.id
+        ).filter(
+            ChimeraRawData.test_id == test_id
+        ).order_by(ChimeraRawData.timestamp).all()
+
+        has_bb_events = len(bb_events) > 0
+        has_bb_raw = len(bb_raw) > 0
+        has_chimera = len(chimera_data) > 0
+
+        if not has_bb_events and not has_bb_raw and not has_chimera:
+             return jsonify({"error": "No data found for this test"}), 404
+
+        # Helper to create CSV string
+        def create_csv_string(header, rows, row_mapper):
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(header)
+            for row in rows:
+                writer.writerow(row_mapper(row))
+            return output.getvalue()
+
+        # Mappers
+        def map_bb_event(item):
+            event, device_name = item
+            return [
+                datetime.fromtimestamp(event.timestamp).isoformat(),
+                device_name,
+                event.channel_number,
+                event.channel_name,
+                event.days,
+                event.hours,
+                event.minutes,
+                event.tumbler_volume,
+                event.temperature,
+                event.pressure,
+                event.cumulative_tips,
+                event.volume_this_tip_stp,
+                event.total_volume_stp,
+                event.tips_this_day,
+                event.volume_this_day_stp,
+                event.tips_this_hour,
+                event.volume_this_hour_stp,
+                event.net_volume_per_gram
+            ]
+
+        def map_bb_raw(item):
+            row, device_name = item
+            return [
+                datetime.fromtimestamp(row.timestamp).isoformat() if row.timestamp else '',
+                device_name,
+                row.channel_number,
+                row.tip_number,
+                row.seconds_elapsed,
+                row.temperature,
+                row.pressure
+            ]
+
+        def map_chimera(item):
+            row, device_name = item
+            return [
+                datetime.fromtimestamp(row.timestamp).isoformat(),
+                device_name,
+                row.channel_number,
+                row.gas_name,
+                row.peak_value,
+                row.sensor_number
+            ]
+
+        bb_event_header = [
+            'Timestamp', 'Device', 'Channel', 'Channel Name', 'Days', 'Hours', 'Minutes', 
+            'Tumbler Volume', 'Temperature (C)', 'Pressure (mbar)', 'Cumulative Tips', 
+            'Volume This Tip STP', 'Total Volume STP', 'Tips This Day', 
+            'Volume This Day STP', 'Tips This Hour', 'Volume This Hour STP', 'Net Volume Per Gram'
+        ]
+        
+        bb_raw_header = [
+            'Timestamp', 'Device', 'Channel', 'Tip Number', 'Seconds Elapsed', 'Temperature (C)', 'Pressure (mbar)'
+        ]
+
+        chimera_header = ['Timestamp', 'Device', 'Channel', 'Gas', 'Peak Value', 'Sensor Number']
+
+        # Logic for return
+        # If multiple types exist, ZIP them.
+        # If only one type exists, return single CSV.
+        
+        sources_count = sum([has_bb_events, has_bb_raw, has_chimera])
+
+        if sources_count > 1:
+            # Create ZIP
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                if has_bb_events:
+                    csv_data = create_csv_string(bb_event_header, bb_events, map_bb_event)
+                    zf.writestr(f"{test.name}_gfm_events.csv", csv_data)
+                
+                if has_bb_raw:
+                    csv_data = create_csv_string(bb_raw_header, bb_raw, map_bb_raw)
+                    zf.writestr(f"{test.name}_gfm_raw.csv", csv_data)
+
+                if has_chimera:
+                    csv_data = create_csv_string(chimera_header, chimera_data, map_chimera)
+                    zf.writestr(f"{test.name}_chimera.csv", csv_data)
+            
+            zip_buffer.seek(0)
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f"{test.name}_data.zip"
+            )
+
+        elif has_bb_events:
+            # Return BlackBox Events CSV
+            csv_content = create_csv_string(bb_event_header, bb_events, map_bb_event)
+            return send_file(
+                io.BytesIO(csv_content.encode()),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f"{test.name}_gfm_events.csv"
+            )
+        
+        elif has_bb_raw:
+             # Return BlackBox Raw CSV
+            csv_content = create_csv_string(bb_raw_header, bb_raw, map_bb_raw)
+            return send_file(
+                io.BytesIO(csv_content.encode()),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f"{test.name}_gfm_raw.csv"
+            )
+
+        elif has_chimera:
+             # Return Chimera CSV
+            csv_content = create_csv_string(chimera_header, chimera_data, map_chimera)
+            return send_file(
+                io.BytesIO(csv_content.encode()),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f"{test.name}_chimera.csv"
+            )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 from routes.black_box import black_box_bp

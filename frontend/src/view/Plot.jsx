@@ -399,7 +399,6 @@ function Plot({ initialParams, onNavigate }) {
     };
 
     const columns = useMemo(() => [
-        { accessorKey: 'id', header: 'ID', size: 60 },
         { accessorKey: 'name', header: 'Name', size: 150 },
         { accessorKey: 'description', header: 'Description', size: 200 },
         {
@@ -421,6 +420,12 @@ function Plot({ initialParams, onNavigate }) {
         {
             accessorKey: 'date_created',
             header: 'Created',
+            size: 120,
+            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
+        },
+        {
+            accessorKey: 'date_ended',
+            header: 'Ended',
             size: 120,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
@@ -711,8 +716,8 @@ function Plot({ initialParams, onNavigate }) {
                         <button
                             onClick={() => {
                                 if (initialParams) {
-                                    // Navigated from dashboard, go back to dashboard
-                                    onNavigate('dashboard');
+                                    // Navigated from another view, go back to source
+                                    onNavigate(initialParams.source || 'dashboard');
                                 } else {
                                     // Normal plot view, just close the plot
                                     setShowPlotView(false);
@@ -725,7 +730,7 @@ function Plot({ initialParams, onNavigate }) {
                             }}
                             className="text-gray-600 hover:text-gray-900 flex items-center gap-2 mb-4"
                         >
-                            <span>←</span> {initialParams ? 'Back to Dashboard' : 'Back to Tests'}
+                            <span>←</span> {initialParams ? `Back to ${initialParams.source === 'database' ? 'Database' : 'Dashboard'}` : 'Back to Tests'}
                         </button>
                         <h2 className="text-xl font-bold text-gray-800">{selectedTest.name}</h2>
                         <p className="text-sm text-gray-500 mt-1">Plot Settings</p>

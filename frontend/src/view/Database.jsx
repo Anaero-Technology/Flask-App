@@ -8,8 +8,8 @@ import {
     flexRender,
 } from '@tanstack/react-table';
 
-function Database() {
-    const [activeTable, setActiveTable] = useState('samples');
+const Database = ({ onViewPlot }) => {
+    const [activeTable, setActiveTable] = useState('tests');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [globalFilter, setGlobalFilter] = useState('');
@@ -25,7 +25,7 @@ function Database() {
             let endpoint = '';
             if (activeTable === 'samples') endpoint = '/api/v1/samples';
             else if (activeTable === 'inoculums') endpoint = '/api/v1/inoculum';
-            else if (activeTable === 'tests') endpoint = '/api/v1/tests';
+            else if (activeTable === 'tests') endpoint = '/api/v1/tests?include_devices=true';
 
             const response = await fetch(endpoint);
             const result = await response.json();
@@ -41,7 +41,6 @@ function Database() {
 
     // Define columns for each table type
     const samplesColumns = useMemo(() => [
-        { accessorKey: 'id', header: 'ID', size: 60 },
         { accessorKey: 'sample_name', header: 'Sample Name', size: 150 },
         { accessorKey: 'substrate_source', header: 'Substrate Source', size: 150 },
         { accessorKey: 'description', header: 'Description', size: 200 },
@@ -51,20 +50,20 @@ function Database() {
     ], []);
 
     const inoculumsColumns = useMemo(() => [
-        { accessorKey: 'id', header: 'ID', size: 60 },
+
+        { accessorKey: 'sample_name', header: 'Name', size: 150 },
+        { accessorKey: 'inoculum_source', header: 'Source', size: 200 },
+        { accessorKey: 'inoculum_percent_ts', header: '%TS', size: 80 },
+        { accessorKey: 'inoculum_percent_vs', header: '%VS', size: 80 },
         {
             accessorKey: 'date_created',
             header: 'Date Created',
             size: 120,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
-        { accessorKey: 'inoculum_source', header: 'Source', size: 200 },
-        { accessorKey: 'inoculum_percent_ts', header: '%TS', size: 80 },
-        { accessorKey: 'inoculum_percent_vs', header: '%VS', size: 80 },
     ], []);
 
     const testsColumns = useMemo(() => [
-        { accessorKey: 'id', header: 'ID', size: 60 },
         { accessorKey: 'name', header: 'Name', size: 150 },
         { accessorKey: 'description', header: 'Description', size: 200 },
         {
@@ -75,19 +74,13 @@ function Database() {
                 const status = info.getValue();
                 const colorClass = status === 'running' ? 'bg-green-100 text-green-800' :
                     status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800';
+                        'bg-gray-100 text-gray-800';
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colorClass}`}>
                         {status}
                     </span>
                 );
             }
-        },
-        {
-            accessorKey: 'date_created',
-            header: 'Created',
-            size: 100,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
         {
             accessorKey: 'date_started',
@@ -102,7 +95,83 @@ function Database() {
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
         { accessorKey: 'created_by', header: 'Created By', size: 120 },
-    ], []);
+        {
+            id: 'actions',
+            header: 'Actions',
+            size: 280,
+            cell: info => {
+                const test = info.row.original;
+                const hasDevices = test.devices && test.devices.length > 0;
+
+                return (
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => hasDevices && onViewPlot(test.id, test.devices[0].id, 'database')}
+                            disabled={!hasDevices}
+                            className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            View Plot
+                        </button>
+                        <button
+                            onClick={() => window.open(`/api/v1/tests/${test.id}/download`, '_blank')}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Download
+                        </button>
+                        {test.status === 'running' ? (
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm('Are you sure you want to stop this test?')) {
+                                        try {
+                                            const response = await fetch(`/api/v1/tests/${test.id}/stop`, {
+                                                method: 'POST'
+                                            });
+                                            if (response.ok) {
+                                                fetchData(); // Refresh list
+                                            } else {
+                                                const err = await response.json();
+                                                alert('Failed to stop test: ' + (err.error || 'Unknown error'));
+                                            }
+                                        } catch (error) {
+                                            console.error('Error stopping test:', error);
+                                            alert('Error stopping test');
+                                        }
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+                            >
+                                Stop
+                            </button>
+                        ) : (
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm('Are you sure you want to delete this test? This action cannot be undone.')) {
+                                        try {
+                                            const response = await fetch(`/api/v1/tests/${test.id}`, {
+                                                method: 'DELETE'
+                                            });
+                                            if (response.ok) {
+                                                fetchData(); // Refresh list
+                                            } else {
+                                                const err = await response.json();
+                                                alert('Failed to delete test: ' + err.error);
+                                            }
+                                        } catch (error) {
+                                            console.error('Error deleting test:', error);
+                                            alert('Error deleting test');
+                                        }
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                            >
+                                Delete
+                            </button>
+                        )}
+                    </div>
+                );
+            }
+        }
+    ], [onViewPlot, fetchData]);
 
     const columns = useMemo(() => {
         if (activeTable === 'samples') return samplesColumns;
@@ -133,7 +202,7 @@ function Database() {
 
     return (
         <div className="p-6">
-            <h1 className="text-4xl font-bold text-black pl-6 m-6">Database</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight pl-6 m-6">Database</h1>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
                 {/* Table Selection */}
@@ -141,31 +210,28 @@ function Database() {
                     <div className="flex space-x-4 mb-4">
                         <button
                             onClick={() => setActiveTable('samples')}
-                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${
-                                activeTable === 'samples'
-                                    ? '!border-blue-600 !bg-white !text-black'
-                                    : '!border-gray-300 !bg-gray-100 !text-gray-700'
-                            } hover:!bg-gray-200`}
+                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'samples'
+                                ? '!border-blue-600 !bg-white !text-black'
+                                : '!border-gray-300 !bg-gray-100 !text-gray-700'
+                                } hover:!bg-gray-200`}
                         >
                             Samples
                         </button>
                         <button
                             onClick={() => setActiveTable('inoculums')}
-                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${
-                                activeTable === 'inoculums'
-                                    ? '!border-blue-600 !bg-white !text-black'
-                                    : '!border-gray-300 !bg-gray-100 !text-gray-700'
-                            } hover:!bg-gray-200`}
+                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'inoculums'
+                                ? '!border-blue-600 !bg-white !text-black'
+                                : '!border-gray-300 !bg-gray-100 !text-gray-700'
+                                } hover:!bg-gray-200`}
                         >
                             Inoculum
                         </button>
                         <button
                             onClick={() => setActiveTable('tests')}
-                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${
-                                activeTable === 'tests'
-                                    ? '!border-blue-600 !bg-white !text-black'
-                                    : '!border-gray-300 !bg-gray-100 !text-gray-700'
-                            } hover:!bg-gray-200`}
+                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'tests'
+                                ? '!border-blue-600 !bg-white !text-black'
+                                : '!border-gray-300 !bg-gray-100 !text-gray-700'
+                                } hover:!bg-gray-200`}
                         >
                             Tests
                         </button>
