@@ -1163,5 +1163,41 @@ app.register_blueprint(wifi_bp)
 app.register_blueprint(data_bp)
 app.register_blueprint(sse, url_prefix='/stream')
 
+
+@app.route("/api/v1/system/git-pull", methods=['POST'])
+def git_pull():
+    """Pull latest changes from GitHub repository"""
+    import subprocess
+    import os
+
+    try:
+        # Get the project root directory (parent of backend)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        # Run git pull origin master
+        result = subprocess.run(
+            ['git', 'pull', 'origin', 'master'],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode == 0:
+            return jsonify({
+                "success": True,
+                "message": result.stdout.strip() or "Already up to date"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.stderr.strip() or "Git pull failed"
+            }), 500
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Git pull timed out"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=6000)

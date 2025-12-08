@@ -7,6 +7,8 @@ function Settings() {
   const [selectedNetworkIndex, setSelectedNetworkIndex] = useState(null)
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState({ text: '', type: '' })
+  const [pulling, setPulling] = useState(false)
+  const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -110,6 +112,28 @@ function Settings() {
     if (signalNum >= -60) return '📶'
     if (signalNum >= -70) return '📡'
     return '📡'
+  }
+
+  const pullFromGithub = async () => {
+    setPulling(true)
+    setPullMessage({ text: '', type: '' })
+
+    try {
+      const response = await fetch('/api/v1/system/git-pull', {
+        method: 'POST'
+      })
+      const data = await response.json()
+
+      if (response.ok) {
+        setPullMessage({ text: data.message || 'Successfully pulled from GitHub', type: 'success' })
+      } else {
+        setPullMessage({ text: data.error || 'Failed to pull from GitHub', type: 'error' })
+      }
+    } catch (error) {
+      setPullMessage({ text: 'Error pulling from GitHub: ' + error.message, type: 'error' })
+    } finally {
+      setPulling(false)
+    }
   }
 
   useEffect(() => {
@@ -244,10 +268,32 @@ function Settings() {
           )}
         </div>
 
-        {/* Other Settings Sections Can Go Here */}
+        {/* System Settings */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">General Settings</h2>
-          <p className="text-gray-600">Additional settings coming soon...</p>
+          <h2 className="text-xl font-semibold mb-4">System</h2>
+
+          {/* Pull Message Display */}
+          {pullMessage.text && (
+            <div className={`mb-4 p-3 rounded ${
+              pullMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              <pre className="whitespace-pre-wrap text-sm">{pullMessage.text}</pre>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium">Update Software</h3>
+              <p className="text-sm text-gray-600">Pull latest changes from GitHub repository</p>
+            </div>
+            <button
+              onClick={pullFromGithub}
+              disabled={pulling}
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {pulling ? 'Pulling...' : 'Pull from GitHub'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
