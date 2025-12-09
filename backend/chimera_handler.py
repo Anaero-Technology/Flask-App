@@ -880,7 +880,7 @@ class ChimeraHandler(SerialHandler):
 
                         # Send ipset command to chimera
                         if self.connection and self.connection.is_open:
-                            command = f"ipset {current_ip}:5173\n"
+                            command = f"ipset http://{current_ip}:5173\n"
                             try:
                                 self.connection.write(command.encode())
                                 print(f"[CHIMERA IP MONITOR] Sent: ipset {current_ip}")
