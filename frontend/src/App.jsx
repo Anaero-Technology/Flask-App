@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/Toast'
+import { CalibrationProvider } from './components/CalibrationContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -59,9 +60,11 @@ function App() {
 
   return (
     <ToastProvider>
-      <Layout currentView={currentView} onNavigate={handleNavigate}>
-        {renderView()}
-      </Layout>
+      <CalibrationProvider>
+        <Layout currentView={currentView} onNavigate={handleNavigate}>
+          {renderView()}
+        </Layout>
+      </CalibrationProvider>
     </ToastProvider>
   )
 }

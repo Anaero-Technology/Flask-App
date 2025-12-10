@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Clock, Settings, RefreshCw, Activity, Server, Save, Play } from 'lucide-react';
+import { useCalibration } from './CalibrationContext';
 
 // Calibration Progress Bar Component
 function CalibrationProgressBar({ progress }) {
@@ -55,60 +56,63 @@ function ChimeraConfig({ device }) {
     const [deviceConfig, setDeviceConfig] = useState({});
     const [loading, setLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
-    const [calibrationProgress, setCalibrationProgress] = useState(null);
     const [serviceSequence, setServiceSequence] = useState('111111111111111');
     // Per-channel settings: { 1: { openTime: 1 }, 2: {...}, ... }
     const [channelSettings, setChannelSettings] = useState({});
 
+    // Use global calibration context for SSE updates
+    const { subscribeToDevice, calibrationStates } = useCalibration();
+    // Local state for immediate display while context loads
+    const [localCalibrationProgress, setLocalCalibrationProgress] = useState(null);
+
+    // Use context state if available, otherwise use local state
+    const calibrationProgress = calibrationStates[device.id] || localCalibrationProgress;
+
+    // Fetch calibration state directly on mount for immediate display
     useEffect(() => {
-        fetchDeviceConfig();
-
-        // Set up SSE connection for calibration progress
-        const eventSource = new EventSource(`api/v1/chimera/${device.id}/stream`);
-
-        eventSource.addEventListener('calibration_progress', (event) => {
-            const data = JSON.parse(event.data);
-
-            // Map stage to message
-            let message = '';
-            switch (data.stage) {
-                case 'starting':
-                    message = 'Flushing sensor to get zero value';
-                    break;
-                case 'opening':
-                    message = 'Opening sensor for gas accumulation';
-                    break;
-                case 'info':
-                    message = 'Accumulating gas';
-                    break;
-                case 'reading':
-                    message = 'Reading sensor values';
-                    break;
-                case 'finishing':
-                    message = 'Flushing sensor to finish';
-                    break;
-                default:
-                    message = 'Calibrating...';
+        const fetchCalibrationState = async () => {
+            try {
+                const response = await fetch(`/api/v1/chimera/${device.id}/sensor_info`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.is_calibrating) {
+                        let message = '';
+                        switch (data.is_calibrating.stage) {
+                            case 'starting':
+                                message = 'Flushing sensor to get zero value';
+                                break;
+                            case 'opening':
+                                message = 'Opening sensor for gas accumulation';
+                                break;
+                            case 'info':
+                                message = 'Accumulating gas';
+                                break;
+                            case 'reading':
+                                message = 'Reading sensor values';
+                                break;
+                            case 'finishing':
+                                message = 'Flushing sensor to finish';
+                                break;
+                            default:
+                                message = 'Calibrating...';
+                        }
+                        setLocalCalibrationProgress({
+                            stage: data.is_calibrating.stage,
+                            message: message,
+                            time_ms: data.is_calibrating.time_ms || 0,
+                            startTime: Date.now()
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch calibration state:', err);
             }
-
-            setCalibrationProgress({
-                stage: data.stage,
-                message: message,
-                time_ms: data.time_ms,
-                startTime: Date.now()
-            });
-        });
-
-        // Listen for done calibrate to clear progress
-        eventSource.addEventListener('message', (event) => {
-            if (event.data.includes('done calibrate')) {
-                setTimeout(() => setCalibrationProgress(null), 1000);
-            }
-        });
-
-        return () => {
-            eventSource.close();
         };
+
+        fetchDeviceConfig();
+        fetchCalibrationState();
+        // Subscribe to SSE for this device (handled globally by context)
+        subscribeToDevice(device.id);
     }, [device.id]);
 
     const fetchDeviceConfig = async () => {

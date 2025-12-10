@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard'
 import ActiveTestCard from '../components/ActiveTestCard'
 import TipNotification from '../components/TipNotification'
+import ChimeraConfig from '../components/ChimeraConfig'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
 import { RefreshCw, Server, Activity, CheckCircle, FlaskConical } from 'lucide-react';
@@ -101,6 +102,30 @@ function Dashboard({ onViewPlot }) {
       }))
     )
   }
+
+  const handleCalibrateAction = async (deviceId, sensorNumber, gasPercentage) => {
+    try {
+      const response = await fetch(`/api/v1/chimera/${deviceId}/calibrate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Optional: use a toast here
+          console.log('Calibration started successfully');
+        } else {
+          console.error(`Failed to calibrate: ${data.message}`);
+          alert(`Failed: ${data.message}`);
+        }
+      }
+    } catch (error) {
+      console.error('Calibration error:', error);
+      alert('Calibration failed to start.');
+    }
+  };
 
   useEffect(() => {
     const hasDiscovered = sessionStorage.getItem('discoveryCompleted')
@@ -264,6 +289,7 @@ function Dashboard({ onViewPlot }) {
                     image={device.device_type === "black-box" ? GFM : Chimera}
                     onNameUpdate={handleNameUpdate}
                     onViewPlot={onViewPlot}
+                    onCalibrateAction={handleCalibrateAction}
                   />
                 ))}
               </div>
@@ -334,6 +360,6 @@ function Dashboard({ onViewPlot }) {
       </div>
     </div>
   )
-}
 
+}
 export default Dashboard

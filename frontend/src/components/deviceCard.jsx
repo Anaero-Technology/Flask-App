@@ -1,11 +1,109 @@
 import React, { useState, useEffect } from "react";
 import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart } from 'lucide-react';
+import CalibrationProgressBar from './CalibrationProgressBar';
+import { useCalibration } from './CalibrationContext';
 
 function DeviceCard(props) {
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isCalibrating, setIsCalibrating] = useState(false);
+    const [calibrationSensor, setCalibrationSensor] = useState("");
+    const [calibrationGasPct, setCalibrationGasPct] = useState("");
+    const [availableSensors, setAvailableSensors] = useState([]);
     const [duration, setDuration] = useState("0h 0m 0s");
+
+    // Use global calibration context for persistent state across page navigation
+    const { subscribeToDevice, calibrationStates } = useCalibration();
+    const calibrationProgress = calibrationStates[props.deviceId] || null;
+
+    useEffect(() => {
+        // Always fetch sensor info on mount to check for active calibration
+        if (props.deviceType.startsWith('chimera')) {
+            // Subscribe to SSE via global context (handles calibration progress)
+            subscribeToDevice(props.deviceId);
+
+            fetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // 1. Check active calibration - set UI to calibrating mode if active
+                        if (data.is_calibrating) {
+                            setIsCalibrating(true);
+                        }
+
+                        // 2. Process sensors and history
+                        if (data.sensor_types) {
+                            const sensorsArray = Object.entries(data.sensor_types).map(([num, name]) => {
+                                const lastCalStart = data.calibration_history ? data.calibration_history[num] : null;
+                                let lastCalStr = "";
+                                if (lastCalStart) {
+                                    const date = new Date(lastCalStart);
+                                    // Simple format: "Dec 10, 14:30" or similar
+                                    lastCalStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                }
+
+                                return {
+                                    sensor_number: parseInt(num),
+                                    gas_name: name,
+                                    last_calibrated: lastCalStr
+                                };
+                            });
+                            setAvailableSensors(sensorsArray);
+
+                            // Only set default if not already set
+                            if (!calibrationSensor && sensorsArray.length > 0) {
+                                setCalibrationSensor(sensorsArray[0].sensor_number);
+                            }
+                        }
+                    }
+                })
+                .catch(err => console.error("Failed to fetch sensor info", err));
+        }
+    }, [props.deviceId, props.deviceType, subscribeToDevice]);
+
+    // Track if calibration was ever in progress (to detect completion)
+    const [hadCalibrationProgress, setHadCalibrationProgress] = useState(false);
+
+    // Update isCalibrating based on context state
+    useEffect(() => {
+        if (calibrationProgress) {
+            setIsCalibrating(true);
+            setHadCalibrationProgress(true);
+        }
+    }, [calibrationProgress]);
+
+    // Handle calibration completion - only when progress goes from having a value to null
+    useEffect(() => {
+        if (!calibrationProgress && hadCalibrationProgress) {
+            // Calibration just completed, refresh sensor info
+            setIsCalibrating(false);
+            setHadCalibrationProgress(false);
+            if (props.deviceType.startsWith('chimera')) {
+                fetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.sensor_types) {
+                            const sensorsArray = Object.entries(data.sensor_types).map(([num, name]) => {
+                                const lastCalStart = data.calibration_history ? data.calibration_history[num] : null;
+                                let lastCalStr = "";
+                                if (lastCalStart) {
+                                    const date = new Date(lastCalStart);
+                                    lastCalStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                }
+                                return {
+                                    sensor_number: parseInt(num),
+                                    gas_name: name,
+                                    last_calibrated: lastCalStr
+                                };
+                            });
+                            setAvailableSensors(sensorsArray);
+                        }
+                    });
+            }
+        }
+    }, [calibrationProgress, hadCalibrationProgress, props.deviceId, props.deviceType]);
+
 
     useEffect(() => {
         if (!props.testStartTime) return;
@@ -29,6 +127,21 @@ function DeviceCard(props) {
 
         return () => clearInterval(interval);
     }, [props.testStartTime]);
+
+    const handleCalibrationStart = () => {
+        if (!calibrationSensor || !calibrationGasPct) return;
+
+        const sensor = availableSensors.find(s => s.sensor_number === parseInt(calibrationSensor));
+        const gasName = sensor ? sensor.gas_name : `Sensor ${calibrationSensor}`;
+
+        if (window.confirm(`Are you sure you want to start calibration for ${gasName}?`)) {
+            if (props.onCalibrateAction) {
+                props.onCalibrateAction(props.deviceId, calibrationSensor, calibrationGasPct);
+                // Don't close setIsCalibrating(false) yet - wait for progress
+                setCalibrationGasPct("");
+            }
+        }
+    };
 
     const handleNameSubmit = async () => {
         if (editedName === props.name) {
@@ -101,7 +214,7 @@ function DeviceCard(props) {
                     />
                 </div>
 
-                <div className="flex-1 w-full min-w-0">
+                <div className="flex-1 w-full min-w-0 relative">
                     <div className="flex justify-between items-start">
                         <div className="min-w-0">
                             <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-0.5 truncate">
@@ -147,7 +260,76 @@ function DeviceCard(props) {
                                 <span>View Plot</span>
                             </button>
                         )}
+
+                        {!isCompact && !props.activeTestId && (props.deviceType === 'chimera' || props.deviceType === 'chimera-max') && props.onCalibrateAction && (
+                            isCalibrating ? (
+                                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                                    {calibrationProgress ? (
+                                        <div className="w-88 absolute bottom-0 right-0">
+                                            <CalibrationProgressBar progress={calibrationProgress} />
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <select
+                                                className="text-sm border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500 py-1 pl-2 pr-8"
+                                                value={calibrationSensor}
+                                                onChange={(e) => setCalibrationSensor(e.target.value)}
+                                            >
+                                                {availableSensors.length > 0 ? (
+                                                    availableSensors.map(s => (
+                                                        <option key={s.sensor_number} value={s.sensor_number}>
+                                                            {s.gas_name || `Sensor ${s.sensor_number}`}
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    [1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                                                        <option key={n} value={n}>Sensor {n}</option>
+                                                    ))
+                                                )}
+                                            </select>
+
+                                            <div className="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-2 py-1">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    className="w-12 text-sm bg-transparent border-none focus:ring-0 p-0 text-right"
+                                                    value={calibrationGasPct}
+                                                    onChange={(e) => setCalibrationGasPct(e.target.value)}
+                                                />
+                                                <span className="text-sm text-gray-500">%</span>
+                                            </div>
+
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={handleCalibrationStart}
+                                                    disabled={!calibrationSensor || !calibrationGasPct}
+                                                    className="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 text-sm font-medium transition-colors shadow-sm"
+                                                >
+                                                    Start
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsCalibrating(false)}
+                                                    className="px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors shadow-sm"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsCalibrating(true)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-orange-600 transition-all shadow-sm shrink-0"
+                                >
+                                    <Settings size={16} />
+                                    <span>Calibrate</span>
+                                </button>
+                            )
+                        )}
                     </div>
+
+
                     <div className={`flex flex-wrap items-center gap-2 ${isCompact ? 'mt-2' : 'mt-6'}`}>
                         <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${props.logging
                             ? 'bg-green-100 text-green-700'
