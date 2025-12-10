@@ -201,8 +201,8 @@ const Database = ({ onViewPlot }) => {
     });
 
     return (
-        <div className="p-6">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight pl-6 m-6">Database</h1>
+        <div className="space-y-4">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Database</h1>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
                 {/* Table Selection */}

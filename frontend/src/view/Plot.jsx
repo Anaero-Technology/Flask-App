@@ -1069,9 +1069,9 @@ function Plot({ initialParams, onNavigate }) {
     }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Data Visualization</h1>
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Data Visualization</h1>
                 <div className="flex gap-4">
                     <input
                         type="text"
@@ -1132,25 +1132,61 @@ function Plot({ initialParams, onNavigate }) {
                         </div>
 
                         {/* Pagination */}
-                        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-                            <span className="text-sm text-gray-700">
-                                Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                            </span>
-                            <div className="flex gap-2">
+                        <div className="flex items-center justify-between px-4 py-4 border-t border-gray-200">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-700">
+                                    Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+                                    {Math.min(
+                                        (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                                        table.getFilteredRowModel().rows.length
+                                    )}{' '}
+                                    of {table.getFilteredRowModel().rows.length} entries
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => table.setPageIndex(0)}
+                                    disabled={!table.getCanPreviousPage()}
+                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {'<<'}
+                                </button>
                                 <button
                                     onClick={() => table.previousPage()}
                                     disabled={!table.getCanPreviousPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-white transition-colors"
+                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Previous
+                                    {'<'}
                                 </button>
+                                <span className="text-sm text-gray-700">
+                                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                                </span>
                                 <button
                                     onClick={() => table.nextPage()}
                                     disabled={!table.getCanNextPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-white transition-colors"
+                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Next
+                                    {'>'}
                                 </button>
+                                <button
+                                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                                    disabled={!table.getCanNextPage()}
+                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {'>>'}
+                                </button>
+                                <select
+                                    value={table.getState().pagination.pageSize}
+                                    onChange={e => table.setPageSize(Number(e.target.value))}
+                                    className="ml-2 px-2 py-1 border border-gray-300 rounded"
+                                >
+                                    {[10, 20, 50, 100].map(pageSize => (
+                                        <option key={pageSize} value={pageSize}>
+                                            Show {pageSize}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                     </>
