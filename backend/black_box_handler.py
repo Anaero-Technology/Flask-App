@@ -575,16 +575,16 @@ class BlackBoxHandler(SerialHandler):
             result = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}"
             eventData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-            setup = {"names" : [""] * 15,
-                     "inUse" : [False] * 15,
-                     "inoculumOnly" : [False] * 15,
-                     "inoculumMass" : [0.0] * 15,
-                     "sampleMass" : [0.0] * 15,
-                     "tumblerVolume" : [0.0] * 15,
-                     "gasConstants" : [0.0] * 15}
+            setup = {"names" : [""] * 16,
+                     "inUse" : [False] * 16,
+                     "inoculumOnly" : [False] * 16,
+                     "inoculumMass" : [0.0] * 16,
+                     "sampleMass" : [0.0] * 16,
+                     "tumblerVolume" : [0.0] * 16,
+                     "gasConstants" : [0.0] * 16}
 
             #Dicionary to store overall running information for all channels
-            overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "volumeRecirculation" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
+            overall = {"tips" : [0] * 16, "volumeSTP" : [0.0] * 16, "volumeNet" : [0.0] * 16, "volumeRecirculation" : [0.0] * 16, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
 
             hourlyTips = 0
             dailyTips = 0
@@ -594,7 +594,7 @@ class BlackBoxHandler(SerialHandler):
 
             for row in tableData:
                 channel = row.channel_number
-                if channel >= 0 and channel < 15:
+                if channel >= 0 and channel < 16:
                     setup["inUse"][channel] = True
                     setup["names"][channel] = row.notes
                     sample = False
@@ -703,7 +703,7 @@ class BlackBoxHandler(SerialHandler):
                                 if overall["inoculumMass"] != 0:
                                     inoculumAdjust = 0
                                     inoculumCount = 0
-                                    for channel in range(0, 15):
+                                    for channel in range(0, 16):
                                         if setup["inoculumOnly"][channel] and setup["inoculumMass"][channel] != 0:
                                             inoculumAdjust = inoculumAdjust + (overall["volumeSTP"][channel] / setup["inoculumMass"][channel])
                                             inoculumCount = inoculumCount + 1
