@@ -805,9 +805,9 @@ class BlackBoxHandler(SerialHandler):
 
                                     if chimera_handler:
                                         try:
-                                            # Recirculation pumps at 2.5ml/s
-                                            recirculation_duration = int(chimera_channel_config.volume_since_last_recirculation / 2.5)
-                                            recirculation_pump_power = 100
+                                            # Get open time from channel config, use flush time from chimera config
+                                            recirculation_duration = int(chimera_channel_config.open_time_seconds)
+                                            recirculation_pump_power = 50  # percent (could be made configurable)
 
                                             print(f"[DEBUG Recirculation] Calling recirculate_flag(channel={databaseRow.chimera_channel}, duration={recirculation_duration}, pump_power={recirculation_pump_power})")
                                             success, message = chimera_handler.recirculate_flag(
