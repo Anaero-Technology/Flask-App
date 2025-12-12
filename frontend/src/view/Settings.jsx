@@ -9,6 +9,10 @@ function Settings() {
   const [message, setMessage] = useState({ text: '', type: '' })
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
+  const [serialLogInfo, setSerialLogInfo] = useState(null)
+  const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
+  const [downloadingLog, setDownloadingLog] = useState(false)
+  const [clearingLog, setClearingLog] = useState(false)
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -136,9 +140,78 @@ function Settings() {
     }
   }
 
+  const fetchSerialLogInfo = async () => {
+    try {
+      const response = await fetch('/api/v1/system/serial-log/info')
+      const data = await response.json()
+      if (response.ok) {
+        setSerialLogInfo(data)
+      }
+    } catch (error) {
+      console.error('Error fetching serial log info:', error)
+    }
+  }
+
+  const downloadSerialLog = async () => {
+    setDownloadingLog(true)
+    setSerialLogMessage({ text: '', type: '' })
+
+    try {
+      const response = await fetch('/api/v1/system/serial-log')
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'serial_messages.log'
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setSerialLogMessage({ text: 'Serial log downloaded successfully', type: 'success' })
+      } else {
+        const data = await response.json()
+        setSerialLogMessage({ text: data.error || 'Failed to download serial log', type: 'error' })
+      }
+    } catch (error) {
+      setSerialLogMessage({ text: 'Error downloading serial log: ' + error.message, type: 'error' })
+    } finally {
+      setDownloadingLog(false)
+    }
+  }
+
+  const clearSerialLog = async () => {
+    if (!confirm('Are you sure you want to clear the serial log?')) {
+      return
+    }
+
+    setClearingLog(true)
+    setSerialLogMessage({ text: '', type: '' })
+
+    try {
+      const response = await fetch('/api/v1/system/serial-log', {
+        method: 'DELETE'
+      })
+      const data = await response.json()
+
+      if (response.ok) {
+        setSerialLogMessage({ text: 'Serial log cleared successfully', type: 'success' })
+        fetchSerialLogInfo()
+      } else {
+        setSerialLogMessage({ text: data.error || 'Failed to clear serial log', type: 'error' })
+      }
+    } catch (error) {
+      setSerialLogMessage({ text: 'Error clearing serial log: ' + error.message, type: 'error' })
+    } finally {
+      setClearingLog(false)
+    }
+  }
+
   useEffect(() => {
     // Auto-scan on component mount
     scanNetworks()
+    fetchSerialLogInfo()
   }, [])
 
   return (
@@ -293,6 +366,50 @@ function Settings() {
             >
               {pulling ? 'Pulling...' : 'Pull from GitHub'}
             </button>
+          </div>
+        </div>
+
+        {/* Serial Log Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+          <h2 className="text-xl font-semibold mb-4">Serial Communication Log</h2>
+
+          {/* Serial Log Message Display */}
+          {serialLogMessage.text && (
+            <div className={`mb-4 p-3 rounded ${
+              serialLogMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {serialLogMessage.text}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium">Download Serial Log</h3>
+              <p className="text-sm text-gray-600">
+                Download all serial messages received from devices
+                {serialLogInfo && serialLogInfo.exists && (
+                  <span className="ml-2 text-gray-500">
+                    (Current size: {serialLogInfo.size_formatted})
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={clearSerialLog}
+                disabled={clearingLog || !serialLogInfo?.exists}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {clearingLog ? 'Clearing...' : 'Clear Log'}
+              </button>
+              <button
+                onClick={downloadSerialLog}
+                disabled={downloadingLog || !serialLogInfo?.exists}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {downloadingLog ? 'Downloading...' : 'Download Log'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

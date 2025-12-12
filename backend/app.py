@@ -1411,6 +1411,67 @@ app.register_blueprint(data_bp)
 app.register_blueprint(sse, url_prefix='/stream')
 
 
+@app.route("/api/v1/system/serial-log", methods=['GET'])
+def download_serial_log():
+    """Download the serial communication log file"""
+    from flask import send_file
+    from serial_logger import serial_logger
+    import io
+
+    try:
+        if not serial_logger.log_exists():
+            return jsonify({"error": "No serial log data available"}), 404
+
+        return send_file(
+            serial_logger.log_file_path,
+            mimetype='text/plain',
+            as_attachment=True,
+            download_name='serial_messages.log'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/system/serial-log", methods=['DELETE'])
+def clear_serial_log():
+    """Clear the serial communication log file"""
+    from serial_logger import serial_logger
+
+    try:
+        success = serial_logger.clear_log()
+        if success:
+            return jsonify({"success": True, "message": "Serial log cleared"}), 200
+        else:
+            return jsonify({"error": "Failed to clear serial log"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/system/serial-log/info", methods=['GET'])
+def serial_log_info():
+    """Get information about the serial log file"""
+    from serial_logger import serial_logger
+
+    try:
+        size_bytes = serial_logger.get_log_size()
+        # Convert to human-readable format
+        if size_bytes < 1024:
+            size_str = f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            size_str = f"{size_bytes / 1024:.1f} KB"
+        else:
+            size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+
+        return jsonify({
+            "exists": serial_logger.log_exists(),
+            "size_bytes": size_bytes,
+            "size_formatted": size_str,
+            "enabled": serial_logger.enabled
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/v1/system/git-pull", methods=['POST'])
 def git_pull():
     """Pull latest changes from GitHub repository"""

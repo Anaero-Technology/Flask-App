@@ -3,6 +3,7 @@ import threading
 import time
 from typing import Optional, Callable
 import queue
+from serial_logger import serial_logger
 
 
 class SerialHandler:
@@ -153,6 +154,9 @@ class SerialHandler:
     
     def _handle_line(self, line: str):
         """Handle a complete line of data"""
+        # Log the received message
+        serial_logger.log_received(self.port, line)
+
         # Check if line matches any automatic handler prefix
         handled = False
         for prefix, handler in self._automatic_handlers.items():
@@ -160,12 +164,10 @@ class SerialHandler:
                 try:
                     handler(line)
                     handled = True
-                    print(f"{line} not put in queue")
                 except Exception:
                     pass
         # If not handled automatically, add to command response queue
         if not handled:
-            print(f"{repr(line)} put in queue")
             self._command_response_queue.put(line)
     
     def send_command(self, command: str, timeout: float = 5.0) -> Optional[str]:
@@ -184,6 +186,7 @@ class SerialHandler:
         with self._write_lock:
             self.connection.write(f"{command}\n".encode())
             self.connection.flush()
+            serial_logger.log_sent(self.port, command)
 
         # Wait for response
         try:
@@ -196,10 +199,11 @@ class SerialHandler:
         """Send a command without waiting for response"""
         if not self.connection.is_open:
             raise Exception("Device not connected")
-        
+
         with self._write_lock:
             self.connection.write(f"{command}\n".encode())
             self.connection.flush()
+            serial_logger.log_sent(self.port, command)
     
     def get_response(self, timeout: float = 5.0) -> Optional[str]:
         """Get a response from the command response queue"""

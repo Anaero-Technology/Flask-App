@@ -1,0 +1,906 @@
+[2025-12-12 12:47:21.325] [TX] [cu.debug-console] info
+[2025-12-12 12:47:21.332] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:47:21.335] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:47:23.395] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:47:23.400] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:47:23.422] [RX] [cu.usbmodemD0CF132D4F681] done ipset
+[2025-12-12 12:47:26.516] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:47:26.616] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:47:26.715] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:47:26.815] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:47:26.914] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:47:27.020] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.190] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:48:01.289] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.388] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.491] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.590] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.690] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:01.792] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:22.661] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:48:22.668] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:48:22.673] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:48:22.680] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:48:22.684] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:48:22.691] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:48:22.695] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:48:22.703] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:48:36.032] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:48:36.132] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:36.231] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:36.333] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:48:40.586] [TX] [cu.debug-console] info
+[2025-12-12 12:49:10.626] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:49:10.727] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:49:10.827] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:49:10.927] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:49:11.037] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:49:11.138] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:49:21.217] [TX] [cu.debug-console] info
+[2025-12-12 12:49:40.131] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:49:40.138] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:49:40.143] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:49:40.150] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:49:40.154] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:49:40.161] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:49:40.167] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:49:40.173] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:49:58.102] [TX] [cu.debug-console] info
+[2025-12-12 12:49:58.110] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:49:58.114] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:50:00.176] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:50:00.180] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:50:00.202] [RX] [cu.usbmodemD0CF132D4F681] done ipset
+[2025-12-12 12:50:02.180] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:02.187] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:02.194] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:02.199] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:02.204] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:02.210] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:02.216] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:02.221] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:04.221] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:50:04.321] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:04.421] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:04.521] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:23.854] [RX] [cu.usbserial-0001] 0
+[2025-12-12 12:50:23.856] [TX] [cu.debug-console] info
+[2025-12-12 12:50:23.957] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:50:23.981] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:50:23.983] [RX] [cu.usbserial-0001] info 0 none MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:50:26.831] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:50:26.844] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:50:26.860] [RX] [cu.usbserial-0001] info 0 none MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:50:26.860] [TX] [cu.usbserial-0001] setName MyGasflowmeter
+[2025-12-12 12:50:26.904] [RX] [cu.usbserial-0001] done setName
+[2025-12-12 12:50:29.484] [TX] [cu.debug-console] info
+[2025-12-12 12:50:38.798] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:50:38.897] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:39.006] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:39.104] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:39.202] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:39.300] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:48.920] [TX] [cu.debug-console] info
+[2025-12-12 12:50:49.018] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:50:49.019] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:50:49.030] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:50:49.033] [RX] [cu.usbserial-0001] info 0 none MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:50:51.884] [TX] [cu.usbmodemD0CF132D4F681] info
+[2025-12-12 12:50:51.886] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:50:51.887] [RX] [cu.usbmodemD0CF132D4F681] info false none 0 0 chimera-max D2:CF:13:2D:4F:69
+[2025-12-12 12:50:51.902] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:50:51.904] [RX] [cu.usbserial-0001] info 0 none MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:50:51.905] [TX] [cu.usbserial-0001] setName MyGasflowmeter
+[2025-12-12 12:50:51.912] [RX] [cu.usbmodemD0CF132D4F681] done ipset
+[2025-12-12 12:50:51.935] [RX] [cu.usbserial-0001] done setName
+[2025-12-12 12:50:55.909] [TX] [cu.debug-console] info
+[2025-12-12 12:50:57.436] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:50:57.535] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:57.634] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:57.742] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:57.840] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:57.937] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:50:59.453] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:59.465] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:59.472] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:59.476] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:59.482] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:59.487] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:50:59.491] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:50:59.498] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:04.459] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:04.471] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:04.475] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:04.482] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:04.484] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:04.492] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:04.496] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:04.503] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:18.913] [TX] [cu.usbserial-0001] setTime 2025,12,12,12,51,18
+[2025-12-12 12:51:18.926] [RX] [cu.usbserial-0001] done setTime
+[2025-12-12 12:51:18.927] [TX] [cu.usbserial-0001] start /asdf_MyGas_12121251.txt
+[2025-12-12 12:51:19.231] [RX] [cu.usbserial-0001] Setup successfully updated
+[2025-12-12 12:51:19.318] [RX] [cu.usbserial-0001] Start working - awaiting reset
+[2025-12-12 12:51:19.321] [RX] [cu.usbserial-0001] Testing Reset
+[2025-12-12 12:51:19.323] [RX] [cu.usbserial-0001] Sent clear request
+[2025-12-12 12:51:19.324] [RX] [cu.usbserial-0001] Waiting for clear response...
+[2025-12-12 12:51:19.325] [RX] [cu.usbserial-0001] Testing Reset
+[2025-12-12 12:51:19.325] [RX] [cu.usbserial-0001] Waiting for clear response...
+[2025-12-12 12:51:19.490] [RX] [cu.usbserial-0001] Testing Reset
+[2025-12-12 12:51:19.493] [RX] [cu.usbserial-0001] Waiting for clear response...
+[2025-12-12 12:51:19.495] [RX] [cu.usbserial-0001] Sent clear confirmation
+[2025-12-12 12:51:19.601] [RX] [cu.usbserial-0001] Testing Reset
+[2025-12-12 12:51:19.601] [RX] [cu.usbserial-0001] Waiting for clear response...
+[2025-12-12 12:51:19.602] [RX] [cu.usbserial-0001] done start
+[2025-12-12 12:51:22.328] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:22.336] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:22.347] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:22.349] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:22.361] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:22.366] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:22.370] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:51:22.377] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:51:25.102] [RX] [cu.usbserial-0001] tip 1 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:51:25.426] [RX] [cu.usbserial-0001] tip 2 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:51:26.010] [RX] [cu.usbserial-0001] tip 3 2025.12.12.12.51.24 6 6 23.0 1007.3
+[2025-12-12 12:51:34.693] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:51:34.791] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:51:34.900] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:51:34.999] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:51:35.098] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:51:35.207] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:08.880] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:52:08.980] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:09.078] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:09.187] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:09.285] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:09.384] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:42.879] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:52:42.977] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:43.076] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:43.186] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:43.284] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:43.381] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:52:43.481] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:16.975] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:53:17.073] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:17.173] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:17.273] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:17.373] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.178] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:53:51.288] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.387] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.485] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.585] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.682] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:53:51.792] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.303] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:54:25.406] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.505] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.614] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.715] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.807] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:25.913] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:39.616] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:54:39.629] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:54:39.634] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:54:39.640] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:54:39.644] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:54:39.652] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:54:39.655] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:54:39.663] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:54:41.488] [TX] [cu.debug-console] info
+[2025-12-12 12:54:41.590] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:54:41.669] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:54:41.670] [RX] [cu.usbserial-0001] info 1 /asdf_MyGas_12121251.txt MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:54:44.519] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:54:44.597] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:54:44.608] [RX] [cu.usbserial-0001] info 1 /asdf_MyGas_12121251.txt MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:54:44.609] [TX] [cu.usbserial-0001] setName MyGasflowmeter
+[2025-12-12 12:54:44.640] [RX] [cu.usbserial-0001] done setName
+[2025-12-12 12:54:50.420] [RX] [cu.usbserial-0001] tip 9 2025.12.12.12.54.49 211 7 22.7 1007.4
+[2025-12-12 12:54:50.491] [TX] [cu.usbserial-0001] downloadFrom /asdf_MyGas_12121251.txt 4
+[2025-12-12 12:54:50.722] [RX] [cu.usbserial-0001] download start /asdf_MyGas_12121251.txt 240
+[2025-12-12 12:54:50.725] [RX] [cu.usbserial-0001] download 4 2025.12.12.12.54.27 189 7 22.7 1007.3
+[2025-12-12 12:54:50.727] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:50.738] [RX] [cu.usbserial-0001] download 5 2025.12.12.12.54.28 190 6 22.7 1007.3
+[2025-12-12 12:54:50.739] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:50.750] [RX] [cu.usbserial-0001] download 6 2025.12.12.12.54.28 190 5 22.7 1007.3
+[2025-12-12 12:54:50.751] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:50.763] [RX] [cu.usbserial-0001] download 7 2025.12.12.12.54.29 191 4 22.7 1007.3
+[2025-12-12 12:54:50.765] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:50.777] [RX] [cu.usbserial-0001] download 8 2025.12.12.12.54.30 192 4 22.7 1007.3
+[2025-12-12 12:54:50.779] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:50.790] [RX] [cu.usbserial-0001] download 9 2025.12.12.12.54.49 211 7 22.7 1007.4
+[2025-12-12 12:54:50.792] [RX] [cu.usbserial-0001] download stop
+[2025-12-12 12:54:50.793] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:54:59.411] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:54:59.510] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:59.609] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:59.705] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:59.814] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:54:59.914] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:05.032] [RX] [cu.usbserial-0001] tip 10 2025.12.12.12.55.3 225 6 22.5 1007.4
+[2025-12-12 12:55:10.941] [RX] [cu.usbserial-0001] tip 11 2025.12.12.12.55.9 231 5 22.5 1007.3
+[2025-12-12 12:55:13.051] [RX] [cu.usbserial-0001] tip 12 2025.12.12.12.55.11 233 6 22.7 1007.3
+[2025-12-12 12:55:33.489] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:55:33.597] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:33.696] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:33.795] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:33.892] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:33.990] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:55:34.099] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:07.691] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:56:07.790] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:07.889] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:07.986] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:08.094] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:08.193] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:08.289] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:08.392] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:19.380] [TX] [cu.usbserial-0001] files
+[2025-12-12 12:56:19.394] [RX] [cu.usbserial-0001] memory 31902400512 2883584
+[2025-12-12 12:56:19.397] [RX] [cu.usbserial-0001] file start
+[2025-12-12 12:56:19.400] [RX] [cu.usbserial-0001] file setup.txt 26
+[2025-12-12 12:56:19.401] [RX] [cu.usbserial-0001] file name.txt 16
+[2025-12-12 12:56:19.403] [RX] [cu.usbserial-0001] file time.txt 10
+[2025-12-12 12:56:19.404] [RX] [cu.usbserial-0001] file hourlyTips.txt 0
+[2025-12-12 12:56:19.406] [RX] [cu.usbserial-0001] file test.txt 378
+[2025-12-12 12:56:19.408] [RX] [cu.usbserial-0001] file tipcount.txt 2
+[2025-12-12 12:56:19.410] [RX] [cu.usbserial-0001] file test4.txt 1396
+[2025-12-12 12:56:19.412] [RX] [cu.usbserial-0001] file bh.txt 0
+[2025-12-12 12:56:19.412] [RX] [cu.usbserial-0001] file hkj.txt 99
+[2025-12-12 12:56:19.413] [RX] [cu.usbserial-0001] file wowow.txt 766
+[2025-12-12 12:56:19.414] [RX] [cu.usbserial-0001] file test5.txt 0
+[2025-12-12 12:56:19.415] [RX] [cu.usbserial-0001] file testaroo.txt 1139
+[2025-12-12 12:56:19.415] [RX] [cu.usbserial-0001] file testaroo2.txt 215
+[2025-12-12 12:56:19.416] [RX] [cu.usbserial-0001] file zxvdzcvxx.txt 105
+[2025-12-12 12:56:19.428] [RX] [cu.usbserial-0001] file utyi.txt 413
+[2025-12-12 12:56:19.428] [RX] [cu.usbserial-0001] file jkhkn.txt 885
+[2025-12-12 12:56:19.439] [RX] [cu.usbserial-0001] file plo_MyGasflowm_10301338.txt 148
+[2025-12-12 12:56:19.440] [RX] [cu.usbserial-0001] file pkooiki.txt 226
+[2025-12-12 12:56:19.451] [RX] [cu.usbserial-0001] file tat.txt 604
+[2025-12-12 12:56:19.463] [RX] [cu.usbserial-0001] file owoww_MyGasflowm_11141524.txt 1302
+[2025-12-12 12:56:19.466] [RX] [cu.usbserial-0001] file eventMemory.txt 132
+[2025-12-12 12:56:19.480] [RX] [cu.usbserial-0001] file Random2_MyGas_111816.txt 486
+[2025-12-12 12:56:19.482] [RX] [cu.usbserial-0001] file ffa.txt 193
+[2025-12-12 12:56:19.494] [RX] [cu.usbserial-0001] file test54.txt 228
+[2025-12-12 12:56:19.506] [RX] [cu.usbserial-0001] file Test7_MyGasflowm_11141346.txt 0
+[2025-12-12 12:56:19.508] [RX] [cu.usbserial-0001] file klm.txt 0
+[2025-12-12 12:56:19.531] [RX] [cu.usbserial-0001] file RandomTe_MyGas_11181.txt 529
+[2025-12-12 12:56:19.535] [RX] [cu.usbserial-0001] file Test5_MyGas_11191021.txt 1677
+[2025-12-12 12:56:19.547] [RX] [cu.usbserial-0001] file Please_MyGas_1119110.txt 353
+[2025-12-12 12:56:19.560] [RX] [cu.usbserial-0001] file NewTest_MyGas_112114.txt 535
+[2025-12-12 12:56:19.574] [RX] [cu.usbserial-0001] file Work_MyGas_11211431.txt 329
+[2025-12-12 12:56:19.589] [RX] [cu.usbserial-0001] file try_agai_MyGas_11211.txt 280
+[2025-12-12 12:56:19.603] [RX] [cu.usbserial-0001] file test67_MyGas_1124114.txt 938
+[2025-12-12 12:56:19.616] [RX] [cu.usbserial-0001] file testing_MyGas_112510.txt 2447
+[2025-12-12 12:56:19.630] [RX] [cu.usbserial-0001] file plop_MyGas_11251140.txt 2042
+[2025-12-12 12:56:19.644] [RX] [cu.usbserial-0001] file gsdgfggr_MyGas_11251.txt 0
+[2025-12-12 12:56:19.658] [RX] [cu.usbserial-0001] file iuhoj_MyGas_11251307.txt 0
+[2025-12-12 12:56:19.671] [RX] [cu.usbserial-0001] file ouhijuhv_MyGas_11251.txt 0
+[2025-12-12 12:56:19.696] [RX] [cu.usbserial-0001] file phkn_MyGas_11251308.txt 1153
+[2025-12-12 12:56:19.709] [RX] [cu.usbserial-0001] file jkui_MyGas_11251333.txt 593
+[2025-12-12 12:56:19.723] [RX] [cu.usbserial-0001] file safasdfa_MyGas_11251.txt 281
+[2025-12-12 12:56:19.748] [RX] [cu.usbserial-0001] file liyguop_MyGas_112513.txt 550
+[2025-12-12 12:56:19.762] [RX] [cu.usbserial-0001] file etdgrgrd_MyGas_11251.txt 0
+[2025-12-12 12:56:19.788] [RX] [cu.usbserial-0001] file sdf_MyGas_11251408.txt 0
+[2025-12-12 12:56:19.801] [RX] [cu.usbserial-0001] file asb_MyGas_11251408.txt 0
+[2025-12-12 12:56:19.825] [RX] [cu.usbserial-0001] file adsf_MyGas_11251409.txt 0
+[2025-12-12 12:56:19.839] [RX] [cu.usbserial-0001] file adsf_MyGas_11251410.txt 195
+[2025-12-12 12:56:19.865] [RX] [cu.usbserial-0001] file asd_MyGas_11251416.txt 152
+[2025-12-12 12:56:19.890] [RX] [cu.usbserial-0001] file test6767_MyGas_11251.txt 0
+[2025-12-12 12:56:19.904] [RX] [cu.usbserial-0001] file pliii_MyGas_11271415.txt 281
+[2025-12-12 12:56:19.928] [RX] [cu.usbserial-0001] file Test67_MyGas_1128105.txt 245
+[2025-12-12 12:56:19.952] [RX] [cu.usbserial-0001] file pls_MyGas_11281131.txt 0
+[2025-12-12 12:56:19.975] [RX] [cu.usbserial-0001] file oo_MyGas_11281132.txt 190
+[2025-12-12 12:56:20.000] [RX] [cu.usbserial-0001] file test6_MyGas_11281152.txt 0
+[2025-12-12 12:56:20.023] [RX] [cu.usbserial-0001] file testpls_MyGas_112811.txt 0
+[2025-12-12 12:56:20.062] [RX] [cu.usbserial-0001] file test1_MyGas_11281156.txt 114
+[2025-12-12 12:56:20.076] [RX] [cu.usbserial-0001] file fa.txt 0
+[2025-12-12 12:56:20.097] [RX] [cu.usbserial-0001] file wrok.txt 0
+[2025-12-12 12:56:20.129] [RX] [cu.usbserial-0001] file testtt_MyGas_1128133.txt 152
+[2025-12-12 12:56:20.155] [RX] [cu.usbserial-0001] file Test10_MyGas_1128134.txt 0
+[2025-12-12 12:56:20.179] [RX] [cu.usbserial-0001] file testtta.txt 0
+[2025-12-12 12:56:20.201] [RX] [cu.usbserial-0001] file tseaseg.txt 0
+[2025-12-12 12:56:20.234] [RX] [cu.usbserial-0001] file testaab_MyGas_112813.txt 0
+[2025-12-12 12:56:20.257] [RX] [cu.usbserial-0001] file asdfsaf.txt 0
+[2025-12-12 12:56:20.291] [RX] [cu.usbserial-0001] file wowww.txt 0
+[2025-12-12 12:56:20.316] [RX] [cu.usbserial-0001] file tesa.txt 114
+[2025-12-12 12:56:20.350] [RX] [cu.usbserial-0001] file WOWO_MyGas_11281626.txt 77
+[2025-12-12 12:56:20.376] [RX] [cu.usbserial-0001] file gg.txt 749
+[2025-12-12 12:56:20.399] [RX] [cu.usbserial-0001] file ds.txt 1108
+[2025-12-12 12:56:20.422] [RX] [cu.usbserial-0001] file uy.txt 482
+[2025-12-12 12:56:20.457] [RX] [cu.usbserial-0001] file asdflafs_MyGas_12021.txt 237
+[2025-12-12 12:56:20.493] [RX] [cu.usbserial-0001] file opal_MyGas_12021642.txt 300
+[2025-12-12 12:56:20.517] [RX] [cu.usbserial-0001] file asdf.txt 610
+[2025-12-12 12:56:20.551] [RX] [cu.usbserial-0001] file tip_test.txt 1256
+[2025-12-12 12:56:20.587] [RX] [cu.usbserial-0001] file wowww_MyGas_12031037.txt 151
+[2025-12-12 12:56:20.613] [RX] [cu.usbserial-0001] file logg.txt 786
+[2025-12-12 12:56:20.647] [RX] [cu.usbserial-0001] file Test5_MyGas_12031100.txt 116
+[2025-12-12 12:56:20.674] [RX] [cu.usbserial-0001] file asdf_MyGas_12031310.txt 0
+[2025-12-12 12:56:20.708] [RX] [cu.usbserial-0001] file asdfga_MyGas_1203131.txt 0
+[2025-12-12 12:56:20.735] [RX] [cu.usbserial-0001] file aside_MyGas_12031312.txt 0
+[2025-12-12 12:56:20.768] [RX] [cu.usbserial-0001] file BMP_BATC_MyGas_12031.txt 0
+[2025-12-12 12:56:20.812] [RX] [cu.usbserial-0001] file Testas_MyGas_1203134.txt 0
+[2025-12-12 12:56:20.834] [RX] [cu.usbserial-0001] file ski_MyGas_12031351.txt 0
+[2025-12-12 12:56:20.877] [RX] [cu.usbserial-0001] file YIT_MyGas_12031354.txt 0
+[2025-12-12 12:56:20.911] [RX] [cu.usbserial-0001] file test_MyGas_12031412.txt 0
+[2025-12-12 12:56:20.944] [RX] [cu.usbserial-0001] file Test_MyGas_12031416.txt 0
+[2025-12-12 12:56:20.988] [RX] [cu.usbserial-0001] file asdf_MyGas_12031421.txt 0
+[2025-12-12 12:56:21.023] [RX] [cu.usbserial-0001] file jh_MyGas_12031436.txt 0
+[2025-12-12 12:56:21.058] [RX] [cu.usbserial-0001] file test_PLW_MyGas_12031.txt 214
+[2025-12-12 12:56:21.094] [RX] [cu.usbserial-0001] file recirc_t_MyGas_12031.txt 184
+[2025-12-12 12:56:21.138] [RX] [cu.usbserial-0001] file 2Test_MyGas_12041055.txt 0
+[2025-12-12 12:56:21.172] [RX] [cu.usbserial-0001] file ads_MyGas_12041105.txt 145
+[2025-12-12 12:56:21.209] [RX] [cu.usbserial-0001] file kh_MyGas_12041110.txt 0
+[2025-12-12 12:56:21.245] [RX] [cu.usbserial-0001] file as.txt 255
+[2025-12-12 12:56:21.289] [RX] [cu.usbserial-0001] file as_MyGas_12041117.txt 970
+[2025-12-12 12:56:21.333] [RX] [cu.usbserial-0001] file aasa_MyGas_12041155.txt 637
+[2025-12-12 12:56:21.376] [RX] [cu.usbserial-0001] file af_MyGas_12041213.txt 1120
+[2025-12-12 12:56:21.421] [RX] [cu.usbserial-0001] file whatt_MyGas_12041224.txt 254
+[2025-12-12 12:56:21.455] [RX] [cu.usbserial-0001] file asdf_MyGas_12041237.txt 533
+[2025-12-12 12:56:21.499] [RX] [cu.usbserial-0001] file assa_MyGas_12041306.txt 216
+[2025-12-12 12:56:21.541] [RX] [cu.usbserial-0001] file bla_MyGas_12041313.txt 1274
+[2025-12-12 12:56:21.586] [RX] [cu.usbserial-0001] file oa_MyGas_12041318.txt 408
+[2025-12-12 12:56:21.630] [RX] [cu.usbserial-0001] file asdf_MyGas_12041321.txt 148
+[2025-12-12 12:56:21.680] [RX] [cu.usbserial-0001] file sd_MyGas_12041329.txt 0
+[2025-12-12 12:56:21.725] [RX] [cu.usbserial-0001] file asdffa_MyGas_1204133.txt 0
+[2025-12-12 12:56:21.768] [RX] [cu.usbserial-0001] file fsdfa_MyGas_12041354.txt 146
+[2025-12-12 12:56:21.812] [RX] [cu.usbserial-0001] file oiu_MyGas_12041357.txt 0
+[2025-12-12 12:56:21.855] [RX] [cu.usbserial-0001] file asfd_MyGas_12041402.txt 0
+[2025-12-12 12:56:21.911] [RX] [cu.usbserial-0001] file asdfasdf_MyGas_12041.txt 0
+[2025-12-12 12:56:21.954] [RX] [cu.usbserial-0001] file asfd32_MyGas_1204140.txt 631
+[2025-12-12 12:56:22.009] [RX] [cu.usbserial-0001] file testa_MyGas_12051133.txt 152
+[2025-12-12 12:56:22.053] [RX] [cu.usbserial-0001] file Testaroo_MyGas_12051.txt 601
+[2025-12-12 12:56:22.097] [RX] [cu.usbserial-0001] file testa_MyGas_12051205.txt 180
+[2025-12-12 12:56:22.153] [RX] [cu.usbserial-0001] file bllaa_MyGas_12051211.txt 0
+[2025-12-12 12:56:22.198] [RX] [cu.usbserial-0001] file obnj_MyGas_12051217.txt 0
+[2025-12-12 12:56:22.253] [RX] [cu.usbserial-0001] file hg.txt 0
+[2025-12-12 12:56:22.297] [RX] [cu.usbserial-0001] file log_20240115.txt.txt 0
+[2025-12-12 12:56:22.353] [RX] [cu.usbserial-0001] file wow.txt 148
+[2025-12-12 12:56:22.408] [RX] [cu.usbserial-0001] file ig_MyGas_12051342.txt 0
+[2025-12-12 12:56:22.463] [RX] [cu.usbserial-0001] file iyovu_MyGas_12051344.txt 0
+[2025-12-12 12:56:22.508] [RX] [cu.usbserial-0001] file asdf_MyGas_12051345.txt 0
+[2025-12-12 12:56:22.562] [RX] [cu.usbserial-0001] file asdf_MyGas_12051353.txt 0
+[2025-12-12 12:56:22.616] [RX] [cu.usbserial-0001] file sdf.txt 221
+[2025-12-12 12:56:22.672] [RX] [cu.usbserial-0001] file ohg_MyGas_12051355.txt 222
+[2025-12-12 12:56:22.718] [RX] [cu.usbserial-0001] file oj.txt 152
+[2025-12-12 12:56:22.775] [RX] [cu.usbserial-0001] file i.txt 114
+[2025-12-12 12:56:22.830] [RX] [cu.usbserial-0001] file iu_MyGas_12111539.txt 416
+[2025-12-12 12:56:22.886] [RX] [cu.usbserial-0001] file jnlk_MyGas_12111550.txt 310
+[2025-12-12 12:56:22.944] [RX] [cu.usbserial-0001] file asafdsdf_MyGas_12111.txt 0
+[2025-12-12 12:56:23.001] [RX] [cu.usbserial-0001] file asa_MyGas_12111607.txt 283
+[2025-12-12 12:56:23.056] [RX] [cu.usbserial-0001] file plssss_MyGas_1211162.txt 0
+[2025-12-12 12:56:23.111] [RX] [cu.usbserial-0001] file sdwqr_MyGas_12111625.txt 120
+[2025-12-12 12:56:23.166] [RX] [cu.usbserial-0001] file plo_MyGas_12111657.txt 0
+[2025-12-12 12:56:23.234] [RX] [cu.usbserial-0001] file asdf_MyGas_12111700.txt 0
+[2025-12-12 12:56:23.281] [RX] [cu.usbserial-0001] file aaadfasd_MyGas_12111.txt 466
+[2025-12-12 12:56:23.347] [RX] [cu.usbserial-0001] file jul_MyGas_12111717.txt 164
+[2025-12-12 12:56:23.405] [RX] [cu.usbserial-0001] file pls_MyGas_12111749.txt 79
+[2025-12-12 12:56:23.470] [RX] [cu.usbserial-0001] file asdf_MyGas_12121251.txt 475
+[2025-12-12 12:56:23.473] [RX] [cu.usbserial-0001] done files
+[2025-12-12 12:56:29.323] [TX] [cu.usbserial-0001] download /asdf_MyGas_12121251.txt 999999999
+[2025-12-12 12:56:29.708] [RX] [cu.usbserial-0001] download start /asdf_MyGas_12121251.txt 475
+[2025-12-12 12:56:29.711] [RX] [cu.usbserial-0001] download 1 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:56:29.713] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.723] [RX] [cu.usbserial-0001] download 2 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:56:29.725] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.736] [RX] [cu.usbserial-0001] download 3 2025.12.12.12.51.24 6 6 23.0 1007.3
+[2025-12-12 12:56:29.738] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.749] [RX] [cu.usbserial-0001] download 4 2025.12.12.12.54.27 189 7 22.7 1007.3
+[2025-12-12 12:56:29.752] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.762] [RX] [cu.usbserial-0001] download 5 2025.12.12.12.54.28 190 6 22.7 1007.3
+[2025-12-12 12:56:29.765] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.775] [RX] [cu.usbserial-0001] download 6 2025.12.12.12.54.28 190 5 22.7 1007.3
+[2025-12-12 12:56:29.777] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.788] [RX] [cu.usbserial-0001] download 7 2025.12.12.12.54.29 191 4 22.7 1007.3
+[2025-12-12 12:56:29.790] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.801] [RX] [cu.usbserial-0001] download 8 2025.12.12.12.54.30 192 4 22.7 1007.3
+[2025-12-12 12:56:29.803] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.814] [RX] [cu.usbserial-0001] download 9 2025.12.12.12.54.49 211 7 22.7 1007.4
+[2025-12-12 12:56:29.817] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.828] [RX] [cu.usbserial-0001] download 10 2025.12.12.12.55.3 225 6 22.5 1007.4
+[2025-12-12 12:56:29.830] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.841] [RX] [cu.usbserial-0001] download 11 2025.12.12.12.55.9 231 5 22.5 1007.3
+[2025-12-12 12:56:29.844] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:29.855] [RX] [cu.usbserial-0001] download 12 2025.12.12.12.55.11 233 6 22.7 1007.3
+[2025-12-12 12:56:29.857] [RX] [cu.usbserial-0001] download stop
+[2025-12-12 12:56:29.859] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:56:41.702] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:56:41.801] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:41.900] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:41.998] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:42.099] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:42.206] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:56:42.306] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:15.834] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:57:15.936] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:16.036] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:16.138] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:16.232] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:16.336] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:16.440] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:49.777] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:57:49.878] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:49.982] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:50.079] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:50.179] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:50.281] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:57:50.384] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:09.527] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:09.536] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:09.541] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:09.547] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:09.551] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:09.558] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:09.562] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:09.570] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:17.148] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:17.160] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:17.164] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:17.172] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:17.175] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:17.183] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:17.187] [TX] [cu.usbmodemD0CF132D4F681] sensorget
+[2025-12-12 12:58:17.195] [RX] [cu.usbmodemD0CF132D4F681] sensortypes 1 CH4 2 CO2 7 H2S
+[2025-12-12 12:58:18.425] [TX] [cu.debug-console] info
+[2025-12-12 12:58:18.527] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:58:18.605] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:58:18.616] [RX] [cu.usbserial-0001] info 1 /asdf_MyGas_12121251.txt MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:58:21.458] [TX] [cu.usbserial-0001] info
+[2025-12-12 12:58:21.547] [RX] [cu.usbserial-0001] Setup completed sucessfully
+[2025-12-12 12:58:21.548] [RX] [cu.usbserial-0001] info 1 /asdf_MyGas_12121251.txt MyGasflowmeter black-box EC:E3:34:69:6A:A3
+[2025-12-12 12:58:21.548] [TX] [cu.usbserial-0001] setName MyGasflowmeter
+[2025-12-12 12:58:21.580] [RX] [cu.usbserial-0001] done setName
+[2025-12-12 12:58:25.331] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:58:25.439] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:25.539] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:25.550] [RX] [cu.usbserial-0001] tip 60 2025.12.12.12.58.24 426 15 22.7 1007.3
+[2025-12-12 12:58:25.626] [TX] [cu.usbserial-0001] downloadFrom /asdf_MyGas_12121251.txt 13
+[2025-12-12 12:58:25.638] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:25.736] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:25.834] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:25.857] [RX] [cu.usbserial-0001] download start /asdf_MyGas_12121251.txt 1986
+[2025-12-12 12:58:25.859] [RX] [cu.usbserial-0001] download 13 2025.12.12.12.57.17 359 7 22.7 1007.3
+[2025-12-12 12:58:25.861] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.872] [RX] [cu.usbserial-0001] download 14 2025.12.12.12.57.18 360 6 22.7 1007.3
+[2025-12-12 12:58:25.874] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.885] [RX] [cu.usbserial-0001] download 15 2025.12.12.12.57.19 361 5 22.7 1007.3
+[2025-12-12 12:58:25.887] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.898] [RX] [cu.usbserial-0001] download 16 2025.12.12.12.57.20 362 4 22.7 1007.3
+[2025-12-12 12:58:25.901] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.912] [RX] [cu.usbserial-0001] download 17 2025.12.12.12.57.21 363 3 22.7 1007.3
+[2025-12-12 12:58:25.914] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.925] [RX] [cu.usbserial-0001] download 18 2025.12.12.12.57.21 363 3 22.7 1007.3
+[2025-12-12 12:58:25.929] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.939] [RX] [cu.usbserial-0001] download 19 2025.12.12.12.57.22 364 2 22.7 1007.3
+[2025-12-12 12:58:25.942] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.952] [RX] [cu.usbserial-0001] download 20 2025.12.12.12.57.23 365 1 22.7 1007.3
+[2025-12-12 12:58:25.955] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.966] [RX] [cu.usbserial-0001] download 21 2025.12.12.12.57.24 366 15 22.7 1007.4
+[2025-12-12 12:58:25.968] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.979] [RX] [cu.usbserial-0001] download 22 2025.12.12.12.57.25 367 14 22.7 1007.3
+[2025-12-12 12:58:25.981] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:25.992] [RX] [cu.usbserial-0001] download 23 2025.12.12.12.57.26 368 13 22.7 1007.3
+[2025-12-12 12:58:25.994] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.005] [RX] [cu.usbserial-0001] download 24 2025.12.12.12.57.26 368 12 22.7 1007.3
+[2025-12-12 12:58:26.007] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.018] [RX] [cu.usbserial-0001] download 25 2025.12.12.12.57.27 369 11 22.7 1007.3
+[2025-12-12 12:58:26.021] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.032] [RX] [cu.usbserial-0001] download 26 2025.12.12.12.57.27 369 10 22.7 1007.3
+[2025-12-12 12:58:26.034] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.044] [RX] [cu.usbserial-0001] download 27 2025.12.12.12.57.28 370 9 22.7 1007.3
+[2025-12-12 12:58:26.046] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.057] [RX] [cu.usbserial-0001] download 28 2025.12.12.12.57.29 371 8 22.7 1007.4
+[2025-12-12 12:58:26.059] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.070] [RX] [cu.usbserial-0001] download 29 2025.12.12.12.57.31 373 7 22.7 1007.4
+[2025-12-12 12:58:26.072] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.083] [RX] [cu.usbserial-0001] download 30 2025.12.12.12.57.32 374 6 22.7 1007.4
+[2025-12-12 12:58:26.085] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.096] [RX] [cu.usbserial-0001] download 31 2025.12.12.12.57.33 375 5 22.7 1007.4
+[2025-12-12 12:58:26.101] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.112] [RX] [cu.usbserial-0001] download 32 2025.12.12.12.57.34 376 3 22.7 1007.4
+[2025-12-12 12:58:26.114] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.125] [RX] [cu.usbserial-0001] download 33 2025.12.12.12.57.35 377 2 22.7 1007.4
+[2025-12-12 12:58:26.127] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.138] [RX] [cu.usbserial-0001] download 34 2025.12.12.12.57.36 378 1 22.7 1007.4
+[2025-12-12 12:58:26.143] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.154] [RX] [cu.usbserial-0001] download 35 2025.12.12.12.57.38 380 15 22.7 1007.4
+[2025-12-12 12:58:26.155] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.167] [RX] [cu.usbserial-0001] download 36 2025.12.12.12.57.38 380 14 22.7 1007.4
+[2025-12-12 12:58:26.168] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.179] [RX] [cu.usbserial-0001] download 37 2025.12.12.12.57.39 381 13 22.7 1007.4
+[2025-12-12 12:58:26.180] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.190] [RX] [cu.usbserial-0001] download 38 2025.12.12.12.57.39 381 12 22.7 1007.4
+[2025-12-12 12:58:26.192] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.202] [RX] [cu.usbserial-0001] download 39 2025.12.12.12.57.40 382 11 22.7 1007.4
+[2025-12-12 12:58:26.203] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.213] [RX] [cu.usbserial-0001] download 40 2025.12.12.12.57.41 383 10 22.7 1007.4
+[2025-12-12 12:58:26.214] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.224] [RX] [cu.usbserial-0001] download 41 2025.12.12.12.57.42 384 9 22.7 1007.4
+[2025-12-12 12:58:26.225] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.236] [RX] [cu.usbserial-0001] download 42 2025.12.12.12.57.43 385 8 22.7 1007.3
+[2025-12-12 12:58:26.237] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.247] [RX] [cu.usbserial-0001] download 43 2025.12.12.12.57.48 390 7 22.7 1007.4
+[2025-12-12 12:58:26.248] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.258] [RX] [cu.usbserial-0001] download 44 2025.12.12.12.57.49 391 6 22.7 1007.4
+[2025-12-12 12:58:26.260] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.270] [RX] [cu.usbserial-0001] download 45 2025.12.12.12.57.50 392 5 22.7 1007.4
+[2025-12-12 12:58:26.271] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.282] [RX] [cu.usbserial-0001] download 46 2025.12.12.12.57.50 392 4 22.7 1007.4
+[2025-12-12 12:58:26.284] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.295] [RX] [cu.usbserial-0001] download 47 2025.12.12.12.57.51 393 3 22.7 1007.4
+[2025-12-12 12:58:26.296] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.306] [RX] [cu.usbserial-0001] download 48 2025.12.12.12.57.52 394 2 22.7 1007.3
+[2025-12-12 12:58:26.307] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.318] [RX] [cu.usbserial-0001] download 49 2025.12.12.12.57.52 394 2 22.7 1007.3
+[2025-12-12 12:58:26.319] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.329] [RX] [cu.usbserial-0001] download 50 2025.12.12.12.57.53 395 1 22.7 1007.3
+[2025-12-12 12:58:26.330] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.340] [RX] [cu.usbserial-0001] download 51 2025.12.12.12.57.55 397 15 22.7 1007.3
+[2025-12-12 12:58:26.341] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.351] [RX] [cu.usbserial-0001] download 52 2025.12.12.12.57.56 398 14 22.7 1007.3
+[2025-12-12 12:58:26.351] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.362] [RX] [cu.usbserial-0001] download 53 2025.12.12.12.57.57 399 13 22.7 1007.3
+[2025-12-12 12:58:26.362] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.373] [RX] [cu.usbserial-0001] download 54 2025.12.12.12.57.57 399 12 22.7 1007.4
+[2025-12-12 12:58:26.373] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.384] [RX] [cu.usbserial-0001] download 55 2025.12.12.12.57.58 400 11 22.7 1007.4
+[2025-12-12 12:58:26.385] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.395] [RX] [cu.usbserial-0001] download 56 2025.12.12.12.57.59 401 10 22.7 1007.3
+[2025-12-12 12:58:26.396] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.407] [RX] [cu.usbserial-0001] download 57 2025.12.12.12.57.59 401 10 22.7 1007.3
+[2025-12-12 12:58:26.408] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.418] [RX] [cu.usbserial-0001] download 58 2025.12.12.12.58.0 402 9 22.7 1007.3
+[2025-12-12 12:58:26.419] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.429] [RX] [cu.usbserial-0001] download 59 2025.12.12.12.58.1 403 8 22.7 1007.3
+[2025-12-12 12:58:26.431] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:26.441] [RX] [cu.usbserial-0001] download 60 2025.12.12.12.58.24 426 15 22.7 1007.3
+[2025-12-12 12:58:26.442] [RX] [cu.usbserial-0001] download stop
+[2025-12-12 12:58:26.444] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:58:27.227] [RX] [cu.usbserial-0001] tip 61 2025.12.12.12.58.26 428 14 22.7 1007.3
+[2025-12-12 12:58:27.816] [RX] [cu.usbserial-0001] tip 62 2025.12.12.12.58.26 428 13 22.7 1007.3
+[2025-12-12 12:58:28.652] [RX] [cu.usbserial-0001] tip 63 2025.12.12.12.58.27 429 12 22.7 1007.3
+[2025-12-12 12:58:29.233] [RX] [cu.usbserial-0001] tip 64 2025.12.12.12.58.28 430 11 22.7 1007.2
+[2025-12-12 12:58:30.067] [RX] [cu.usbserial-0001] tip 65 2025.12.12.12.58.29 431 10 22.7 1007.3
+[2025-12-12 12:58:30.654] [RX] [cu.usbserial-0001] tip 66 2025.12.12.12.58.29 431 9 22.7 1007.3
+[2025-12-12 12:58:31.489] [RX] [cu.usbserial-0001] tip 67 2025.12.12.12.58.30 432 8 22.7 1007.3
+[2025-12-12 12:58:33.855] [RX] [cu.usbserial-0001] tip 68 2025.12.12.12.58.32 434 7 22.7 1007.3
+[2025-12-12 12:58:34.433] [RX] [cu.usbserial-0001] tip 69 2025.12.12.12.58.33 435 6 22.7 1007.3
+[2025-12-12 12:58:35.018] [RX] [cu.usbserial-0001] tip 70 2025.12.12.12.58.33 435 5 22.7 1007.3
+[2025-12-12 12:58:35.860] [RX] [cu.usbserial-0001] tip 71 2025.12.12.12.58.34 436 4 22.7 1007.3
+[2025-12-12 12:58:59.547] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:58:59.655] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:59.754] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:59.853] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:58:59.952] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:00.059] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:24.568] [TX] [cu.usbserial-0001] files
+[2025-12-12 12:59:24.582] [RX] [cu.usbserial-0001] memory 31902400512 2883584
+[2025-12-12 12:59:24.585] [RX] [cu.usbserial-0001] file start
+[2025-12-12 12:59:24.586] [RX] [cu.usbserial-0001] file setup.txt 26
+[2025-12-12 12:59:24.586] [RX] [cu.usbserial-0001] file name.txt 16
+[2025-12-12 12:59:24.587] [RX] [cu.usbserial-0001] file time.txt 10
+[2025-12-12 12:59:24.588] [RX] [cu.usbserial-0001] file hourlyTips.txt 0
+[2025-12-12 12:59:24.589] [RX] [cu.usbserial-0001] file test.txt 378
+[2025-12-12 12:59:24.589] [RX] [cu.usbserial-0001] file tipcount.txt 2
+[2025-12-12 12:59:24.590] [RX] [cu.usbserial-0001] file test4.txt 1396
+[2025-12-12 12:59:24.591] [RX] [cu.usbserial-0001] file bh.txt 0
+[2025-12-12 12:59:24.592] [RX] [cu.usbserial-0001] file hkj.txt 99
+[2025-12-12 12:59:24.593] [RX] [cu.usbserial-0001] file wowow.txt 766
+[2025-12-12 12:59:24.593] [RX] [cu.usbserial-0001] file test5.txt 0
+[2025-12-12 12:59:24.594] [RX] [cu.usbserial-0001] file testaroo.txt 1139
+[2025-12-12 12:59:24.606] [RX] [cu.usbserial-0001] file testaroo2.txt 215
+[2025-12-12 12:59:24.607] [RX] [cu.usbserial-0001] file zxvdzcvxx.txt 105
+[2025-12-12 12:59:24.608] [RX] [cu.usbserial-0001] file utyi.txt 413
+[2025-12-12 12:59:24.620] [RX] [cu.usbserial-0001] file jkhkn.txt 885
+[2025-12-12 12:59:24.621] [RX] [cu.usbserial-0001] file plo_MyGasflowm_10301338.txt 148
+[2025-12-12 12:59:24.633] [RX] [cu.usbserial-0001] file pkooiki.txt 226
+[2025-12-12 12:59:24.635] [RX] [cu.usbserial-0001] file tat.txt 604
+[2025-12-12 12:59:24.647] [RX] [cu.usbserial-0001] file owoww_MyGasflowm_11141524.txt 1302
+[2025-12-12 12:59:24.660] [RX] [cu.usbserial-0001] file eventMemory.txt 781
+[2025-12-12 12:59:24.662] [RX] [cu.usbserial-0001] file Random2_MyGas_111816.txt 486
+[2025-12-12 12:59:24.674] [RX] [cu.usbserial-0001] file ffa.txt 193
+[2025-12-12 12:59:24.680] [RX] [cu.usbserial-0001] file test54.txt 228
+[2025-12-12 12:59:24.692] [RX] [cu.usbserial-0001] file Test7_MyGasflowm_11141346.txt 0
+[2025-12-12 12:59:24.704] [RX] [cu.usbserial-0001] file klm.txt 0
+[2025-12-12 12:59:24.717] [RX] [cu.usbserial-0001] file RandomTe_MyGas_11181.txt 529
+[2025-12-12 12:59:24.731] [RX] [cu.usbserial-0001] file Test5_MyGas_11191021.txt 1677
+[2025-12-12 12:59:24.734] [RX] [cu.usbserial-0001] file Please_MyGas_1119110.txt 353
+[2025-12-12 12:59:24.747] [RX] [cu.usbserial-0001] file NewTest_MyGas_112114.txt 535
+[2025-12-12 12:59:24.759] [RX] [cu.usbserial-0001] file Work_MyGas_11211431.txt 329
+[2025-12-12 12:59:24.772] [RX] [cu.usbserial-0001] file try_agai_MyGas_11211.txt 280
+[2025-12-12 12:59:24.785] [RX] [cu.usbserial-0001] file test67_MyGas_1124114.txt 938
+[2025-12-12 12:59:24.799] [RX] [cu.usbserial-0001] file testing_MyGas_112510.txt 2447
+[2025-12-12 12:59:24.813] [RX] [cu.usbserial-0001] file plop_MyGas_11251140.txt 2042
+[2025-12-12 12:59:24.826] [RX] [cu.usbserial-0001] file gsdgfggr_MyGas_11251.txt 0
+[2025-12-12 12:59:24.849] [RX] [cu.usbserial-0001] file iuhoj_MyGas_11251307.txt 0
+[2025-12-12 12:59:24.863] [RX] [cu.usbserial-0001] file ouhijuhv_MyGas_11251.txt 0
+[2025-12-12 12:59:24.876] [RX] [cu.usbserial-0001] file phkn_MyGas_11251308.txt 1153
+[2025-12-12 12:59:24.899] [RX] [cu.usbserial-0001] file jkui_MyGas_11251333.txt 593
+[2025-12-12 12:59:24.912] [RX] [cu.usbserial-0001] file safasdfa_MyGas_11251.txt 281
+[2025-12-12 12:59:24.925] [RX] [cu.usbserial-0001] file liyguop_MyGas_112513.txt 550
+[2025-12-12 12:59:24.946] [RX] [cu.usbserial-0001] file etdgrgrd_MyGas_11251.txt 0
+[2025-12-12 12:59:24.970] [RX] [cu.usbserial-0001] file sdf_MyGas_11251408.txt 0
+[2025-12-12 12:59:24.987] [RX] [cu.usbserial-0001] file asb_MyGas_11251408.txt 0
+[2025-12-12 12:59:25.012] [RX] [cu.usbserial-0001] file adsf_MyGas_11251409.txt 0
+[2025-12-12 12:59:25.024] [RX] [cu.usbserial-0001] file adsf_MyGas_11251410.txt 195
+[2025-12-12 12:59:25.046] [RX] [cu.usbserial-0001] file asd_MyGas_11251416.txt 152
+[2025-12-12 12:59:25.070] [RX] [cu.usbserial-0001] file test6767_MyGas_11251.txt 0
+[2025-12-12 12:59:25.093] [RX] [cu.usbserial-0001] file pliii_MyGas_11271415.txt 281
+[2025-12-12 12:59:25.117] [RX] [cu.usbserial-0001] file Test67_MyGas_1128105.txt 245
+[2025-12-12 12:59:25.142] [RX] [cu.usbserial-0001] file pls_MyGas_11281131.txt 0
+[2025-12-12 12:59:25.164] [RX] [cu.usbserial-0001] file oo_MyGas_11281132.txt 190
+[2025-12-12 12:59:25.189] [RX] [cu.usbserial-0001] file test6_MyGas_11281152.txt 0
+[2025-12-12 12:59:25.215] [RX] [cu.usbserial-0001] file testpls_MyGas_112811.txt 0
+[2025-12-12 12:59:25.239] [RX] [cu.usbserial-0001] file test1_MyGas_11281156.txt 114
+[2025-12-12 12:59:25.265] [RX] [cu.usbserial-0001] file fa.txt 0
+[2025-12-12 12:59:25.289] [RX] [cu.usbserial-0001] file wrok.txt 0
+[2025-12-12 12:59:25.315] [RX] [cu.usbserial-0001] file testtt_MyGas_1128133.txt 152
+[2025-12-12 12:59:25.339] [RX] [cu.usbserial-0001] file Test10_MyGas_1128134.txt 0
+[2025-12-12 12:59:25.363] [RX] [cu.usbserial-0001] file testtta.txt 0
+[2025-12-12 12:59:25.397] [RX] [cu.usbserial-0001] file tseaseg.txt 0
+[2025-12-12 12:59:25.421] [RX] [cu.usbserial-0001] file testaab_MyGas_112813.txt 0
+[2025-12-12 12:59:25.445] [RX] [cu.usbserial-0001] file asdfsaf.txt 0
+[2025-12-12 12:59:25.479] [RX] [cu.usbserial-0001] file wowww.txt 0
+[2025-12-12 12:59:25.504] [RX] [cu.usbserial-0001] file tesa.txt 114
+[2025-12-12 12:59:25.529] [RX] [cu.usbserial-0001] file WOWO_MyGas_11281626.txt 77
+[2025-12-12 12:59:25.563] [RX] [cu.usbserial-0001] file gg.txt 749
+[2025-12-12 12:59:25.588] [RX] [cu.usbserial-0001] file ds.txt 1108
+[2025-12-12 12:59:25.614] [RX] [cu.usbserial-0001] file uy.txt 482
+[2025-12-12 12:59:25.648] [RX] [cu.usbserial-0001] file asdflafs_MyGas_12021.txt 237
+[2025-12-12 12:59:25.682] [RX] [cu.usbserial-0001] file opal_MyGas_12021642.txt 300
+[2025-12-12 12:59:25.704] [RX] [cu.usbserial-0001] file asdf.txt 610
+[2025-12-12 12:59:25.743] [RX] [cu.usbserial-0001] file tip_test.txt 1256
+[2025-12-12 12:59:25.767] [RX] [cu.usbserial-0001] file wowww_MyGas_12031037.txt 151
+[2025-12-12 12:59:25.801] [RX] [cu.usbserial-0001] file logg.txt 786
+[2025-12-12 12:59:25.834] [RX] [cu.usbserial-0001] file Test5_MyGas_12031100.txt 116
+[2025-12-12 12:59:25.857] [RX] [cu.usbserial-0001] file asdf_MyGas_12031310.txt 0
+[2025-12-12 12:59:25.892] [RX] [cu.usbserial-0001] file asdfga_MyGas_1203131.txt 0
+[2025-12-12 12:59:25.927] [RX] [cu.usbserial-0001] file aside_MyGas_12031312.txt 0
+[2025-12-12 12:59:25.965] [RX] [cu.usbserial-0001] file BMP_BATC_MyGas_12031.txt 0
+[2025-12-12 12:59:25.988] [RX] [cu.usbserial-0001] file Testas_MyGas_1203134.txt 0
+[2025-12-12 12:59:26.022] [RX] [cu.usbserial-0001] file ski_MyGas_12031351.txt 0
+[2025-12-12 12:59:26.068] [RX] [cu.usbserial-0001] file YIT_MyGas_12031354.txt 0
+[2025-12-12 12:59:26.104] [RX] [cu.usbserial-0001] file test_MyGas_12031412.txt 0
+[2025-12-12 12:59:26.132] [RX] [cu.usbserial-0001] file Test_MyGas_12031416.txt 0
+[2025-12-12 12:59:26.176] [RX] [cu.usbserial-0001] file asdf_MyGas_12031421.txt 0
+[2025-12-12 12:59:26.209] [RX] [cu.usbserial-0001] file jh_MyGas_12031436.txt 0
+[2025-12-12 12:59:26.244] [RX] [cu.usbserial-0001] file test_PLW_MyGas_12031.txt 214
+[2025-12-12 12:59:26.289] [RX] [cu.usbserial-0001] file recirc_t_MyGas_12031.txt 184
+[2025-12-12 12:59:26.325] [RX] [cu.usbserial-0001] file 2Test_MyGas_12041055.txt 0
+[2025-12-12 12:59:26.358] [RX] [cu.usbserial-0001] file ads_MyGas_12041105.txt 145
+[2025-12-12 12:59:26.394] [RX] [cu.usbserial-0001] file kh_MyGas_12041110.txt 0
+[2025-12-12 12:59:26.440] [RX] [cu.usbserial-0001] file as.txt 255
+[2025-12-12 12:59:26.475] [RX] [cu.usbserial-0001] file as_MyGas_12041117.txt 970
+[2025-12-12 12:59:26.521] [RX] [cu.usbserial-0001] file aasa_MyGas_12041155.txt 637
+[2025-12-12 12:59:26.568] [RX] [cu.usbserial-0001] file af_MyGas_12041213.txt 1120
+[2025-12-12 12:59:26.604] [RX] [cu.usbserial-0001] file whatt_MyGas_12041224.txt 254
+[2025-12-12 12:59:26.648] [RX] [cu.usbserial-0001] file asdf_MyGas_12041237.txt 533
+[2025-12-12 12:59:26.682] [RX] [cu.usbserial-0001] file assa_MyGas_12041306.txt 216
+[2025-12-12 12:59:26.728] [RX] [cu.usbserial-0001] file bla_MyGas_12041313.txt 1274
+[2025-12-12 12:59:26.775] [RX] [cu.usbserial-0001] file oa_MyGas_12041318.txt 408
+[2025-12-12 12:59:26.820] [RX] [cu.usbserial-0001] file asdf_MyGas_12041321.txt 148
+[2025-12-12 12:59:26.867] [RX] [cu.usbserial-0001] file sd_MyGas_12041329.txt 0
+[2025-12-12 12:59:26.910] [RX] [cu.usbserial-0001] file asdffa_MyGas_1204133.txt 0
+[2025-12-12 12:59:26.954] [RX] [cu.usbserial-0001] file fsdfa_MyGas_12041354.txt 146
+[2025-12-12 12:59:26.999] [RX] [cu.usbserial-0001] file oiu_MyGas_12041357.txt 0
+[2025-12-12 12:59:27.043] [RX] [cu.usbserial-0001] file asfd_MyGas_12041402.txt 0
+[2025-12-12 12:59:27.097] [RX] [cu.usbserial-0001] file asdfasdf_MyGas_12041.txt 0
+[2025-12-12 12:59:27.142] [RX] [cu.usbserial-0001] file asfd32_MyGas_1204140.txt 631
+[2025-12-12 12:59:27.187] [RX] [cu.usbserial-0001] file testa_MyGas_12051133.txt 152
+[2025-12-12 12:59:27.244] [RX] [cu.usbserial-0001] file Testaroo_MyGas_12051.txt 601
+[2025-12-12 12:59:27.290] [RX] [cu.usbserial-0001] file testa_MyGas_12051205.txt 180
+[2025-12-12 12:59:27.334] [RX] [cu.usbserial-0001] file bllaa_MyGas_12051211.txt 0
+[2025-12-12 12:59:27.389] [RX] [cu.usbserial-0001] file obnj_MyGas_12051217.txt 0
+[2025-12-12 12:59:27.434] [RX] [cu.usbserial-0001] file hg.txt 0
+[2025-12-12 12:59:27.494] [RX] [cu.usbserial-0001] file log_20240115.txt.txt 0
+[2025-12-12 12:59:27.538] [RX] [cu.usbserial-0001] file wow.txt 148
+[2025-12-12 12:59:27.592] [RX] [cu.usbserial-0001] file ig_MyGas_12051342.txt 0
+[2025-12-12 12:59:27.646] [RX] [cu.usbserial-0001] file iyovu_MyGas_12051344.txt 0
+[2025-12-12 12:59:27.692] [RX] [cu.usbserial-0001] file asdf_MyGas_12051345.txt 0
+[2025-12-12 12:59:27.747] [RX] [cu.usbserial-0001] file asdf_MyGas_12051353.txt 0
+[2025-12-12 12:59:27.801] [RX] [cu.usbserial-0001] file sdf.txt 221
+[2025-12-12 12:59:27.857] [RX] [cu.usbserial-0001] file ohg_MyGas_12051355.txt 222
+[2025-12-12 12:59:27.911] [RX] [cu.usbserial-0001] file oj.txt 152
+[2025-12-12 12:59:27.968] [RX] [cu.usbserial-0001] file i.txt 114
+[2025-12-12 12:59:28.024] [RX] [cu.usbserial-0001] file iu_MyGas_12111539.txt 416
+[2025-12-12 12:59:28.071] [RX] [cu.usbserial-0001] file jnlk_MyGas_12111550.txt 310
+[2025-12-12 12:59:28.136] [RX] [cu.usbserial-0001] file asafdsdf_MyGas_12111.txt 0
+[2025-12-12 12:59:28.180] [RX] [cu.usbserial-0001] file asa_MyGas_12111607.txt 283
+[2025-12-12 12:59:28.246] [RX] [cu.usbserial-0001] file plssss_MyGas_1211162.txt 0
+[2025-12-12 12:59:28.305] [RX] [cu.usbserial-0001] file sdwqr_MyGas_12111625.txt 120
+[2025-12-12 12:59:28.359] [RX] [cu.usbserial-0001] file plo_MyGas_12111657.txt 0
+[2025-12-12 12:59:28.415] [RX] [cu.usbserial-0001] file asdf_MyGas_12111700.txt 0
+[2025-12-12 12:59:28.472] [RX] [cu.usbserial-0001] file aaadfasd_MyGas_12111.txt 466
+[2025-12-12 12:59:28.529] [RX] [cu.usbserial-0001] file jul_MyGas_12111717.txt 164
+[2025-12-12 12:59:28.600] [RX] [cu.usbserial-0001] file pls_MyGas_12111749.txt 79
+[2025-12-12 12:59:28.656] [RX] [cu.usbserial-0001] file asdf_MyGas_12121251.txt 2917
+[2025-12-12 12:59:28.659] [RX] [cu.usbserial-0001] done files
+[2025-12-12 12:59:32.069] [TX] [cu.usbserial-0001] download /asdf_MyGas_12121251.txt 999999999
+[2025-12-12 12:59:32.488] [RX] [cu.usbserial-0001] download start /asdf_MyGas_12121251.txt 2917
+[2025-12-12 12:59:32.492] [RX] [cu.usbserial-0001] download 1 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:59:32.494] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.504] [RX] [cu.usbserial-0001] download 2 2025.12.12.12.51.24 6 7 23.0 1007.3
+[2025-12-12 12:59:32.506] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.517] [RX] [cu.usbserial-0001] download 3 2025.12.12.12.51.24 6 6 23.0 1007.3
+[2025-12-12 12:59:32.535] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.545] [RX] [cu.usbserial-0001] download 4 2025.12.12.12.54.27 189 7 22.7 1007.3
+[2025-12-12 12:59:32.546] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.557] [RX] [cu.usbserial-0001] download 5 2025.12.12.12.54.28 190 6 22.7 1007.3
+[2025-12-12 12:59:32.557] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.568] [RX] [cu.usbserial-0001] download 6 2025.12.12.12.54.28 190 5 22.7 1007.3
+[2025-12-12 12:59:32.569] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.579] [RX] [cu.usbserial-0001] download 7 2025.12.12.12.54.29 191 4 22.7 1007.3
+[2025-12-12 12:59:32.580] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.590] [RX] [cu.usbserial-0001] download 8 2025.12.12.12.54.30 192 4 22.7 1007.3
+[2025-12-12 12:59:32.592] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.602] [RX] [cu.usbserial-0001] download 9 2025.12.12.12.54.49 211 7 22.7 1007.4
+[2025-12-12 12:59:32.604] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.614] [RX] [cu.usbserial-0001] download 10 2025.12.12.12.55.3 225 6 22.5 1007.4
+[2025-12-12 12:59:32.615] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.626] [RX] [cu.usbserial-0001] download 11 2025.12.12.12.55.9 231 5 22.5 1007.3
+[2025-12-12 12:59:32.628] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.639] [RX] [cu.usbserial-0001] download 12 2025.12.12.12.55.11 233 6 22.7 1007.3
+[2025-12-12 12:59:32.642] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.653] [RX] [cu.usbserial-0001] download 13 2025.12.12.12.57.17 359 7 22.7 1007.3
+[2025-12-12 12:59:32.655] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.666] [RX] [cu.usbserial-0001] download 14 2025.12.12.12.57.18 360 6 22.7 1007.3
+[2025-12-12 12:59:32.668] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.678] [RX] [cu.usbserial-0001] download 15 2025.12.12.12.57.19 361 5 22.7 1007.3
+[2025-12-12 12:59:32.680] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.691] [RX] [cu.usbserial-0001] download 16 2025.12.12.12.57.20 362 4 22.7 1007.3
+[2025-12-12 12:59:32.693] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.704] [RX] [cu.usbserial-0001] download 17 2025.12.12.12.57.21 363 3 22.7 1007.3
+[2025-12-12 12:59:32.708] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.718] [RX] [cu.usbserial-0001] download 18 2025.12.12.12.57.21 363 3 22.7 1007.3
+[2025-12-12 12:59:32.720] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.734] [RX] [cu.usbserial-0001] download 19 2025.12.12.12.57.22 364 2 22.7 1007.3
+[2025-12-12 12:59:32.736] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.746] [RX] [cu.usbserial-0001] download 20 2025.12.12.12.57.23 365 1 22.7 1007.3
+[2025-12-12 12:59:32.749] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.759] [RX] [cu.usbserial-0001] download 21 2025.12.12.12.57.24 366 15 22.7 1007.4
+[2025-12-12 12:59:32.761] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.772] [RX] [cu.usbserial-0001] download 22 2025.12.12.12.57.25 367 14 22.7 1007.3
+[2025-12-12 12:59:32.775] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.786] [RX] [cu.usbserial-0001] download 23 2025.12.12.12.57.26 368 13 22.7 1007.3
+[2025-12-12 12:59:32.790] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.801] [RX] [cu.usbserial-0001] download 24 2025.12.12.12.57.26 368 12 22.7 1007.3
+[2025-12-12 12:59:32.803] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.814] [RX] [cu.usbserial-0001] download 25 2025.12.12.12.57.27 369 11 22.7 1007.3
+[2025-12-12 12:59:32.817] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.827] [RX] [cu.usbserial-0001] download 26 2025.12.12.12.57.27 369 10 22.7 1007.3
+[2025-12-12 12:59:32.832] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.842] [RX] [cu.usbserial-0001] download 27 2025.12.12.12.57.28 370 9 22.7 1007.3
+[2025-12-12 12:59:32.844] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.855] [RX] [cu.usbserial-0001] download 28 2025.12.12.12.57.29 371 8 22.7 1007.4
+[2025-12-12 12:59:32.856] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.867] [RX] [cu.usbserial-0001] download 29 2025.12.12.12.57.31 373 7 22.7 1007.4
+[2025-12-12 12:59:32.870] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.881] [RX] [cu.usbserial-0001] download 30 2025.12.12.12.57.32 374 6 22.7 1007.4
+[2025-12-12 12:59:32.883] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.894] [RX] [cu.usbserial-0001] download 31 2025.12.12.12.57.33 375 5 22.7 1007.4
+[2025-12-12 12:59:32.896] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.907] [RX] [cu.usbserial-0001] download 32 2025.12.12.12.57.34 376 3 22.7 1007.4
+[2025-12-12 12:59:32.908] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.919] [RX] [cu.usbserial-0001] download 33 2025.12.12.12.57.35 377 2 22.7 1007.4
+[2025-12-12 12:59:32.921] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.931] [RX] [cu.usbserial-0001] download 34 2025.12.12.12.57.36 378 1 22.7 1007.4
+[2025-12-12 12:59:32.933] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.944] [RX] [cu.usbserial-0001] download 35 2025.12.12.12.57.38 380 15 22.7 1007.4
+[2025-12-12 12:59:32.947] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.958] [RX] [cu.usbserial-0001] download 36 2025.12.12.12.57.38 380 14 22.7 1007.4
+[2025-12-12 12:59:32.960] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.971] [RX] [cu.usbserial-0001] download 37 2025.12.12.12.57.39 381 13 22.7 1007.4
+[2025-12-12 12:59:32.972] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.984] [RX] [cu.usbserial-0001] download 38 2025.12.12.12.57.39 381 12 22.7 1007.4
+[2025-12-12 12:59:32.987] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:32.998] [RX] [cu.usbserial-0001] download 39 2025.12.12.12.57.40 382 11 22.7 1007.4
+[2025-12-12 12:59:33.001] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.012] [RX] [cu.usbserial-0001] download 40 2025.12.12.12.57.41 383 10 22.7 1007.4
+[2025-12-12 12:59:33.015] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.025] [RX] [cu.usbserial-0001] download 41 2025.12.12.12.57.42 384 9 22.7 1007.4
+[2025-12-12 12:59:33.028] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.039] [RX] [cu.usbserial-0001] download 42 2025.12.12.12.57.43 385 8 22.7 1007.3
+[2025-12-12 12:59:33.041] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.052] [RX] [cu.usbserial-0001] download 43 2025.12.12.12.57.48 390 7 22.7 1007.4
+[2025-12-12 12:59:33.055] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.066] [RX] [cu.usbserial-0001] download 44 2025.12.12.12.57.49 391 6 22.7 1007.4
+[2025-12-12 12:59:33.068] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.079] [RX] [cu.usbserial-0001] download 45 2025.12.12.12.57.50 392 5 22.7 1007.4
+[2025-12-12 12:59:33.081] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.092] [RX] [cu.usbserial-0001] download 46 2025.12.12.12.57.50 392 4 22.7 1007.4
+[2025-12-12 12:59:33.095] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.106] [RX] [cu.usbserial-0001] download 47 2025.12.12.12.57.51 393 3 22.7 1007.4
+[2025-12-12 12:59:33.108] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.119] [RX] [cu.usbserial-0001] download 48 2025.12.12.12.57.52 394 2 22.7 1007.3
+[2025-12-12 12:59:33.122] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.132] [RX] [cu.usbserial-0001] download 49 2025.12.12.12.57.52 394 2 22.7 1007.3
+[2025-12-12 12:59:33.135] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.146] [RX] [cu.usbserial-0001] download 50 2025.12.12.12.57.53 395 1 22.7 1007.3
+[2025-12-12 12:59:33.151] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.162] [RX] [cu.usbserial-0001] download 51 2025.12.12.12.57.55 397 15 22.7 1007.3
+[2025-12-12 12:59:33.164] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.176] [RX] [cu.usbserial-0001] download 52 2025.12.12.12.57.56 398 14 22.7 1007.3
+[2025-12-12 12:59:33.177] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.187] [RX] [cu.usbserial-0001] download 53 2025.12.12.12.57.57 399 13 22.7 1007.3
+[2025-12-12 12:59:33.188] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.198] [RX] [cu.usbserial-0001] download 54 2025.12.12.12.57.57 399 12 22.7 1007.4
+[2025-12-12 12:59:33.201] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.211] [RX] [cu.usbserial-0001] download 55 2025.12.12.12.57.58 400 11 22.7 1007.4
+[2025-12-12 12:59:33.214] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.225] [RX] [cu.usbserial-0001] download 56 2025.12.12.12.57.59 401 10 22.7 1007.3
+[2025-12-12 12:59:33.227] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.238] [RX] [cu.usbserial-0001] download 57 2025.12.12.12.57.59 401 10 22.7 1007.3
+[2025-12-12 12:59:33.241] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.252] [RX] [cu.usbserial-0001] download 58 2025.12.12.12.58.0 402 9 22.7 1007.3
+[2025-12-12 12:59:33.253] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.265] [RX] [cu.usbserial-0001] download 59 2025.12.12.12.58.1 403 8 22.7 1007.3
+[2025-12-12 12:59:33.267] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.278] [RX] [cu.usbserial-0001] download 60 2025.12.12.12.58.24 426 15 22.7 1007.3
+[2025-12-12 12:59:33.280] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.291] [RX] [cu.usbserial-0001] download 61 2025.12.12.12.58.26 428 14 22.7 1007.3
+[2025-12-12 12:59:33.293] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.303] [RX] [cu.usbserial-0001] download 62 2025.12.12.12.58.26 428 13 22.7 1007.3
+[2025-12-12 12:59:33.305] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.316] [RX] [cu.usbserial-0001] download 63 2025.12.12.12.58.27 429 12 22.7 1007.3
+[2025-12-12 12:59:33.318] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.329] [RX] [cu.usbserial-0001] download 64 2025.12.12.12.58.28 430 11 22.7 1007.2
+[2025-12-12 12:59:33.331] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.342] [RX] [cu.usbserial-0001] download 65 2025.12.12.12.58.29 431 10 22.7 1007.3
+[2025-12-12 12:59:33.344] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.354] [RX] [cu.usbserial-0001] download 66 2025.12.12.12.58.29 431 9 22.7 1007.3
+[2025-12-12 12:59:33.357] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.367] [RX] [cu.usbserial-0001] download 67 2025.12.12.12.58.30 432 8 22.7 1007.3
+[2025-12-12 12:59:33.369] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.379] [RX] [cu.usbserial-0001] download 68 2025.12.12.12.58.32 434 7 22.7 1007.3
+[2025-12-12 12:59:33.382] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.392] [RX] [cu.usbserial-0001] download 69 2025.12.12.12.58.33 435 6 22.7 1007.3
+[2025-12-12 12:59:33.395] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.406] [RX] [cu.usbserial-0001] download 70 2025.12.12.12.58.33 435 5 22.7 1007.3
+[2025-12-12 12:59:33.409] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.420] [RX] [cu.usbserial-0001] download 71 2025.12.12.12.58.34 436 4 22.7 1007.3
+[2025-12-12 12:59:33.422] [RX] [cu.usbserial-0001] download stop
+[2025-12-12 12:59:33.424] [TX] [cu.usbserial-0001] next
+[2025-12-12 12:59:33.842] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 12:59:33.951] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:34.053] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:34.144] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:34.253] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 12:59:34.354] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:07.840] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 13:00:07.939] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:08.037] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:08.146] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:08.244] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:08.341] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:41.927] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 13:00:42.037] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:42.135] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:42.233] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:42.332] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:00:42.430] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:16.185] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 13:01:16.283] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:16.383] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:16.480] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:16.581] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:16.689] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.205] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 13:01:50.303] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.413] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.511] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.609] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.707] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:01:50.814] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:02:00.610] [TX] [cu.usbserial-0001] stop
+[2025-12-12 13:02:00.633] [RX] [cu.usbserial-0001] Setup successfully updated
+[2025-12-12 13:02:00.642] [RX] [cu.usbserial-0001] done stop
+[2025-12-12 13:02:00.643] [RX] [cu.usbserial-0001] memory 31902400512 2883584
+[2025-12-12 13:02:24.445] [RX] [cu.usbmodemD0CF132D4F681] done clearssids
+[2025-12-12 13:02:24.545] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:02:24.644] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:02:24.743] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:02:24.840] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
+[2025-12-12 13:02:24.948] [RX] [cu.usbmodemD0CF132D4F681] done ssidadd
