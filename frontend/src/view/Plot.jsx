@@ -108,14 +108,12 @@ function Plot({ initialParams, onNavigate }) {
             if (firstItem.hasOwnProperty('pressure')) options.push({ value: 'pressure', label: 'Pressure (mbar)' });
 
             // Event Log specific
-            if (firstItem.hasOwnProperty('tumbler_volume')) options.push({ value: 'tumbler_volume', label: 'Tumbler Volume' });
-            if (firstItem.hasOwnProperty('cumulative_tips')) options.push({ value: 'cumulative_tips', label: 'Cumulative Tips' });
-            if (firstItem.hasOwnProperty('total_volume_stp')) options.push({ value: 'total_volume_stp', label: 'Total Volume STP' });
-            if (firstItem.hasOwnProperty('net_volume_per_gram')) options.push({ value: 'net_volume_per_gram', label: 'Net Volume/Gram' });
-            if (firstItem.hasOwnProperty('volume_this_hour_stp')) options.push({ value: 'volume_this_hour_stp', label: 'Volume/Hour STP' });
+            if (firstItem.hasOwnProperty('cumulative_tips')) options.push({ value: 'cumulative_tips', label: 'Cumulative Tips (tips)' });
+            if (firstItem.hasOwnProperty('total_volume_stp')) options.push({ value: 'total_volume_stp', label: 'Total Volume STP (mL)' });
+            if (firstItem.hasOwnProperty('net_volume_per_gram')) options.push({ value: 'net_volume_per_gram', label: 'Net Volume/Gram (mL/g)' });
 
             // Raw specific
-            if (firstItem.hasOwnProperty('tip_number')) options.push({ value: 'tip_number', label: 'Tip Number' });
+            if (firstItem.hasOwnProperty('tip_number')) options.push({ value: 'tip_number', label: 'Tip Number (tips)' });
 
             return options;
         }
@@ -124,8 +122,8 @@ function Plot({ initialParams, onNavigate }) {
         return [
             { value: 'temperature', label: 'Temperature (°C)' },
             { value: 'pressure', label: 'Pressure (mbar)' },
-            { value: 'cumulative_tips', label: 'Cumulative Tips' },
-            { value: 'total_volume_stp', label: 'Total Volume STP' }
+            { value: 'cumulative_tips', label: 'Cumulative Tips (tips)' },
+            { value: 'total_volume_stp', label: 'Total Volume STP (mL)' }
         ];
     }, [devices, selectedDeviceId, plotData]);
 
@@ -190,10 +188,10 @@ function Plot({ initialParams, onNavigate }) {
                     return typeof val === 'number' ? val.toFixed(2) : '-';
                 }
             },
-            { accessorKey: 'cumulative_tips', header: 'Tips' },
+            { accessorKey: 'cumulative_tips', header: 'Tips (tips)' },
             {
                 accessorKey: 'total_volume_stp',
-                header: 'Vol STP',
+                header: 'Vol STP (mL)',
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(4) : '-';
@@ -201,16 +199,7 @@ function Plot({ initialParams, onNavigate }) {
             },
             {
                 accessorKey: 'net_volume_per_gram',
-                header: 'Net Vol/g',
-                cell: info => {
-                    const val = info.getValue();
-                    return typeof val === 'number' ? val.toFixed(4) : '-';
-                }
-            },
-            { accessorKey: 'tumbler_volume', header: 'Tumbler Vol' },
-            {
-                accessorKey: 'volume_this_hour_stp',
-                header: 'Vol/Hour STP',
+                header: 'Net Vol/g (mL/g)',
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(4) : '-';
@@ -642,10 +631,17 @@ function Plot({ initialParams, onNavigate }) {
     const plotlyLayout = useMemo(() => {
         const device = devices.find(d => d.id === selectedDeviceId);
 
+        // Axis title styling
+        const axisTitleFont = {
+            family: 'Arial, sans-serif',
+            size: 14,
+            color: '#374151'
+        };
+
         // Base Layout
         const layout = {
             autosize: true,
-            margin: { l: 60, r: 20, t: 40, b: 50 },
+            margin: { l: 40, r: 15, t: 20, b: 50 },
             legend: { orientation: 'h', y: -0.15 },
             hovermode: 'closest',
             dragmode: 'lasso', // Enable lasso selection
@@ -654,12 +650,19 @@ function Plot({ initialParams, onNavigate }) {
         // Chimera Layout
         if (device && device.device_type.includes('chimera')) {
             // Dynamic X-axis title based on mode
-            let xAxisTitle = 'Time';
-            if (xAxisMode === 'day') xAxisTitle = 'Time (Days Elapsed)';
-            else if (xAxisMode === 'hour') xAxisTitle = 'Time (Hours Elapsed)';
-            else if (xAxisMode === 'minute') xAxisTitle = 'Time (Minutes Elapsed)';
+            let xAxisTitle = 'Time (Date/Time)';
+            if (xAxisMode === 'day') xAxisTitle = 'Elapsed Time (days)';
+            else if (xAxisMode === 'hour') xAxisTitle = 'Elapsed Time (hours)';
+            else if (xAxisMode === 'minute') xAxisTitle = 'Elapsed Time (minutes)';
 
-            layout.xaxis = { title: xAxisTitle };
+            layout.xaxis = {
+                title: {
+                    text: xAxisTitle,
+                    font: axisTitleFont,
+                    standoff: 10
+                },
+                tickfont: { size: 11 }
+            };
 
             // Determine unit based on selected gas (if in gas mode) or generally
             let unit = 'Concentration (%)';
@@ -667,7 +670,7 @@ function Plot({ initialParams, onNavigate }) {
 
             if (groupingMode === 'gas') {
                 if (selectedGas && (selectedGas.includes('NH3') || selectedGas.includes('H2S') || selectedGas.toLowerCase().includes('ppm'))) {
-                    unit = 'Concentration (PPM)';
+                    unit = 'Concentration (ppm)';
                     isPPM = true;
                 }
             } else {
@@ -678,7 +681,12 @@ function Plot({ initialParams, onNavigate }) {
             }
 
             layout.yaxis = {
-                title: unit,
+                title: {
+                    text: unit,
+                    font: axisTitleFont,
+                    standoff: 5
+                },
+                tickfont: { size: 11 },
                 rangemode: 'nonnegative'
             };
 
@@ -688,17 +696,33 @@ function Plot({ initialParams, onNavigate }) {
             }
         } else {
             // BlackBox Layout
-            let xTitle = 'Time';
-            if (xAxisMode === 'day') xTitle = 'Time (Days Elapsed)';
-            if (xAxisMode === 'hour') xTitle = 'Time (Hours Elapsed)';
-            if (xAxisMode === 'minute') xTitle = 'Time (Minutes Elapsed)';
+            let xTitle = 'Time (Date/Time)';
+            if (xAxisMode === 'day') xTitle = 'Elapsed Time (days)';
+            if (xAxisMode === 'hour') xTitle = 'Elapsed Time (hours)';
+            if (xAxisMode === 'minute') xTitle = 'Elapsed Time (minutes)';
 
-            layout.xaxis = { title: xTitle };
-            layout.yaxis = { title: getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric };
+            const yLabel = getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric;
+
+            layout.xaxis = {
+                title: {
+                    text: xTitle,
+                    font: axisTitleFont,
+                    standoff: 10
+                },
+                tickfont: { size: 11 }
+            };
+            layout.yaxis = {
+                title: {
+                    text: yLabel,
+                    font: axisTitleFont,
+                    standoff: 5
+                },
+                tickfont: { size: 11 }
+            };
         }
 
         return layout;
-    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode]);
+    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode]);
 
     if (showPlotView && selectedTest) {
         const selectedDevice = devices.find(d => d.id === selectedDeviceId);
@@ -895,7 +919,7 @@ function Plot({ initialParams, onNavigate }) {
                     <div className="flex-1 flex flex-col overflow-hidden">
                         {selectedDevice ? (
                             <>
-                                <div className="bg-white border-b border-gray-200 flex-[2] min-h-0 flex flex-col">
+                                <div className="bg-white border-b border-gray-200 flex-[2.5] min-h-0 flex flex-col">
                                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                                         <div>
                                             <h3 className="text-lg font-bold text-gray-900">
