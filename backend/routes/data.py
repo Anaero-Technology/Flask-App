@@ -67,16 +67,30 @@ def get_device_data(test_id, device_id):
         
         # Apply aggregation if needed (for raw data models)
         if aggregation in ['daily', 'hourly', 'minute'] and model in [ChimeraRawData, BlackboxRawData]:
-            # ... (aggregation logic) ...
             # Get all data first (limit doesn't apply easily before aggregation without subquery)
             results = query.order_by(model.seconds_elapsed.asc()).all()
-            
-            # ... (rest of aggregation logic) ...
-        
+            # Raw data aggregation not implemented yet - returns raw data
+
         elif aggregation in ['daily', 'hourly', 'minute'] and model == BlackBoxEventLogData:
-            # ... (aggregation logic) ...
-            results = query.order_by(model.timestamp.asc()).all()
-            # ...
+            # Aggregate event log data by time period and channel
+            # Group by time period, take the last value in each group (since values are cumulative)
+            all_results = query.order_by(model.timestamp.asc()).all()
+
+            # Group by time period and channel
+            groups = {}
+            for row in all_results:
+                if aggregation == 'daily':
+                    key = (row.channel_number, row.days)
+                elif aggregation == 'hourly':
+                    key = (row.channel_number, row.days, row.hours)
+                else:  # minute
+                    key = (row.channel_number, row.days, row.hours, row.minutes)
+
+                # Keep overwriting - last value wins (since data is ordered by timestamp asc)
+                groups[key] = row
+
+            # Convert back to list, sorted by timestamp
+            results = sorted(groups.values(), key=lambda r: r.timestamp)
                 
         else:
             # Raw data fetch (no aggregation)
