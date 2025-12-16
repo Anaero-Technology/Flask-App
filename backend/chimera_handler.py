@@ -38,6 +38,7 @@ class ChimeraHandler(SerialHandler):
         self.last_known_ssids = set()  # Track SSIDs we've already sent
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
+        self.register_automatic_handler("recirculate ", self._handle_recirculate)  # Note: trailing space to avoid matching "recirculateflag"
         self.register_automatic_handler("connect", self._handle_wifi_connect)
         self.register_automatic_handler("calibration", self._handle_calibration)
         
@@ -160,6 +161,80 @@ class ChimeraHandler(SerialHandler):
             except (ValueError, IndexError) as e:
                 print(f"Failed to parse datapoint: {e}")
                 pass
+
+    def _handle_recirculate(self, line: str):
+        """Process automatic recirculate messages and save to database
+        Format: recirculate [date_time] [seconds_elapsed] [channel_number] [gas_name1] [peak_value1] [gas_name2] [peak_value2]...
+        Up to 8 sensors
+        """
+        parts = line.split()
+        if len(parts) < 6:
+            print(f"[CHIMERA RECIRCULATE] Too few parts: {line}")
+            return
+
+        try:
+            # Parse date format: YYYY.MM.DD.HH.MM.SS
+            try:
+                dt_str = parts[1]
+                dt = datetime.strptime(dt_str, "%Y.%m.%d.%H.%M.%S")
+                timestamp = int(dt.timestamp())
+            except ValueError:
+                print(f"[CHIMERA RECIRCULATE] Failed to parse date format: {parts[1]}")
+                return
+
+            seconds_elapsed = int(parts[2])
+            channel = int(parts[3])
+
+            sensor_data = []
+            sensor_num = 1
+            i = 4  # Start after recirculate, date_time, seconds_elapsed, channel
+
+            # Parse sensors: gas_name followed by peak_value
+            while i + 1 < len(parts):
+                gas_name = parts[i]
+                peak_value = float(parts[i + 1])
+
+                sensor_data.append({
+                    "sensor_number": sensor_num,
+                    "gas_name": gas_name,
+                    "peak_value": peak_value
+                })
+                sensor_num += 1
+                i += 2
+
+            print(f"[CHIMERA RECIRCULATE] Channel {channel} - {len(sensor_data)} sensors")
+
+            # Save to database if test_id is set
+            if self.test_id and self.app and hasattr(self, 'id'):
+                try:
+                    with self.app.app_context():
+                        from database.models import ChimeraRawData, db
+
+                        for sensor in sensor_data:
+                            raw_data = ChimeraRawData(
+                                test_id=self.test_id,
+                                device_id=self.id,
+                                channel_number=channel,
+                                timestamp=timestamp,
+                                seconds_elapsed=seconds_elapsed,
+                                sensor_number=sensor["sensor_number"],
+                                gas_name=sensor["gas_name"],
+                                peak_value=sensor["peak_value"],
+                                peak_parts=json.dumps([])
+                            )
+                            db.session.add(raw_data)
+
+                        db.session.commit()
+                        print(f"[CHIMERA RECIRCULATE] Saved {len(sensor_data)} sensor readings to database")
+                except Exception as e:
+                    print(f"[CHIMERA RECIRCULATE] Failed to save to database: {e}")
+                    try:
+                        db.session.rollback()
+                    except:
+                        pass
+
+        except (ValueError, IndexError) as e:
+            print(f"[CHIMERA RECIRCULATE] Failed to parse: {e} - Line: {line}")
 
     def _handle_calibration(self, line: str):
         """Process automatic calibration messages and send SSE updates"""
