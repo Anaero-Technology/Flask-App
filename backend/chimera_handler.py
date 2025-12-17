@@ -18,9 +18,10 @@ class ChimeraHandler(SerialHandler):
         self.mac_address = None
         self.is_logging = False
         self.current_channel = 0
+        self.current_status = 'idle'  # 'idle', 'flushing', 'reading'
         self.seconds_elapsed = 0
-        self.open_time_ms = 0
-        self.flush_time_ms = 0
+        self.channel_times_ms = [0] * 15  # Open/read times for channels 0-14
+        self.flush_time_ms = 0  # Flush time (channel 15)
         self.service_sequence = "111111111111111"  # 15 channels
         self.recirculation_mode = 0  # 0=disabled, 1=automatic, 2=manual
         self.recirculation_days = 1
@@ -41,6 +42,7 @@ class ChimeraHandler(SerialHandler):
         self.register_automatic_handler("recirculate ", self._handle_recirculate)  # Note: trailing space to avoid matching "recirculateflag"
         self.register_automatic_handler("connect", self._handle_wifi_connect)
         self.register_automatic_handler("calibration", self._handle_calibration)
+        self.register_automatic_handler("valve", self._handle_valve)
         
     def connect(self):
         super().connect(self.port)
@@ -266,6 +268,57 @@ class ChimeraHandler(SerialHandler):
             print(f"Failed to parse calibration message: {e}")
             pass
 
+    def _handle_valve(self, line: str):
+        """Process valve status messages to track flushing/reading state
+        Format: valve [0-15] opened/closed latch
+        - Valve 0-14 = channels 1-15 (reading)
+        - Valve 15 = flush valve (flushing)
+        """
+        print(f"[CHIMERA VALVE] Handler triggered with line: {line}")
+        try:
+            parts = line.split()
+            if len(parts) >= 3:
+                valve_num = int(parts[1])
+                state = parts[2]  # 'opened' or 'closed'
+
+                if state == 'opened':
+                    if valve_num == 15:
+                        # Flush valve opened
+                        self.current_status = 'flushing'
+                        print(f"[CHIMERA STATUS] Flushing started")
+                    else:
+                        # Channel valve opened (valve 0-14 = channel 1-15)
+                        self.current_status = 'reading'
+                        self.current_channel = valve_num + 1
+                        print(f"[CHIMERA STATUS] Reading channel {self.current_channel}")
+
+                    # Send SSE notification only when valve opens (new phase starts)
+                    if self.app and hasattr(self, 'id'):
+                        try:
+                            with self.app.app_context():
+                                from flask_sse import sse
+                                sse.publish(
+                                    {
+                                        "device_id": self.id,
+                                        "status": self.current_status,
+                                        "channel": self.current_channel
+                                    },
+                                    type='chimera_status'
+                                )
+                        except Exception as e:
+                            print(f"[CHIMERA STATUS] SSE publish failed: {e}")
+
+                elif state == 'closed':
+                    if valve_num == 15:
+                        # Flush valve closed - will transition to reading
+                        print(f"[CHIMERA STATUS] Flushing completed")
+                    else:
+                        # Channel valve closed
+                        print(f"[CHIMERA STATUS] Channel {valve_num + 1} closed")
+
+        except (ValueError, IndexError) as e:
+            print(f"[CHIMERA STATUS] Failed to parse valve message: {e} - Line: {line}")
+
     def set_name(self, name: str) -> bool:
         self.device_name = name
         return True
@@ -312,6 +365,7 @@ class ChimeraHandler(SerialHandler):
             "device_name": self.device_name,
             "mac_address": self.mac_address,
             "is_logging": self.is_logging,
+            "current_status": self.current_status,
             "current_channel": self.current_channel,
             "seconds_elapsed": self.seconds_elapsed,
             "port": self.port,
@@ -481,30 +535,35 @@ class ChimeraHandler(SerialHandler):
             return False, f"Unexpected response: {response}"
     
     def get_timing(self) -> Tuple[bool, Dict, str]:
-        """Get open and flush timing"""
+        """Get open and flush timing for all channels
+
+        Response format: timing [ch0] [ch1] ... [ch14] [flush]
+        - Channels 0-14: individual open/read times in ms
+        - Channel 15 (flush): flush time in ms
+        """
         response = self.send_command("timingget")
-        
+
         if response and response.startswith("timing "):
             try:
                 parts = response.split()
-                if len(parts) == 3:
-                    self.open_time_ms = int(parts[1])
-                    self.flush_time_ms = int(parts[2])
+                if len(parts) == 17:  # "timing" + 15 channel times + 1 flush time
+                    self.channel_times_ms = [int(parts[i]) for i in range(1, 16)]
+                    self.flush_time_ms = int(parts[16])
                     return True, {
-                        "open_time_ms": self.open_time_ms,
+                        "channel_times_ms": self.channel_times_ms,
                         "flush_time_ms": self.flush_time_ms
                     }, "Timing retrieved successfully"
             except (ValueError, IndexError):
                 return False, {}, "Failed to parse timing"
-        
+
         return False, {}, f"Unexpected response: {response}"
     
-    def set_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
-        """Set open and flush timing"""
+    def set_all_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
+        """Set open and flush timing for all channels"""
         response = self.send_command(f"timingset {open_time_ms} {flush_time_ms}")
-        
+
         if response == "done timeset":
-            self.open_time_ms = open_time_ms
+            self.channel_times_ms = [open_time_ms] * 15
             self.flush_time_ms = flush_time_ms
             return True, "Timing set successfully"
         elif response == "failed timingset nofiles":

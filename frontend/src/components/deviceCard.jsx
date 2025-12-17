@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart } from 'lucide-react';
+import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart, Wind, Activity } from 'lucide-react';
 import CalibrationProgressBar from './CalibrationProgressBar';
-import { useCalibration } from './CalibrationContext';
+import { useCalibration } from './ChimeraContext';
 
 function DeviceCard(props) {
     const [isEditingName, setIsEditingName] = useState(false);
@@ -12,10 +12,43 @@ function DeviceCard(props) {
     const [calibrationGasPct, setCalibrationGasPct] = useState("");
     const [availableSensors, setAvailableSensors] = useState([]);
     const [duration, setDuration] = useState("0h 0m 0s");
+    const [borderProgress, setBorderProgress] = useState(0);
 
     // Use global calibration context for persistent state across page navigation
-    const { subscribeToDevice, calibrationStates } = useCalibration();
+    const { subscribeToDevice, calibrationStates, chimeraStates } = useCalibration();
     const calibrationProgress = calibrationStates[props.deviceId] || null;
+    const chimeraStatus = chimeraStates?.[props.deviceId] || null;
+
+    // Animate border progress based on chimera status timing
+    useEffect(() => {
+        if (!props.logging || !chimeraStatus) {
+            setBorderProgress(0);
+            return;
+        }
+
+        const { phaseStartTime, phaseDuration } = chimeraStatus;
+        if (!phaseStartTime || !phaseDuration) return;
+
+        let interval = null;
+
+        const updateProgress = () => {
+            const elapsed = Date.now() - phaseStartTime;
+            const progress = Math.min((elapsed / phaseDuration) * 100, 100);
+            setBorderProgress(progress);
+
+            // Stop animation when complete
+            if (progress >= 100 && interval) {
+                clearInterval(interval);
+                interval = null;
+            }
+        };
+
+        updateProgress();
+        interval = setInterval(updateProgress, 16); // ~60fps for smooth animation
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [props.logging, chimeraStatus]);
 
     useEffect(() => {
         // Always fetch sensor info on mount to check for active calibration
@@ -202,9 +235,35 @@ function DeviceCard(props) {
         }
     };
 
+    // Show animated border when chimera is actively logging with status
+    const showStatusBorder = props.logging && chimeraStatus;
+    const isFlushing = chimeraStatus?.status === 'flushing';
+
+    // Calculate border gradient based on progress (fills clockwise from top)
+    // Green for reading, orange for flushing
+    const borderAngle = (borderProgress / 100) * 360;
+    const activeColor = isFlushing ? '#f97316' : '#22c55e'; // orange-500 or green-500
+    const borderGradient = showStatusBorder
+        ? `conic-gradient(from 0deg, ${activeColor} 0deg, ${activeColor} ${borderAngle}deg, #e5e7eb ${borderAngle}deg, #e5e7eb 360deg)`
+        : undefined;
+
     return (
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'}`}>
-            <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
+        <div className="relative">
+            {/* Animated border overlay */}
+            {showStatusBorder && (
+                <div
+                    className="absolute inset-0 rounded-xl pointer-events-none z-10"
+                    style={{
+                        background: borderGradient,
+                        padding: '3px',
+                        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                        maskComposite: 'exclude',
+                        WebkitMaskComposite: 'xor',
+                    }}
+                />
+            )}
+            <div className={`relative bg-white rounded-xl shadow-sm border transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'} ${showStatusBorder ? 'border-transparent' : 'border-gray-200'}`}>
+                <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
                 {/* Image Container */}
                 <div className={`${isCompact ? 'w-16 h-16' : 'w-full sm:w-32 h-32'} bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0`}>
                     <img
@@ -339,6 +398,27 @@ function DeviceCard(props) {
                             {props.logging ? 'Recording' : 'Idle'}
                         </div>
 
+                        {/* Chimera status indicator (flushing/reading + channel) */}
+                        {props.logging && chimeraStatus && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                isFlushing
+                                    ? 'bg-orange-50 text-orange-700 border-orange-100'
+                                    : 'bg-green-50 text-green-700 border-green-100'
+                            }`}>
+                                {isFlushing ? (
+                                    <>
+                                        <Wind size={10} />
+                                        <span>Flushing</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Activity size={10} />
+                                        <span>Ch {chimeraStatus.channel}</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         {props.activeTestName && (
                             <>
                                 <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-100">
@@ -362,6 +442,7 @@ function DeviceCard(props) {
                         )}
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     )

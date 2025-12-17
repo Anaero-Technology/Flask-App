@@ -739,11 +739,12 @@ def start_test(test_id):
             chimera_handler = device_manager.get_device(chimera_device.id)
             if chimera_handler and chimera_config:
                 # 1. Set flush time (convert seconds to milliseconds)
-                # First get current timing to preserve open_time
+                # First get current timing to preserve channel times
                 success, current_timing, _ = chimera_handler.get_timing()
-                current_open_time_ms = current_timing.get('open_time_ms', 600000) if success else 600000
+                channel_times = current_timing.get('channel_times_ms', [600000] * 15) if success else [600000] * 15
+                current_open_time_ms = channel_times[0] if channel_times else 600000
                 flush_time_ms = int(chimera_config.flush_time_seconds * 1000)
-                success, msg = chimera_handler.set_timing(current_open_time_ms, flush_time_ms)
+                success, msg = chimera_handler.set_all_timing(current_open_time_ms, flush_time_ms)
                 print(f"[DEBUG] Chimera timing set: open={current_open_time_ms}ms, flush={flush_time_ms}ms - {msg}")
 
                 # 2. Set service sequence (which channels are in service)

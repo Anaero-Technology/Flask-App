@@ -493,7 +493,7 @@ def set_timing(device_id):
         if open_time_ms is None or flush_time_ms is None:
             return jsonify({"error": "open_time_ms and flush_time_ms are required"}), 400
         
-        success, message = handler.set_timing(open_time_ms, flush_time_ms)
+        success, message = handler.set_all_timing(open_time_ms, flush_time_ms)
         
         return jsonify({
             "success": success,

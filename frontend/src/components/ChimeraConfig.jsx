@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Clock, Settings, RefreshCw, Activity, Server, Save, Play } from 'lucide-react';
-import { useCalibration } from './CalibrationContext';
+import { useCalibration } from './ChimeraContext';
 
 // Calibration Progress Bar Component
 function CalibrationProgressBar({ progress }) {
@@ -134,7 +134,9 @@ function ChimeraConfig({ device }) {
             if (timingResponse.ok) {
                 const timingData = await timingResponse.json();
                 if (timingData.success && timingData.timing) {
-                    config.open_time = timingData.timing.open_time_ms;
+                    const channelTimes = timingData.timing.channel_times_ms || [];
+                    config.open_time = channelTimes[0] || 600000;
+                    config.channel_times_ms = channelTimes;
                     config.flush_time = timingData.timing.flush_time_ms;
                 }
             }

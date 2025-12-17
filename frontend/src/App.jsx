@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/Toast'
-import { CalibrationProvider } from './components/CalibrationContext'
+import { ChimeraProvider } from './components/ChimeraContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -60,11 +60,11 @@ function App() {
 
   return (
     <ToastProvider>
-      <CalibrationProvider>
+      <ChimeraProvider>
         <Layout currentView={currentView} onNavigate={handleNavigate}>
           {renderView()}
         </Layout>
-      </CalibrationProvider>
+      </ChimeraProvider>
     </ToastProvider>
   )
 }
