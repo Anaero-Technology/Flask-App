@@ -131,7 +131,7 @@ class SerialHandler:
         # Connection has stopped - call the disconnect callback
         if self.on_disconnect and callable(self.on_disconnect):
             try:
-                self.on_disconnect(self.port)
+                self.on_disconnect()
             except Exception as e:
                 print(f"Error in disconnect callback: {e}")
       

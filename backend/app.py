@@ -303,7 +303,7 @@ def connect_device():
         # Use device manager to connect (auto-registers if needed)
         result = device_manager.connect(serial_port, device_name)
         
-        if result['success']:
+        if result:
             return jsonify(result), 200
         else:
             return jsonify(result), 400
