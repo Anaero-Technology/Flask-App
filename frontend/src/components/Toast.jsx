@@ -43,7 +43,7 @@ export const ToastProvider = ({ children }) => {
 
 const ToastContainer = ({ toasts, removeToast }) => {
     return (
-        <div className="fixed top-4 right-4 z-50 space-y-2">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-50 space-y-2">
             {toasts.map((toast) => (
                 <Toast key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
             ))}
@@ -80,7 +80,7 @@ const Toast = ({ toast, onClose }) => {
 
     return (
         <div
-            className={`${typeStyles[toast.type]} px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] max-w-md transform transition-all duration-300 ${
+            className={`${typeStyles[toast.type]} px-4 sm:px-6 py-3 sm:py-4 rounded-lg shadow-lg flex items-center gap-3 w-full sm:w-auto sm:min-w-[300px] max-w-md transform transition-all duration-300 ${
                 isExiting ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
             }`}
         >

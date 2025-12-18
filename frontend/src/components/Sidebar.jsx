@@ -12,10 +12,11 @@ import {
   Settings,
   PlusCircle,
   User,
-  Cpu
+  Cpu,
+  X
 } from 'lucide-react';
 
-function Sidebar({ onNavigate, currentView }) {
+function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -55,13 +56,26 @@ function Sidebar({ onNavigate, currentView }) {
   };
 
   return (
-    <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 z-50 shadow-sm">
+    <div className={`
+      w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 z-50 shadow-sm
+      transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      lg:translate-x-0
+    `}>
       {/* Header */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-100">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <img src={logo} className="h-8 w-8 object-contain" alt="Logo" />
           <span className="text-lg font-bold text-gray-900 tracking-tight">Anaero Technology</span>
         </div>
+        {/* Close button for mobile */}
+        <button
+          onClick={onClose}
+          className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          aria-label="Close menu"
+        >
+          <X size={20} className="text-gray-500" />
+        </button>
       </div>
 
       {/* CTA */}

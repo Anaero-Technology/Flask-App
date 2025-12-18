@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-table';
 import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
+import { Settings, X, Maximize2, Minimize2 } from 'lucide-react';
 
 function Plot({ initialParams, onNavigate }) {
     const toast = useToast();
@@ -23,6 +24,8 @@ function Plot({ initialParams, onNavigate }) {
     const [selectedDeviceId, setSelectedDeviceId] = useState(null);
     const [plotData, setPlotData] = useState(null);
     const [fetchingData, setFetchingData] = useState(false);
+    const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+    const [fullscreenGraph, setFullscreenGraph] = useState(false);
 
     // New State for Enhanced Plotting
     const [aggregation, setAggregation] = useState('none'); // 'daily', 'hourly', 'none'
@@ -732,32 +735,132 @@ function Plot({ initialParams, onNavigate }) {
             ? [...new Set(plotData.data.map(d => d.gas_name))].sort()
             : [];
 
-        return (
-            <div className="flex h-screen bg-gray-100 overflow-hidden">
-                {/* Sidebar Settings Panel */}
-                <div className="w-70 bg-white shadow-lg flex flex-col z-10 border-r border-gray-200">
-                    <div className="p-6 border-b border-gray-200">
+        // Fullscreen Graph Modal
+        if (fullscreenGraph) {
+            return (
+                <div className="fixed inset-0 z-50 bg-white flex flex-col">
+                    {/* Fullscreen Header */}
+                    <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200 shrink-0">
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-sm font-bold text-gray-900 truncate">{selectedDevice?.name}</h3>
+                            <p className="text-xs text-gray-500">{selectedTest.name}</p>
+                        </div>
                         <button
-                            onClick={() => {
-                                if (initialParams) {
-                                    // Navigated from another view, go back to source
-                                    onNavigate(initialParams.source || 'dashboard');
-                                } else {
-                                    // Normal plot view, just close the plot
-                                    setShowPlotView(false);
-                                    setSelectedTest(null);
-                                    setTestDetails(null);
-                                    setDevices([]);
-                                    setSelectedDeviceId(null);
-                                    setSelectedPoints([]);
-                                }
-                            }}
-                            className="text-gray-600 hover:text-gray-900 flex items-center gap-2 mb-4"
+                            onClick={() => setFullscreenGraph(false)}
+                            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors ml-2"
                         >
-                            <span>←</span> {initialParams ? `Back to ${initialParams.source === 'database' ? 'Database' : 'Dashboard'}` : 'Back to Tests'}
+                            <Minimize2 size={20} className="text-gray-600" />
                         </button>
-                        <h2 className="text-xl font-bold text-gray-800">{selectedTest.name}</h2>
-                        <p className="text-sm text-gray-500 mt-1">Plot Settings</p>
+                    </div>
+                    {/* Fullscreen Plot */}
+                    <div className="flex-1 p-2">
+                        {plotData && plotData.data && plotData.data.length > 0 ? (
+                            <Plotly
+                                data={plotlyData}
+                                layout={{
+                                    ...plotlyLayout,
+                                    margin: { l: 50, r: 20, t: 10, b: 80 },
+                                    legend: {
+                                        orientation: 'h',
+                                        y: -0.25,
+                                        x: 0.5,
+                                        xanchor: 'center',
+                                        font: { size: 10 }
+                                    }
+                                }}
+                                config={{
+                                    displayModeBar: true,
+                                    displaylogo: false,
+                                }}
+                                useResizeHandler={true}
+                                style={{ width: '100%', height: '100%' }}
+                            />
+                        ) : (
+                            <div className="h-full flex justify-center items-center text-gray-400">
+                                No data available
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col lg:flex-row h-screen bg-gray-100 overflow-hidden">
+                {/* Mobile Header */}
+                <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 shrink-0">
+                    <button
+                        onClick={() => {
+                            if (initialParams) {
+                                onNavigate(initialParams.source || 'dashboard');
+                            } else {
+                                setShowPlotView(false);
+                                setSelectedTest(null);
+                                setTestDetails(null);
+                                setDevices([]);
+                                setSelectedDeviceId(null);
+                                setSelectedPoints([]);
+                            }
+                        }}
+                        className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
+                    >
+                        <span>←</span> Back
+                    </button>
+                    <h2 className="text-lg font-bold text-gray-800 truncate mx-4">{selectedTest.name}</h2>
+                    <button
+                        onClick={() => setSettingsPanelOpen(true)}
+                        className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                    >
+                        <Settings size={20} />
+                    </button>
+                </div>
+
+                {/* Mobile Settings Panel Overlay */}
+                {settingsPanelOpen && (
+                    <div
+                        className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+                        onClick={() => setSettingsPanelOpen(false)}
+                    />
+                )}
+
+                {/* Sidebar Settings Panel */}
+                <div className={`
+                    fixed lg:relative inset-y-0 left-0 z-50 lg:z-10
+                    w-72 lg:w-70 bg-white shadow-lg flex flex-col border-r border-gray-200
+                    transform transition-transform duration-300 ease-in-out
+                    ${settingsPanelOpen ? 'translate-x-0' : '-translate-x-full'}
+                    lg:translate-x-0
+                `}>
+                    <div className="p-4 lg:p-6 border-b border-gray-200">
+                        <div className="flex items-center justify-between lg:block">
+                            <button
+                                onClick={() => {
+                                    if (initialParams) {
+                                        onNavigate(initialParams.source || 'dashboard');
+                                    } else {
+                                        setShowPlotView(false);
+                                        setSelectedTest(null);
+                                        setTestDetails(null);
+                                        setDevices([]);
+                                        setSelectedDeviceId(null);
+                                        setSelectedPoints([]);
+                                    }
+                                }}
+                                className="hidden lg:flex text-gray-600 hover:text-gray-900 items-center gap-2 mb-4"
+                            >
+                                <span>←</span> {initialParams ? `Back to ${initialParams.source === 'database' ? 'Database' : 'Dashboard'}` : 'Back to Tests'}
+                            </button>
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-800">{selectedTest.name}</h2>
+                                <p className="text-sm text-gray-500 mt-1">Plot Settings</p>
+                            </div>
+                            <button
+                                onClick={() => setSettingsPanelOpen(false)}
+                                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                                <X size={20} className="text-gray-500" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="p-6 flex-1 overflow-y-auto space-y-7">
@@ -920,25 +1023,35 @@ function Plot({ initialParams, onNavigate }) {
                         {selectedDevice ? (
                             <>
                                 <div className="bg-white border-b border-gray-200 flex-[2.5] min-h-0 flex flex-col">
-                                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-gray-900">
+                                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate">
                                                 {selectedDevice.name} Data
                                             </h3>
-                                            <p className="text-sm text-gray-500">
-                                                {aggregation === 'none' ? 'No Aggregation' : `Aggregated ${aggregation}`} • {getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric}
+                                            <p className="text-xs sm:text-sm text-gray-500 truncate">
+                                                {aggregation === 'none' ? 'Raw' : aggregation} • {getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => fetchPlotData()}
-                                            disabled={fetchingData}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                            Refresh
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            {/* Fullscreen button - mobile only */}
+                                            <button
+                                                onClick={() => setFullscreenGraph(true)}
+                                                className="lg:hidden p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                title="Fullscreen"
+                                            >
+                                                <Maximize2 size={18} />
+                                            </button>
+                                            <button
+                                                onClick={() => fetchPlotData()}
+                                                disabled={fetchingData}
+                                                className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                                <span className="hidden sm:inline">Refresh</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div className="flex-1 pb-4 px-4 min-h-0">
@@ -985,33 +1098,33 @@ function Plot({ initialParams, onNavigate }) {
 
                                 {/* Selected Data Table */}
                                 <div className="bg-white flex-1 flex flex-col min-h-0">
-                                    <div className="px-6 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                                        <h3 className="text-sm font-bold text-gray-700">Selected Data Points ({selectedPoints.length})</h3>
+                                    <div className="px-4 sm:px-6 py-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                                        <h3 className="text-sm font-bold text-gray-700">Selected Points ({selectedPoints.length})</h3>
                                         {selectedPoints.length > 0 && (
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 flex-wrap">
                                                 <button
                                                     onClick={copySelectedData}
-                                                    className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                                    className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
                                                 >
                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                     </svg>
-                                                    Copy
+                                                    <span className="hidden sm:inline">Copy</span>
                                                 </button>
                                                 <button
                                                     onClick={downloadSelectedData}
-                                                    className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
+                                                    className="px-2 sm:px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
                                                 >
                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                     </svg>
-                                                    Download CSV
+                                                    <span className="hidden sm:inline">CSV</span>
                                                 </button>
                                                 <button
                                                     onClick={() => setSelectedPoints([])}
-                                                    className="px-3 py-1 text-red-600 hover:text-red-800 font-medium text-xs border border-red-300 rounded hover:bg-red-50 transition-colors"
+                                                    className="px-2 sm:px-3 py-1 text-red-600 hover:text-red-800 font-medium text-xs border border-red-300 rounded hover:bg-red-50 transition-colors"
                                                 >
-                                                    Clear Selection
+                                                    Clear
                                                 </button>
                                             </div>
                                         )}
@@ -1094,19 +1207,19 @@ function Plot({ initialParams, onNavigate }) {
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Data Visualization</h1>
-                <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Data Visualization</h1>
+                <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
                     <input
                         type="text"
                         placeholder="Search tests..."
                         value={globalFilter ?? ''}
                         onChange={e => setGlobalFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-64"
+                        className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 sm:flex-none sm:w-64 text-sm sm:text-base"
                     />
                     <button
                         onClick={fetchTests}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base whitespace-nowrap"
                     >
                         Refresh
                     </button>
@@ -1156,58 +1269,56 @@ function Plot({ initialParams, onNavigate }) {
                         </div>
 
                         {/* Pagination */}
-                        <div className="flex items-center justify-between px-4 py-4 border-t border-gray-200">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-700">
-                                    Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-                                    {Math.min(
-                                        (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                                        table.getFilteredRowModel().rows.length
-                                    )}{' '}
-                                    of {table.getFilteredRowModel().rows.length} entries
-                                </span>
+                        <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 sm:py-4 border-t border-gray-200 gap-3">
+                            <div className="text-xs sm:text-sm text-gray-700 text-center sm:text-left">
+                                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+                                {Math.min(
+                                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                                    table.getFilteredRowModel().rows.length
+                                )}{' '}
+                                of {table.getFilteredRowModel().rows.length}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
                                 <button
                                     onClick={() => table.setPageIndex(0)}
                                     disabled={!table.getCanPreviousPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
                                     {'<<'}
                                 </button>
                                 <button
                                     onClick={() => table.previousPage()}
                                     disabled={!table.getCanPreviousPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
                                     {'<'}
                                 </button>
-                                <span className="text-sm text-gray-700">
-                                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                                <span className="text-xs sm:text-sm text-gray-700 px-2">
+                                    {table.getState().pagination.pageIndex + 1}/{table.getPageCount()}
                                 </span>
                                 <button
                                     onClick={() => table.nextPage()}
                                     disabled={!table.getCanNextPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
                                     {'>'}
                                 </button>
                                 <button
                                     onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                                     disabled={!table.getCanNextPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
                                     {'>>'}
                                 </button>
                                 <select
                                     value={table.getState().pagination.pageSize}
                                     onChange={e => table.setPageSize(Number(e.target.value))}
-                                    className="ml-2 px-2 py-1 border border-gray-300 rounded"
+                                    className="ml-1 sm:ml-2 px-1 sm:px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm"
                                 >
                                     {[10, 20, 50, 100].map(pageSize => (
                                         <option key={pageSize} value={pageSize}>
-                                            Show {pageSize}
+                                            {pageSize}
                                         </option>
                                     ))}
                                 </select>

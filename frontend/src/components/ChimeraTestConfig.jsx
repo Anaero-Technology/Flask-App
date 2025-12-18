@@ -154,12 +154,12 @@ function ChimeraTestConfig({
 
                 {/* Channels Grid */}
                 <div className="border rounded-lg border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                    <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel Configuration</h3>
 
                         {/* Bulk Apply */}
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Set all open times:</span>
+                            <span className="text-xs text-gray-500 hidden sm:inline">Set all open times:</span>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="number"
@@ -168,20 +168,21 @@ function ChimeraTestConfig({
                                     value={applyAllOpenTimeValue}
                                     onChange={(e) => setApplyAllOpenTimeValue(e.target.value === '' ? '' : parseInt(e.target.value))}
                                     className="w-14 px-1.5 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="sec"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => applyAllOpenTime(applyAllOpenTimeValue)}
                                     className="px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
                                 >
-                                    Apply
+                                    Apply All
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     <div className="p-3 bg-gray-50/30">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                             {Array.from({ length: 15 }, (_, i) => {
                                 const channelNum = i + 1;
                                 const isEnabled = serviceSequence[i] === '1';

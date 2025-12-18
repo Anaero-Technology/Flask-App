@@ -319,7 +319,7 @@ function BlackBoxTestConfig({
         const channels = Array.from({ length: 15 }, (_, i) => i + 1);
 
         return (
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {channels.map(channelNumber => {
                     const config = getChannelConfig(channelNumber);
                     const isConfigured = config !== null;
@@ -382,7 +382,7 @@ function BlackBoxTestConfig({
             {/* Expandable Content */}
             {isExpanded && (
                 <div className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-7 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-7 gap-6 lg:gap-8">
                         {/* Left side - Channel grid and info */}
                         <div className={showChannelConfig && selectedChannel && selectedChannel.deviceId === device.id ? "lg:col-span-3" : "lg:col-span-7"}>
 
