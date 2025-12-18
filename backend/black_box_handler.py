@@ -575,16 +575,16 @@ class BlackBoxHandler(SerialHandler):
             result = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}"
             eventData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-            setup = {"names" : [""] * 16,
-                     "inUse" : [False] * 16,
-                     "inoculumOnly" : [False] * 16,
-                     "inoculumMass" : [0.0] * 16,
-                     "sampleMass" : [0.0] * 16,
-                     "tumblerVolume" : [0.0] * 16,
-                     "gasConstants" : [0.0] * 16}
+            setup = {"names" : [""] * 15,
+                     "inUse" : [False] * 15,
+                     "inoculumOnly" : [False] * 15,
+                     "inoculumMass" : [0.0] * 15,
+                     "sampleMass" : [0.0] * 15,
+                     "tumblerVolume" : [0.0] * 15,
+                     "gasConstants" : [0.0] * 15}
 
             #Dicionary to store overall running information for all channels
-            overall = {"tips" : [0] * 16, "volumeSTP" : [0.0] * 16, "volumeNet" : [0.0] * 16, "volumeRecirculation" : [0.0] * 16, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
+            overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "volumeRecirculation" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
 
             hourlyTips = 0
             dailyTips = 0
@@ -593,18 +593,18 @@ class BlackBoxHandler(SerialHandler):
             lastTipTime = None
 
             for row in tableData:
-                channel = row.channel_number
-                if channel >= 0 and channel < 16:
-                    setup["inUse"][channel] = True
-                    setup["names"][channel] = row.notes
+                channelIdx = row.channel_number - 1  # DB stores 1-15, convert to 0-14 for array access
+                if channelIdx >= 0 and channelIdx < 15:
+                    setup["inUse"][channelIdx] = True
+                    setup["names"][channelIdx] = row.notes
                     sample = False
-                    setup["tumblerVolume"][channel] = row.tumbler_volume
-                    overall["tips"][channel] = row.tip_count
-                    overall["volumeSTP"][channel] = row.total_stp_volume
-                    overall["volumeNet"][channel] = row.total_net_volume
+                    setup["tumblerVolume"][channelIdx] = row.tumbler_volume
+                    overall["tips"][channelIdx] = row.tip_count
+                    overall["volumeSTP"][channelIdx] = row.total_stp_volume
+                    overall["volumeNet"][channelIdx] = row.total_net_volume
 
                     # Get volume_since_last_recirculation from ChimeraChannelConfiguration if mapped
-                    overall["volumeRecirculation"][channel] = 0.0  # Default
+                    overall["volumeRecirculation"][channelIdx] = 0.0  # Default
                     if row.chimera_channel:
                         from database.models import ChimeraConfiguration, ChimeraChannelConfiguration
                         # Find the chimera config for this test
@@ -615,19 +615,19 @@ class BlackBoxHandler(SerialHandler):
                                 channel_number=row.chimera_channel
                             ).first()
                             if chimera_channel_config:
-                                overall["volumeRecirculation"][channel] = chimera_channel_config.volume_since_last_recirculation
+                                overall["volumeRecirculation"][channelIdx] = chimera_channel_config.volume_since_last_recirculation
 
-                    setup["gasConstants"][channel] = (273 * setup["tumblerVolume"][channel]) / 1013.25
+                    setup["gasConstants"][channelIdx] = (273 * setup["tumblerVolume"][channelIdx]) / 1013.25
 
                     if row.substrate_weight_grams > 0:
-                        setup["sampleMass"][channel] = row.substrate_weight_grams
+                        setup["sampleMass"][channelIdx] = row.substrate_weight_grams
                         sample = True
                     if row.inoculum_weight_grams > 0:
-                        setup["inoculumMass"][channel] = row.inoculum_weight_grams
+                        setup["inoculumMass"][channelIdx] = row.inoculum_weight_grams
                         if not sample:
-                            setup["inoculumOnly"][channel] = True
-                            overall["inoculumVolume"] = overall["inoculumVolume"] + overall["volumeSTP"][channel]
-                            overall["inoculumMass"] = overall["inoculumMass"] + overall["tips"][channel] * setup["inoculumMass"][channel]
+                            setup["inoculumOnly"][channelIdx] = True
+                            overall["inoculumVolume"] = overall["inoculumVolume"] + overall["volumeSTP"][channelIdx]
+                            overall["inoculumMass"] = overall["inoculumMass"] + overall["tips"][channelIdx] * setup["inoculumMass"][channelIdx]
 
                     hourlyTips = row.hourly_tips
                     dailyTips = row.daily_tips
@@ -636,14 +636,15 @@ class BlackBoxHandler(SerialHandler):
                     dailyVolume = row.daily_volume
 
             try:
-                    #Get the channel number
-                    channelId = tipData["channel_number"]
-                    print(f"[DEBUG calculateEventLogTip] channelId from tip: {channelId}")
+                    #Get the channel number (device sends 1-15, convert to 0-14 for array access)
+                    channelNum = tipData["channel_number"]  # 1-15 for database
+                    channelIdx = channelNum - 1  # 0-14 for array access
+                    print(f"[DEBUG calculateEventLogTip] channelNum: {channelNum} (DB), channelIdx: {channelIdx} (array)")
                     print(f"[DEBUG calculateEventLogTip] setup['inUse'] = {setup['inUse']}")
-                    print(f"[DEBUG calculateEventLogTip] Checking if channel {channelId} is in use: {setup['inUse'][channelId] if channelId < len(setup['inUse']) else 'INDEX OUT OF BOUNDS'}")
+                    print(f"[DEBUG calculateEventLogTip] Checking if channel {channelIdx} is in use: {setup['inUse'][channelIdx] if channelIdx < len(setup['inUse']) else 'INDEX OUT OF BOUNDS'}")
                     #If this channel should be logging
-                    if setup["inUse"][channelId]:
-                        print(f"[DEBUG calculateEventLogTip] Channel {channelId} IS in use - processing tip")
+                    if setup["inUse"][channelIdx]:
+                        print(f"[DEBUG calculateEventLogTip] Channel {channelNum} IS in use - processing tip")
                         #Get the time, temperature and pressure
                         eventTime = tipData["seconds_elapsed"]
                         timestamp = tipData["timestamp"]
@@ -672,12 +673,12 @@ class BlackBoxHandler(SerialHandler):
 
 
                         #Calculate the volume for the tip
-                        eventVolume = setup["gasConstants"][channelId] * (pressure / temperatureK)
+                        eventVolume = setup["gasConstants"][channelIdx] * (pressure / temperatureK)
 
                         #Add tip to overall, day and hour as well as the volume for each
-                        overall["tips"][channelId] = overall["tips"][channelId] + 1
-                        overall["volumeSTP"][channelId] = overall["volumeSTP"][channelId] + eventVolume
-                        overall["volumeRecirculation"][channelId] = overall["volumeRecirculation"][channelId] + eventVolume
+                        overall["tips"][channelIdx] = overall["tips"][channelIdx] + 1
+                        overall["volumeSTP"][channelIdx] = overall["volumeSTP"][channelIdx] + eventVolume
+                        overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
 
                         hourlyTips = hourlyTips + 1
                         dailyTips = dailyTips + 1
@@ -686,44 +687,44 @@ class BlackBoxHandler(SerialHandler):
                         dailyVolume = dailyVolume + eventVolume
 
                         #thisNetVolume = eventVolume
-                        totalNetVolume = overall["volumeSTP"][channelId]
+                        totalNetVolume = overall["volumeSTP"][channelIdx]
                         #If this is an inoculum only channel
-                        if setup["inoculumOnly"][channelId]:
+                        if setup["inoculumOnly"][channelIdx]:
                             #If there is inoculum mass
-                            if setup["inoculumMass"][channelId] != 0:
+                            if setup["inoculumMass"][channelIdx] != 0:
                                 #Net volume is the total volume divided by the inoculum mass
-                                #thisNetVolume = eventVolume / setup["inoculumMass"][channelId]
-                                totalNetVolume = overall["volumeSTP"][channelId] / setup["inoculumMass"][channelId]
+                                #thisNetVolume = eventVolume / setup["inoculumMass"][channelIdx]
+                                totalNetVolume = overall["volumeSTP"][channelIdx] / setup["inoculumMass"][channelIdx]
                                 #Add the mass and volume to overall running total
                                 overall["inoculumVolume"] = overall["inoculumVolume"] + eventVolume
-                                overall["inoculumMass"] = overall["inoculumMass"] + setup["inoculumMass"][channelId]
+                                overall["inoculumMass"] = overall["inoculumMass"] + setup["inoculumMass"][channelIdx]
                         else:
                             #If there is sample mass
-                            if setup["sampleMass"][channelId] != 0:
+                            if setup["sampleMass"][channelIdx] != 0:
                                 if overall["inoculumMass"] != 0:
                                     inoculumAdjust = 0
                                     inoculumCount = 0
-                                    for channel in range(0, 16):
+                                    for channel in range(0, 15):
                                         if setup["inoculumOnly"][channel] and setup["inoculumMass"][channel] != 0:
                                             inoculumAdjust = inoculumAdjust + (overall["volumeSTP"][channel] / setup["inoculumMass"][channel])
                                             inoculumCount = inoculumCount + 1
                                     inoculumAdjust = inoculumAdjust / inoculumCount
-                                    totalNetVolume = (overall["volumeSTP"][channelId] - (inoculumAdjust * setup["inoculumMass"][channelId])) / setup["sampleMass"][channelId]
+                                    totalNetVolume = (overall["volumeSTP"][channelIdx] - (inoculumAdjust * setup["inoculumMass"][channelIdx])) / setup["sampleMass"][channelIdx]
                                 else:
-                                    totalNetVolume = overall["volumeSTP"][channelId] / setup["sampleMass"][channelId]
-                        
+                                    totalNetVolume = overall["volumeSTP"][channelIdx] / setup["sampleMass"][channelIdx]
+
                         #Add the net volume for this tip to the hourly and daily information for this channel
-                        overall["volumeNet"][channelId] = totalNetVolume
+                        overall["volumeNet"][channelIdx] = totalNetVolume
 
                         #Channel Number, Name, Timestamp, Days, Hours, Minutes, Tumbler Volume (ml), Temperature (C), Pressure (hPA), Cumulative Total Tips, Volume This Tip (STP), Total Volume (STP), Tips This Day, Volume This Day (STP), Tips This Hour, Volume This Hour (STP), Net Volume Per Gram (ml/g)
-                        eventData = [channelId + 1, setup["names"][channelId], timestamp, day, hour, min, setup["tumblerVolume"][channelId], temperatureC, pressure, overall["tips"][channelId], eventVolume, overall["volumeSTP"][channelId], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelId]]
+                        eventData = [channelNum, setup["names"][channelIdx], timestamp, day, hour, min, setup["tumblerVolume"][channelIdx], temperatureC, pressure, overall["tips"][channelIdx], eventVolume, overall["volumeSTP"][channelIdx], dailyTips, dailyVolume, hourlyTips, hourlyVolume, overall["volumeNet"][channelIdx]]
 
                         # Update channel configuration
-                        databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, device_id = self.id, channel_number = channelId).first()
-                        print(f"[DEBUG calculateEventLogTip] Query for config: test_id={self.test_id}, device_id={self.id}, channel_number={channelId}")
+                        databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, device_id = self.id, channel_number = channelNum).first()
+                        print(f"[DEBUG calculateEventLogTip] Query for config: test_id={self.test_id}, device_id={self.id}, channel_number={channelNum}")
                         print(f"[DEBUG calculateEventLogTip] databaseRow found: {databaseRow is not None}")
                         if not databaseRow:
-                            print(f"[DEBUG calculateEventLogTip] Warning: No channel configuration found for test {self.test_id}, device {self.id}, channel {channelId}")
+                            print(f"[DEBUG calculateEventLogTip] Warning: No channel configuration found for test {self.test_id}, device {self.id}, channel {channelNum}")
                             return ""
 
                         databaseRow.hourly_tips = hourlyTips
@@ -731,9 +732,9 @@ class BlackBoxHandler(SerialHandler):
                         databaseRow.last_tip_time = "{0}.{1}.{2}.{3}".format(day, hour, min, sec)
                         databaseRow.hourly_volume = hourlyVolume
                         databaseRow.daily_volume = dailyVolume
-                        databaseRow.tip_count = overall["tips"][channelId]
-                        databaseRow.total_stp_volume = overall["volumeSTP"][channelId]
-                        databaseRow.total_net_volume = overall["volumeNet"][channelId]
+                        databaseRow.tip_count = overall["tips"][channelIdx]
+                        databaseRow.total_stp_volume = overall["volumeSTP"][channelIdx]
+                        databaseRow.total_net_volume = overall["volumeNet"][channelIdx]
 
                         # Update volume_since_last_recirculation in ChimeraChannelConfiguration if mapped
                         chimera_channel_config = None
@@ -747,30 +748,30 @@ class BlackBoxHandler(SerialHandler):
                                     channel_number=databaseRow.chimera_channel
                                 ).first()
                                 if chimera_channel_config:
-                                    chimera_channel_config.volume_since_last_recirculation = overall["volumeRecirculation"][channelId]
+                                    chimera_channel_config.volume_since_last_recirculation = overall["volumeRecirculation"][channelIdx]
 
                         # Create event log entry
                         from database.models import BlackBoxEventLogData
                         event_log = BlackBoxEventLogData(
                             test_id=self.test_id,
                             device_id=self.id,
-                            channel_number=channelId,
-                            channel_name=setup["names"][channelId],
+                            channel_number=channelNum,
+                            channel_name=setup["names"][channelIdx],
                             timestamp=timestamp,
                             days=day,
                             hours=hour,
                             minutes=min,
-                            tumbler_volume=setup["tumblerVolume"][channelId],
+                            tumbler_volume=setup["tumblerVolume"][channelIdx],
                             temperature=temperatureC,
                             pressure=pressure,
-                            cumulative_tips=overall["tips"][channelId],
+                            cumulative_tips=overall["tips"][channelIdx],
                             volume_this_tip_stp=eventVolume,
-                            total_volume_stp=overall["volumeSTP"][channelId],
+                            total_volume_stp=overall["volumeSTP"][channelIdx],
                             tips_this_day=dailyTips,
                             volume_this_day_stp=dailyVolume,
                             tips_this_hour=hourlyTips,
                             volume_this_hour_stp=hourlyVolume,
-                            net_volume_per_gram=overall["volumeNet"][channelId]
+                            net_volume_per_gram=overall["volumeNet"][channelIdx]
                         )
                         db.session.add(event_log)
 
@@ -780,14 +781,14 @@ class BlackBoxHandler(SerialHandler):
                         # Check for volume-based recirculation trigger using ChimeraConfiguration
                         if chimera_config and chimera_channel_config and databaseRow.chimera_channel:
                             print(f"[DEBUG Recirculation] Checking recirculation: mode={chimera_config.recirculation_mode}, threshold={chimera_channel_config.volume_threshold_ml}, chimera_channel={databaseRow.chimera_channel}")
-                            print(f"[DEBUG Recirculation] Current volume since last recirculation: {overall['volumeRecirculation'][channelId]:.2f}")
+                            print(f"[DEBUG Recirculation] Current volume since last recirculation: {overall['volumeRecirculation'][channelIdx]:.2f}")
 
                             if (chimera_config.recirculation_mode == 'volume' and
                                 chimera_channel_config.volume_threshold_ml):
 
                                 # Check if volume threshold has been exceeded
-                                if overall["volumeRecirculation"][channelId] >= chimera_channel_config.volume_threshold_ml:
-                                    print(f"🔄 Volume threshold reached for BlackBox channel {channelId+1}: {overall['volumeRecirculation'][channelId]:.2f} >= {chimera_channel_config.volume_threshold_ml}")
+                                if overall["volumeRecirculation"][channelIdx] >= chimera_channel_config.volume_threshold_ml:
+                                    print(f"🔄 Volume threshold reached for BlackBox channel {channelNum}: {overall['volumeRecirculation'][channelIdx]:.2f} >= {chimera_channel_config.volume_threshold_ml}")
                                     print(f"   Triggering recirculation for Chimera channel {databaseRow.chimera_channel}")
 
                                     # Get the Chimera device handler for this test
@@ -805,9 +806,9 @@ class BlackBoxHandler(SerialHandler):
 
                                     if chimera_handler:
                                         try:
-                                            # Get open time from channel config, use flush time from chimera config
-                                            recirculation_duration = int(chimera_channel_config.open_time_seconds)
-                                            recirculation_pump_power = 50  # percent (could be made configurable)
+                                            # Recirculation pumps at 2.5ml/s
+                                            recirculation_duration = int(chimera_channel_config.volume_since_last_recirculation / 2.5)
+                                            recirculation_pump_power = 100
 
                                             print(f"[DEBUG Recirculation] Calling recirculate_flag(channel={databaseRow.chimera_channel}, duration={recirculation_duration}, pump_power={recirculation_pump_power})")
                                             success, message = chimera_handler.recirculate_flag(
@@ -819,7 +820,7 @@ class BlackBoxHandler(SerialHandler):
                                             if success:
                                                 print(f"   ✓ Recirculation command sent: {message}")
                                                 # Reset the volume counter to 0 for this channel
-                                                overall["volumeRecirculation"][channelId] = 0.0
+                                                overall["volumeRecirculation"][channelIdx] = 0.0
                                                 chimera_channel_config.volume_since_last_recirculation = 0.0
                                                 db.session.commit()
                                                 print(f"   ✓ Reset recirculation volume counter to 0 for Chimera channel {databaseRow.chimera_channel}")
@@ -834,7 +835,7 @@ class BlackBoxHandler(SerialHandler):
 
                         return result.format(*eventData)
                     else:
-                        print(f"[DEBUG calculateEventLogTip] Channel {channelId} is NOT in use - skipping tip processing")
+                        print(f"[DEBUG calculateEventLogTip] Channel {channelNum} is NOT in use - skipping tip processing")
             except:
                 import traceback
                 print("[DEBUG calculateEventLogTip] EXCEPTION occurred:")
