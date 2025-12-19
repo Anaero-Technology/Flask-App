@@ -166,8 +166,8 @@ class ChimeraHandler(SerialHandler):
 
     def _handle_recirculate(self, line: str):
         """Process automatic recirculate messages and save to database
-        Format: recirculate [date_time] [seconds_elapsed] [channel_number] [gas_name1] [peak_value1] [gas_name2] [peak_value2]...
-        Up to 8 sensors
+        Format: recirculate [date_time] [seconds_elapsed] [channel_number] [gas_name1] [peak_value1] [peak_part1_0-4] [gas_name2] [peak_value2] [peak_part2_0-4]...
+        Each sensor has: gas_name, peak_value, and 5 peak_parts
         """
         parts = line.split()
         if len(parts) < 6:
@@ -191,18 +191,29 @@ class ChimeraHandler(SerialHandler):
             sensor_num = 1
             i = 4  # Start after recirculate, date_time, seconds_elapsed, channel
 
-            # Parse sensors: gas_name followed by peak_value
-            while i + 1 < len(parts):
-                gas_name = parts[i]
-                peak_value = float(parts[i + 1])
+            # Parse sensors: gas_name, peak_value, and 5 peak_parts (7 values per sensor)
+            while i + 6 < len(parts):
+                try:
+                    gas_name = parts[i]
+                    peak_value = float(parts[i + 1])
+                    peak_parts = [
+                        float(parts[i + 2]),
+                        float(parts[i + 3]),
+                        float(parts[i + 4]),
+                        float(parts[i + 5]),
+                        float(parts[i + 6])
+                    ]
 
-                sensor_data.append({
-                    "sensor_number": sensor_num,
-                    "gas_name": gas_name,
-                    "peak_value": peak_value
-                })
-                sensor_num += 1
-                i += 2
+                    sensor_data.append({
+                        "sensor_number": sensor_num,
+                        "gas_name": gas_name,
+                        "peak_value": peak_value,
+                        "peak_parts": peak_parts
+                    })
+                    sensor_num += 1
+                    i += 7  # Move to next sensor (gas_name + peak_value + 5 peak_parts)
+                except (ValueError, IndexError):
+                    break
 
             print(f"[CHIMERA RECIRCULATE] Channel {channel} - {len(sensor_data)} sensors")
 
@@ -222,7 +233,7 @@ class ChimeraHandler(SerialHandler):
                                 sensor_number=sensor["sensor_number"],
                                 gas_name=sensor["gas_name"],
                                 peak_value=sensor["peak_value"],
-                                peak_parts=json.dumps([])
+                                peak_parts=json.dumps(sensor["peak_parts"])
                             )
                             db.session.add(raw_data)
 
@@ -291,23 +302,6 @@ class ChimeraHandler(SerialHandler):
                         self.current_status = 'reading'
                         self.current_channel = valve_num + 1
                         print(f"[CHIMERA STATUS] Reading channel {self.current_channel}")
-
-                    # Send SSE notification only when valve opens (new phase starts)
-                    if self.app and hasattr(self, 'id'):
-                        try:
-                            with self.app.app_context():
-                                from flask_sse import sse
-                                sse.publish(
-                                    {
-                                        "device_id": self.id,
-                                        "status": self.current_status,
-                                        "channel": self.current_channel
-                                    },
-                                    type='chimera_status'
-                                )
-                        except Exception as e:
-                            print(f"[CHIMERA STATUS] SSE publish failed: {e}")
-
                 elif state == 'closed':
                     if valve_num == 15:
                         # Flush valve closed - will transition to reading
@@ -315,6 +309,22 @@ class ChimeraHandler(SerialHandler):
                     else:
                         # Channel valve closed
                         print(f"[CHIMERA STATUS] Channel {valve_num + 1} closed")
+
+                # Send SSE notification for status change
+                if self.app and hasattr(self, 'id'):
+                    try:
+                        with self.app.app_context():
+                            from flask_sse import sse
+                            sse.publish(
+                                {
+                                    "device_id": self.id,
+                                    "status": self.current_status,
+                                    "channel": self.current_channel
+                                },
+                                type='chimera_status'
+                            )
+                    except Exception as e:
+                        print(f"[CHIMERA STATUS] SSE publish failed: {e}")
 
         except (ValueError, IndexError) as e:
             print(f"[CHIMERA STATUS] Failed to parse valve message: {e} - Line: {line}")
@@ -558,12 +568,12 @@ class ChimeraHandler(SerialHandler):
 
         return False, {}, f"Unexpected response: {response}"
     
-    def set_all_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
-        """Set open and flush timing for all channels"""
+    def set_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
+        """Set open and flush timing"""
         response = self.send_command(f"timingset {open_time_ms} {flush_time_ms}")
-
+        
         if response == "done timeset":
-            self.channel_times_ms = [open_time_ms] * 15
+            self.open_time_ms = open_time_ms
             self.flush_time_ms = flush_time_ms
             return True, "Timing set successfully"
         elif response == "failed timingset nofiles":
