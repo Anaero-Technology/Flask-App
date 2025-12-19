@@ -1033,10 +1033,10 @@ function Plot({ initialParams, onNavigate }) {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {/* Fullscreen button - mobile only */}
+                                            {/* Fullscreen button */}
                                             <button
                                                 onClick={() => setFullscreenGraph(true)}
-                                                className="lg:hidden p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                                                className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
                                                 title="Fullscreen"
                                             >
                                                 <Maximize2 size={18} />
