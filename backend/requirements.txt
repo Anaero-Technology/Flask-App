@@ -9,3 +9,5 @@ python-dotenv
 gunicorn
 flask-sse
 gevent
+flask-jwt-extended
+bcrypt

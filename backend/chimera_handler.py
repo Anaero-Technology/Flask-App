@@ -568,7 +568,7 @@ class ChimeraHandler(SerialHandler):
 
         return False, {}, f"Unexpected response: {response}"
     
-    def set_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
+    def set_all_timing(self, open_time_ms: int, flush_time_ms: int) -> Tuple[bool, str]:
         """Set open and flush timing"""
         response = self.send_command(f"timingset {open_time_ms} {flush_time_ms}")
         

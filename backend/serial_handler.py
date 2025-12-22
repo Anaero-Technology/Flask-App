@@ -3,7 +3,7 @@ import threading
 import time
 from typing import Optional, Callable
 import queue
-from serial_logger import serial_logger
+from utils.serial_logger import serial_logger
 
 
 class SerialHandler:

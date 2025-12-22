@@ -1,14 +1,17 @@
 from flask import Blueprint, request, jsonify
 from flask_sse import sse
+from flask_jwt_extended import jwt_required
 from datetime import datetime
 from device_manager import DeviceManager
 from database.models import *
+from utils.auth import require_role
 
 black_box_bp = Blueprint('black_box', __name__)
 device_manager = DeviceManager()
 
 
 @black_box_bp.route('/api/v1/black_box/connected', methods=['GET'])
+@jwt_required()
 def get_connected_black_boxes():
     """Get all connected BlackBox devices from database"""
     try:
@@ -47,6 +50,8 @@ def get_connected_black_boxes():
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/connect', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def connect_black_box(device_id):
     try:
         # Get device from database
@@ -86,6 +91,8 @@ def connect_black_box(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/disconnect', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def disconnect_black_box(device_id):
     try:
         # Get device from database
@@ -113,6 +120,8 @@ def disconnect_black_box(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/start_logging', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def start_logging(device_id):
     try:
         # Get device from database
@@ -201,6 +210,8 @@ def start_logging(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/stop_logging', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def stop_logging(device_id):
     try:
         # Get device from database
@@ -250,6 +261,7 @@ def stop_logging(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/info', methods=['GET'])
+@jwt_required()
 def get_info(device_id):
     try:
         # Get device from database
@@ -271,6 +283,7 @@ def get_info(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/files', methods=['GET'])
+@jwt_required()
 def get_files(device_id):
     try:
         # Get device from database
@@ -292,6 +305,7 @@ def get_files(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/download', methods=['POST'])
+@jwt_required()
 def download_file(device_id):
     try:
         # Get device from database
@@ -325,6 +339,7 @@ def download_file(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/download_from', methods=['POST'])
+@jwt_required()
 def download_file_from(device_id):
     try:
         # Get device from database
@@ -359,6 +374,8 @@ def download_file_from(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/delete_file', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def delete_file(device_id):
     try:
         # Get device from database
@@ -389,6 +406,7 @@ def delete_file(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/time', methods=['GET'])
+@jwt_required()
 def get_time(device_id):
     try:
         # Get device from database
@@ -413,6 +431,8 @@ def get_time(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/time', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_time(device_id):
     try:
         # Get device from database
@@ -443,6 +463,8 @@ def set_time(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/name', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_name(device_id):
     try:
         # Get device from database
@@ -481,6 +503,7 @@ def set_name(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/hourly_tips', methods=['GET'])
+@jwt_required()
 def get_hourly_tips(device_id):
     try:
         # Get device from database
@@ -506,6 +529,8 @@ def get_hourly_tips(device_id):
 
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/send_command', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def send_command(device_id):
     try:
         # Get device from database
@@ -536,6 +561,7 @@ def send_command(device_id):
         db.session.close()
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/stream', methods=['GET'])
+@jwt_required()
 def stream(device_id):
     """SSE endpoint for real-time blackbox notifications for a specific device"""
     try:

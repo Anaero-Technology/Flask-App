@@ -1,7 +1,9 @@
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 import subprocess
 import re
 import platform
+from utils.auth import require_role
 
 wifi_bp = Blueprint('wifi', __name__)
 
@@ -203,6 +205,7 @@ def connect_to_wifi_linux(ssid, password):
         return False, str(e)
 
 @wifi_bp.route('/api/v1/wifi/scan', methods=['GET'])
+@jwt_required()
 def scan_wifi():
     """Scan for available WiFi networks"""
     try:
@@ -229,6 +232,7 @@ def scan_wifi():
         return jsonify({'error': str(e)}), 500
 
 @wifi_bp.route('/api/v1/wifi/connect', methods=['POST'])
+@jwt_required()
 def connect_wifi():
     """Connect to a WiFi network"""
     try:

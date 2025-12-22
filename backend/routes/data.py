@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from database.models import *
 from sqlalchemy import and_
 
 data_bp = Blueprint('data', __name__)
 
 @data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/data', methods=['GET'])
+@jwt_required()
 def get_device_data(test_id, device_id):
     """Get time-series data for a specific device in a test"""
     try:
@@ -164,6 +166,7 @@ def get_device_data(test_id, device_id):
 
 
 @data_bp.route('/api/v1/tests/<int:test_id>/devices', methods=['GET'])
+@jwt_required()
 def get_test_devices(test_id):
     """Get all devices associated with a test, either via configuration or data"""
     try:
@@ -219,6 +222,7 @@ def get_test_devices(test_id):
         db.session.close()
 
 @data_bp.route('/api/v1/events/recent', methods=['GET'])
+@jwt_required()
 def get_recent_events():
     """Get the last 20 events across all tests and devices (Tips, Raw Data, Chimera Analysis)"""
     try:

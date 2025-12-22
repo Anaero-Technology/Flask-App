@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sse import sse
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from database.models import *
+from utils.auth import require_role
 import serial.tools.list_ports
 from device_manager import DeviceManager
 from config import Config
@@ -11,10 +13,18 @@ import threading
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
 app.config["REDIS_URL"] = Config.REDIS_URL
-CORS(app)  # Enable CORS for all routes
+app.config["JWT_SECRET_KEY"] = Config.JWT_SECRET_KEY
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = Config.JWT_ACCESS_TOKEN_EXPIRES
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = Config.JWT_REFRESH_TOKEN_EXPIRES
+CORS(app, supports_credentials=True)  # Enable CORS for all routes
 db.init_app(app)
+jwt = JWTManager(app)
 device_manager = DeviceManager()
 DeviceManager.set_app(app)  # Set app reference for db
+
+# Register CLI commands
+from utils.cli import register_cli
+register_cli(app)
 
 # Create tables
 with app.app_context():
@@ -92,6 +102,7 @@ auto_connect_thread.start()
 
 
 @app.route("/api/v1/ports")
+@jwt_required()
 def list_ports():
     ports = []
     for port in serial.tools.list_ports.comports():
@@ -112,6 +123,7 @@ def on_exit():
         db.session.close()
 
 @app.route("/api/v1/devices")
+@jwt_required()
 def list_devices():
     try:
         devices = db.session.query(Device).all()
@@ -129,6 +141,7 @@ def list_devices():
 
 
 @app.route("/api/v1/devices/<int:device_id>", methods=['GET'])
+@jwt_required()
 def get_device(device_id):
     """Get a specific device by ID"""
     try:
@@ -150,6 +163,8 @@ def get_device(device_id):
 
 
 @app.route("/api/v1/devices/<int:device_id>", methods=['PUT'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def update_device(device_id):
     """Update device information"""
     try:
@@ -201,6 +216,8 @@ def update_device(device_id):
 
 
 @app.route("/api/v1/devices/<int:device_id>", methods=['DELETE'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def delete_device(device_id):
     """Delete a device (only if not connected)"""
     try:
@@ -223,6 +240,7 @@ def delete_device(device_id):
 
 
 @app.route("/api/v1/devices/by_mac/<mac_address>")
+@jwt_required()
 def find_device_by_mac(mac_address):
     """Find a device by MAC address"""
     try:
@@ -244,6 +262,8 @@ def find_device_by_mac(mac_address):
 
 
 @app.route("/api/v1/devices/discover")
+@jwt_required()
+@require_role(['admin', 'operator'])
 def discover_devices():
     """Discover and register all valid devices (blackbox or chimera) on available serial ports"""
     import concurrent.futures
@@ -290,6 +310,8 @@ def discover_devices():
     return jsonify(valid_devices)
 
 @app.route("/api/v1/devices/connect", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def connect_device():
     """Connect to a device and auto-register if needed"""
     try:
@@ -311,6 +333,8 @@ def connect_device():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/devices/disconnect/<string:port>", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def disconnect_device_by_port(port):
     """Disconnect a device by port"""
     try:
@@ -324,6 +348,8 @@ def disconnect_device_by_port(port):
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/devices/<int:device_id>/disconnect", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def disconnect_device(device_id):
     """Disconnect a device by ID"""
     try:
@@ -337,6 +363,7 @@ def disconnect_device(device_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/devices/connected")
+@jwt_required()
 def list_connected_devices():
     """List all currently connected devices with availability status"""
     try:
@@ -371,6 +398,8 @@ def list_connected_devices():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/devices/discover", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def discover_device():
     """Discover device information without registering it"""
     try:
@@ -423,13 +452,20 @@ def discover_device():
         return jsonify({"error": str(e)}), 500
 
 
-# Register blueprints
+# Sample Management Endpoints
 @app.route("/api/v1/samples", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def create_sample():
     """Create a new sample"""
     try:
         from datetime import datetime
         data = request.get_json()
+
+        # Get current user from JWT token
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        author = user.username if user else None
 
         # Create sample record
         sample = Sample(
@@ -443,8 +479,8 @@ def create_sample():
             n_content=float(data.get('n_content')) if data.get('n_content') else None,
             substrate_percent_ts=float(data.get('substrate_percent_ts')) if data.get('substrate_percent_ts') else None,
             substrate_percent_vs=float(data.get('substrate_percent_vs')) if data.get('substrate_percent_vs') else None,
-            author=data.get('author'),
-            is_inoculum=data.get('is_inoculum', False), 
+            author=author,
+            is_inoculum=data.get('is_inoculum', False),
             date_created=datetime.now()
         )
 
@@ -462,6 +498,7 @@ def create_sample():
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/samples", methods=['GET'])
+@jwt_required()
 def list_substrate_samples():
     """Get all samples (substrates only, not inoculums)"""
     try:
@@ -482,6 +519,7 @@ def list_substrate_samples():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/inoculum", methods=['GET'])
+@jwt_required()
 def list_inoculum_samples():
     """Get all inoculum samples"""
     try:
@@ -501,6 +539,8 @@ def list_inoculum_samples():
 
 
 @app.route("/api/v1/samples/<int:sample_id>", methods=['PUT'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def update_sample(sample_id):
     """Update an existing sample"""
     try:
@@ -552,6 +592,8 @@ def update_sample(sample_id):
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/samples/<int:sample_id>", methods=['DELETE'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def delete_sample(sample_id):
     """Delete a sample"""
     try:
@@ -574,19 +616,26 @@ def delete_sample(sample_id):
 
 # Test Management Endpoints
 @app.route("/api/v1/tests", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def create_test():
     """Create a new test"""
     try:
         from datetime import datetime
         data = request.get_json()
-        
+
         if not data.get('name'):
             return jsonify({"error": "Test name is required"}), 400
-        
+
+        # Get current user from JWT token
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        created_by = user.username if user else None
+
         test = Test(
             name=data.get('name'),
             description=data.get('description'),
-            created_by=data.get('created_by'),
+            created_by=created_by,
             date_created=datetime.now(),
             status='setup'
         )
@@ -605,6 +654,7 @@ def create_test():
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests", methods=['GET'])
+@jwt_required()
 def list_tests():
     """Get all tests"""
     try:
@@ -664,6 +714,7 @@ def list_tests():
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>", methods=['GET'])
+@jwt_required()
 def get_test(test_id):
     """Get a specific test with its channel configurations"""
     try:
@@ -699,6 +750,8 @@ def get_test(test_id):
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def start_test(test_id):
     """Start a test and assign it to devices, initiating logging"""
     try:
@@ -746,10 +799,14 @@ def start_test(test_id):
                 flush_time_ms = int(chimera_config.flush_time_seconds * 1000)
                 success, msg = chimera_handler.set_all_timing(current_open_time_ms, flush_time_ms)
                 print(f"[DEBUG] Chimera timing set: open={current_open_time_ms}ms, flush={flush_time_ms}ms - {msg}")
+                if not success:
+                    return jsonify({"error": f"Failed to configure Chimera timing on {chimera_device.name}: {msg}"}), 500
 
                 # 2. Set service sequence (which channels are in service)
                 success, msg = chimera_handler.set_service(chimera_config.service_sequence)
                 print(f"[DEBUG] Chimera service sequence set to {chimera_config.service_sequence} - {msg}")
+                if not success:
+                    return jsonify({"error": f"Failed to configure Chimera service sequence on {chimera_device.name}: {msg}"}), 500
 
                 # 3. Set per-channel timing for all in-service channels
                 channel_configs = ChimeraChannelConfiguration.query.filter_by(
@@ -879,6 +936,20 @@ def start_test(test_id):
 
         db.session.commit()
 
+        # Create audit log entry
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        device_names = [Device.query.get(d_id).name for d_id in all_device_ids]
+        audit_log = AuditLog(
+            user_id=int(user_id),
+            action='start_test',
+            target_type='test',
+            target_id=test_id,
+            details=f"Started test '{test.name}' by {user.username if user else 'Unknown'} with devices: {', '.join(device_names)}"
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
         return jsonify({
             "success": True,
             "message": f"Test started with {len(all_device_ids)} devices",
@@ -890,6 +961,8 @@ def start_test(test_id):
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>/stop", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def stop_test(test_id):
     """Stop a test and stop logging on all associated devices"""
     try:
@@ -924,6 +997,20 @@ def stop_test(test_id):
 
         db.session.commit()
 
+        # Create audit log entry
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        device_names = [d.name for d in devices]
+        audit_log = AuditLog(
+            user_id=int(user_id),
+            action='stop_test',
+            target_type='test',
+            target_id=test_id,
+            details=f"Stopped test '{test.name}' by {user.username if user else 'Unknown'}" + (f" (devices: {', '.join(device_names)})" if device_names else "")
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
         return jsonify({
             "success": True,
             "message": "Test stopped successfully",
@@ -936,6 +1023,8 @@ def stop_test(test_id):
 
 # Channel Configuration Endpoints
 @app.route("/api/v1/tests/<int:test_id>/configurations", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def create_channel_configuration(test_id):
     """Create or update channel configurations for a test"""
     try:
@@ -994,6 +1083,8 @@ def create_channel_configuration(test_id):
 
 
 @app.route("/api/v1/tests/<int:test_id>/chimera-configuration", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def create_chimera_configuration(test_id):
     """Create or update Chimera configuration for a test"""
     try:
@@ -1086,6 +1177,8 @@ def create_chimera_configuration(test_id):
 
 
 @app.route("/api/v1/tests/upload-csv", methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def upload_csv_configuration():
     """Parse CSV file and return channel configurations"""
     try:
@@ -1172,6 +1265,8 @@ def upload_csv_configuration():
 
 
 @app.route("/api/v1/tests/<int:test_id>", methods=['DELETE'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def delete_test(test_id):
     """Delete a test and all associated data"""
     try:
@@ -1182,18 +1277,21 @@ def delete_test(test_id):
         if test.status == 'running':
             return jsonify({"error": "Cannot delete a running test. Stop it first."}), 400
 
-        # Delete associated data (cascading deletes should handle this if models are set up correctly, 
+        # Save test name for audit log before deletion
+        test_name = test.name
+
+        # Delete associated data (cascading deletes should handle this if models are set up correctly,
         # but explicit deletion is safer)
-        
+
         # 1. Delete Channel Configurations
         ChannelConfiguration.query.filter_by(test_id=test_id).delete()
-        
+
         # 2. Delete Chimera Configurations (and cascade to ChimeraChannelConfiguration)
         chimera_configs = ChimeraConfiguration.query.filter_by(test_id=test_id).all()
         for cc in chimera_configs:
             ChimeraChannelConfiguration.query.filter_by(chimera_config_id=cc.id).delete()
             db.session.delete(cc)
-            
+
         # 3. Delete Data (Event Logs, Raw Data) - This might be heavy, consider async or restrictions
         BlackBoxEventLogData.query.filter_by(test_id=test_id).delete()
         BlackboxRawData.query.filter_by(test_id=test_id).delete()
@@ -1209,6 +1307,19 @@ def delete_test(test_id):
         db.session.delete(test)
         db.session.commit()
 
+        # Create audit log entry
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        audit_log = AuditLog(
+            user_id=int(user_id),
+            action='delete_test',
+            target_type='test',
+            target_id=test_id,
+            details=f"Deleted test '{test_name}' (ID: {test_id}) by {user.username if user else 'Unknown'}"
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
         return jsonify({"success": True, "message": "Test deleted successfully"}), 200
 
     except Exception as e:
@@ -1217,6 +1328,7 @@ def delete_test(test_id):
 
 
 @app.route("/api/v1/tests/<int:test_id>/download", methods=['GET'])
+@jwt_required()
 def download_test_data(test_id):
     """Download test data. Auto-detects available data:
     - Both GFM and Chimera -> ZIP file with 2 CSVs
@@ -1405,18 +1517,23 @@ from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 from routes.wifi import wifi_bp
 from routes.data import data_bp
+from routes.auth import auth_bp
+from routes.users import users_bp
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
 app.register_blueprint(wifi_bp)
 app.register_blueprint(data_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(users_bp)
 app.register_blueprint(sse, url_prefix='/stream')
 
 
 @app.route("/api/v1/system/serial-log", methods=['GET'])
+@jwt_required()
 def download_serial_log():
     """Download the serial communication log file"""
     from flask import send_file
-    from serial_logger import serial_logger
+    from utils.serial_logger import serial_logger
     import io
 
     try:
@@ -1434,9 +1551,11 @@ def download_serial_log():
 
 
 @app.route("/api/v1/system/serial-log", methods=['DELETE'])
+@jwt_required()
+@require_role(['admin'])
 def clear_serial_log():
     """Clear the serial communication log file"""
-    from serial_logger import serial_logger
+    from utils.serial_logger import serial_logger
 
     try:
         success = serial_logger.clear_log()
@@ -1449,9 +1568,10 @@ def clear_serial_log():
 
 
 @app.route("/api/v1/system/serial-log/info", methods=['GET'])
+@jwt_required()
 def serial_log_info():
     """Get information about the serial log file"""
-    from serial_logger import serial_logger
+    from utils.serial_logger import serial_logger
 
     try:
         size_bytes = serial_logger.get_log_size()
@@ -1474,6 +1594,8 @@ def serial_log_info():
 
 
 @app.route("/api/v1/system/git-pull", methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
 def git_pull():
     """Pull latest changes from GitHub repository"""
     import subprocess

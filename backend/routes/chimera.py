@@ -1,14 +1,17 @@
 from flask import Blueprint, request, jsonify
 from flask_sse import sse
+from flask_jwt_extended import jwt_required
 from datetime import datetime
 from device_manager import DeviceManager
 from database.models import *
+from utils.auth import require_role
 
 chimera_bp = Blueprint('chimera', __name__)
 device_manager = DeviceManager()
 
 
 @chimera_bp.route('/api/v1/chimera/connected', methods=['GET'])
+@jwt_required()
 def get_connected_chimeras():
     """Get all connected Chimera devices from database"""
     try:
@@ -47,6 +50,8 @@ def get_connected_chimeras():
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/connect', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def connect_chimera(device_id):
     try:
         # Get device from database
@@ -87,6 +92,8 @@ def connect_chimera(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/disconnect', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def disconnect_chimera(device_id):
     try:
         # Get device from database
@@ -115,6 +122,7 @@ def disconnect_chimera(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/info', methods=['GET'])
+@jwt_required()
 def get_info(device_id):
     try:
         # Get device from database
@@ -136,6 +144,8 @@ def get_info(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/start_logging', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def start_logging(device_id):
     try:
         # Get device from database
@@ -223,6 +233,8 @@ def start_logging(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/stop_logging', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def stop_logging(device_id):
     try:
         # Get device from database
@@ -272,6 +284,7 @@ def stop_logging(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/files', methods=['GET'])
+@jwt_required()
 def get_files(device_id):
     try:
         # Get device from database
@@ -296,6 +309,7 @@ def get_files(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/download', methods=['POST'])
+@jwt_required()
 def download_file(device_id):
     try:
         # Get device from database
@@ -328,6 +342,8 @@ def download_file(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/delete_file', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def delete_file(device_id):
     try:
         # Get device from database
@@ -358,6 +374,7 @@ def delete_file(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/time', methods=['GET'])
+@jwt_required()
 def get_time(device_id):
     try:
         # Get device from database
@@ -383,6 +400,8 @@ def get_time(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/time', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_time(device_id):
     try:
         # Get device from database
@@ -418,6 +437,8 @@ def set_time(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/calibrate', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def calibrate(device_id):
     try:
         # Get device from database
@@ -449,6 +470,7 @@ def calibrate(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/timing', methods=['GET'])
+@jwt_required()
 def get_timing(device_id):
     try:
         # Get device from database
@@ -474,6 +496,8 @@ def get_timing(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/timing', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_timing(device_id):
     try:
         # Get device from database
@@ -505,6 +529,7 @@ def set_timing(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/service', methods=['GET'])
+@jwt_required()
 def get_service(device_id):
     try:
         # Get device from database
@@ -530,6 +555,8 @@ def get_service(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/service', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_service(device_id):
     try:
         # Get device from database
@@ -560,6 +587,7 @@ def set_service(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/past_values', methods=['GET'])
+@jwt_required()
 def get_past_values(device_id):
     try:
         # Get device from database
@@ -585,6 +613,7 @@ def get_past_values(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/sensor_info', methods=['GET'])
+@jwt_required()
 def get_sensor_info(device_id):
     try:
         # Get device from database
@@ -610,6 +639,8 @@ def get_sensor_info(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/enable', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def enable_recirculation(device_id):
     try:
         # Get device from database
@@ -634,6 +665,8 @@ def enable_recirculation(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/disable', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def disable_recirculation(device_id):
     try:
         # Get device from database
@@ -658,6 +691,8 @@ def disable_recirculation(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/days', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_recirculation_days(device_id):
     try:
         # Get device from database
@@ -688,6 +723,8 @@ def set_recirculation_days(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/time', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_recirculation_time(device_id):
     try:
         # Get device from database
@@ -719,6 +756,8 @@ def set_recirculation_time(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/mode', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_recirculation_mode(device_id):
     try:
         # Get device from database
@@ -749,6 +788,8 @@ def set_recirculation_mode(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/flag', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def recirculation_flag(device_id):
     try:
         # Get device from database
@@ -781,6 +822,7 @@ def recirculation_flag(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/info', methods=['GET'])
+@jwt_required()
 def get_recirculation_info(device_id):
     try:
         # Get device from database
@@ -805,6 +847,8 @@ def get_recirculation_info(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/name', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def set_name(device_id):
     try:
         # Get device from database
@@ -843,6 +887,8 @@ def set_name(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/send_command', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
 def send_command(device_id):
     try:
         # Get device from database
@@ -874,6 +920,7 @@ def send_command(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/stream', methods=['GET'])
+@jwt_required()
 def stream(device_id):
     """SSE endpoint for real-time chimera notifications for a specific device"""
     try:
@@ -903,6 +950,7 @@ def stream(device_id):
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/data_stream', methods=['GET'])
+@jwt_required()
 def get_data_stream_info(device_id):
     """Get information about how to receive real-time data"""
     try:
