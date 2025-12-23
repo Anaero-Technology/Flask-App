@@ -6,10 +6,12 @@ import ChimeraConfig from '../components/ChimeraConfig'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
 import { RefreshCw, Server, Activity, CheckCircle, FlaskConical } from 'lucide-react';
+import { useAuth } from '../components/AuthContext';
 
 
 
 function Dashboard({ onViewPlot }) {
+  const { authFetch } = useAuth();
   const [devices, setDevices] = useState([])
   const [activeTests, setActiveTests] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
@@ -19,7 +21,7 @@ function Dashboard({ onViewPlot }) {
     setLoading(true)
     try {
       // Fetch devices
-      const devicesResponse = await fetch('/api/v1/devices/connected')
+      const devicesResponse = await authFetch('/api/v1/devices/connected')
       let devicesData = []
       if (devicesResponse.ok) {
         const data = await devicesResponse.json()
@@ -35,7 +37,7 @@ function Dashboard({ onViewPlot }) {
       }
 
       // Fetch active tests
-      const testsResponse = await fetch('/api/v1/tests?status=running&include_devices=true')
+      const testsResponse = await authFetch('/api/v1/tests?status=running&include_devices=true')
       let testsData = []
       let testMap = {}
       if (testsResponse.ok) {
@@ -53,7 +55,7 @@ function Dashboard({ onViewPlot }) {
       }))
 
       // Fetch recent events
-      const eventsResponse = await fetch('/api/v1/events/recent')
+      const eventsResponse = await authFetch('/api/v1/events/recent')
       let eventsData = []
       if (eventsResponse.ok) {
         eventsData = await eventsResponse.json()
@@ -73,7 +75,7 @@ function Dashboard({ onViewPlot }) {
   const discoverDevices = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/v1/devices/discover')
+      const response = await authFetch('/api/v1/devices/discover')
       if (response.ok) {
         // After discovery, reload all data
         sessionStorage.setItem('discoveryCompleted', 'true')
@@ -105,9 +107,8 @@ function Dashboard({ onViewPlot }) {
 
   const handleCalibrateAction = async (deviceId, sensorNumber, gasPercentage) => {
     try {
-      const response = await fetch(`/api/v1/chimera/${deviceId}/calibrate`, {
+      const response = await authFetch(`/api/v1/chimera/${deviceId}/calibrate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
       });
 

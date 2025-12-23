@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Clock, Settings, RefreshCw, Activity, Server, Save, Play } from 'lucide-react';
 import { useCalibration } from './ChimeraContext';
+import { useAuth } from './AuthContext';
 
 // Calibration Progress Bar Component
 function CalibrationProgressBar({ progress }) {
@@ -53,6 +54,7 @@ function CalibrationProgressBar({ progress }) {
 }
 
 function ChimeraConfig({ device }) {
+    const { authFetch } = useAuth();
     const [deviceConfig, setDeviceConfig] = useState({});
     const [loading, setLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -72,7 +74,7 @@ function ChimeraConfig({ device }) {
     useEffect(() => {
         const fetchCalibrationState = async () => {
             try {
-                const response = await fetch(`/api/v1/chimera/${device.id}/sensor_info`);
+                const response = await authFetch(`/api/v1/chimera/${device.id}/sensor_info`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.is_calibrating) {
@@ -121,7 +123,7 @@ function ChimeraConfig({ device }) {
             const config = {};
 
             // Fetch current service sequence from device
-            const serviceResponse = await fetch(`/api/v1/chimera/${device.id}/service`);
+            const serviceResponse = await authFetch(`/api/v1/chimera/${device.id}/service`);
             if (serviceResponse.ok) {
                 const serviceData = await serviceResponse.json();
                 if (serviceData.success) {
@@ -130,7 +132,7 @@ function ChimeraConfig({ device }) {
             }
 
             // Fetch timing from device
-            const timingResponse = await fetch(`/api/v1/chimera/${device.id}/timing`);
+            const timingResponse = await authFetch(`/api/v1/chimera/${device.id}/timing`);
             if (timingResponse.ok) {
                 const timingData = await timingResponse.json();
                 if (timingData.success && timingData.timing) {
@@ -142,7 +144,7 @@ function ChimeraConfig({ device }) {
             }
 
             // Fetch recirculation info from device
-            const recircResponse = await fetch(`/api/v1/chimera/${device.id}/recirculation/info`);
+            const recircResponse = await authFetch(`/api/v1/chimera/${device.id}/recirculation/info`);
             if (recircResponse.ok) {
                 const recircData = await recircResponse.json();
                 config.recirculation_enabled = recircData.recirculation_enabled || false;
@@ -183,9 +185,8 @@ function ChimeraConfig({ device }) {
 
     const updateTiming = async (openTimeMs, flushTimeMs) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${device.id}/timing`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/timing`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ open_time_ms: openTimeMs, flush_time_ms: flushTimeMs })
             });
 
@@ -205,9 +206,8 @@ function ChimeraConfig({ device }) {
 
     const calibrateSensor = async (sensorNumber, gasPercentage) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${device.id}/calibrate`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/calibrate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
             });
 
@@ -228,7 +228,7 @@ function ChimeraConfig({ device }) {
     const toggleRecirculation = async (enable) => {
         try {
             const endpoint = enable ? 'recirculation/enable' : 'recirculation/disable';
-            const response = await fetch(`/api/v1/chimera/${device.id}/${endpoint}`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/${endpoint}`, {
                 method: 'POST'
             });
 
@@ -256,9 +256,8 @@ function ChimeraConfig({ device }) {
 
     const updateRecirculationDays = async (days) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${device.id}/recirculation/days`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/recirculation/days`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ days: parseInt(days) })
             });
 
@@ -278,9 +277,8 @@ function ChimeraConfig({ device }) {
 
     const updateRecirculationTime = async (hour, minute) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${device.id}/recirculation/time`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/recirculation/time`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ hour: parseInt(hour), minute: parseInt(minute) })
             });
 
@@ -300,9 +298,8 @@ function ChimeraConfig({ device }) {
 
     const updateService = async (serviceSequence) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${device.id}/service`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/service`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ service_sequence: serviceSequence })
             });
 

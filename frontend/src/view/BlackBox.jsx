@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard';
 import GFM from '../assets/gfm.png';
 import refreshIcon from '../assets/refresh.svg';
+import { useAuth } from '../components/AuthContext';
 
 function BlackBox() {
+    const { authFetch } = useAuth();
     const [blackBoxes, setBlackBoxes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedDevice, setSelectedDevice] = useState(null);
@@ -15,7 +17,7 @@ function BlackBox() {
     const fetchBlackBoxes = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/v1/black_box/connected');
+            const response = await authFetch('/api/v1/black_box/connected');
             if (response.ok) {
                 const data = await response.json();
                 setBlackBoxes(data);
@@ -45,7 +47,7 @@ function BlackBox() {
     const fetchFiles = async (deviceId) => {
         setLoadingFiles(true);
         try {
-            const response = await fetch(`/api/v1/black_box/${deviceId}/files`);
+            const response = await authFetch(`/api/v1/black_box/${deviceId}/files`);
             if (response.ok) {
                 const data = await response.json();
                 setFiles(data.files || []);
@@ -68,11 +70,8 @@ function BlackBox() {
 
     const downloadFile = async (filename) => {
         try {
-            const response = await fetch(`/api/v1/black_box/${selectedDevice.device_id}/download`, {
+            const response = await authFetch(`/api/v1/black_box/${selectedDevice.device_id}/download`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ filename })
             });
 
@@ -106,11 +105,8 @@ function BlackBox() {
         }
 
         try {
-            const response = await fetch(`/api/v1/black_box/${selectedDevice.device_id}/delete_file`, {
+            const response = await authFetch(`/api/v1/black_box/${selectedDevice.device_id}/delete_file`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ filename })
             });
 
@@ -135,11 +131,8 @@ function BlackBox() {
         }
 
         try {
-            const response = await fetch(`/api/v1/tests/${testId}/stop`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+            const response = await authFetch(`/api/v1/tests/${testId}/stop`, {
+                method: 'POST'
             });
 
             if (response.ok) {
@@ -163,7 +156,7 @@ function BlackBox() {
             let response;
             if (isLogging) {
                 // Stop logging
-                response = await fetch(`/api/v1/black_box/${deviceId}/stop_logging`, {
+                response = await authFetch(`/api/v1/black_box/${deviceId}/stop_logging`, {
                     method: 'POST'
                 });
             } else {
@@ -180,11 +173,8 @@ function BlackBox() {
                     return;
                 }
 
-                response = await fetch(`/api/v1/black_box/${deviceId}/start_logging`, {
+                response = await authFetch(`/api/v1/black_box/${deviceId}/start_logging`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({
                         filename,
                         test_name: testName,

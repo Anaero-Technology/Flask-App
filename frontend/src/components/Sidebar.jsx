@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from './AuthContext';
 import logo from '../assets/logo.png';
 import {
   LayoutDashboard,
@@ -12,18 +13,32 @@ import {
   Settings,
   PlusCircle,
   User,
+  Users,
   Cpu,
-  X
+  X,
+  LogOut,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
+  Eye
 } from 'lucide-react';
 
+const ROLE_CONFIG = {
+  admin: { icon: ShieldAlert, color: 'text-red-600', label: 'Admin' },
+  operator: { icon: ShieldCheck, color: 'text-blue-600', label: 'Operator' },
+  technician: { icon: Shield, color: 'text-green-600', label: 'Technician' },
+  viewer: { icon: Eye, color: 'text-gray-600', label: 'Viewer' },
+};
+
 function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
+  const { user, logout, canPerform } = useAuth();
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'test', label: 'Start Test', icon: FlaskConical },
+    { id: 'test', label: 'Start Test', icon: FlaskConical, permission: 'start_test' },
     { id: 'database', label: 'Database', icon: Database },
     { id: 'plot', label: 'Plot', icon: LineChart },
-    { id: 'upload', label: 'Upload Data', icon: Upload },
+    { id: 'upload', label: 'Upload Data', icon: Upload, permission: 'modify_test' },
   ];
 
   const secondaryItems = [
@@ -33,6 +48,22 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
     { id: 'monitor', label: 'Monitor', icon: Monitor },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  const adminItems = [
+    { id: 'users', label: 'User Management', icon: Users, permission: 'manage_users' },
+  ];
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  // Filter items based on permissions
+  const filterItems = (items) => {
+    return items.filter(item => {
+      if (!item.permission) return true;
+      return canPerform(item.permission);
+    });
+  };
 
   const NavItem = ({ item }) => {
     const Icon = item.icon;
@@ -54,6 +85,9 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       </li>
     );
   };
+
+  const roleConfig = user ? ROLE_CONFIG[user.role] || ROLE_CONFIG.viewer : ROLE_CONFIG.viewer;
+  const RoleIcon = roleConfig.icon;
 
   return (
     <div className={`
@@ -78,40 +112,64 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
         </button>
       </div>
 
-      {/* CTA */}
-      <div className="p-4">
-        <button
-          onClick={() => onNavigate('create-sample')}
-          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-medium"
-        >
-          <PlusCircle size={18} />
-          Create Sample
-        </button>
-      </div>
+      {/* CTA - Only show if user can create samples */}
+      {canPerform('create_sample') && (
+        <div className="p-4">
+          <button
+            onClick={() => onNavigate('create-sample')}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-medium"
+          >
+            <PlusCircle size={18} />
+            Create Sample
+          </button>
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-2">
         <div className="px-6 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Main</div>
         <ul>
-          {menuItems.map(item => <NavItem key={item.id} item={item} />)}
+          {filterItems(menuItems).map(item => <NavItem key={item.id} item={item} />)}
         </ul>
 
         <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tools</div>
         <ul>
-          {secondaryItems.map(item => <NavItem key={item.id} item={item} />)}
+          {filterItems(secondaryItems).map(item => <NavItem key={item.id} item={item} />)}
         </ul>
+
+        {/* Admin Section - Only show if user has admin permissions */}
+        {filterItems(adminItems).length > 0 && (
+          <>
+            <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Admin</div>
+            <ul>
+              {filterItems(adminItems).map(item => <NavItem key={item.id} item={item} />)}
+            </ul>
+          </>
+        )}
       </div>
 
-      {/* Footer */}
+      {/* Footer with User Info */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm text-gray-500">
-            <User size={20} />
+          <div className="w-10 h-10 bg-white rounded-full border border-gray-200 flex items-center justify-center shadow-sm">
+            <User size={20} className="text-gray-500" />
           </div>
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-semibold text-gray-900 truncate">Admin User</span>
-            <span className="text-xs text-gray-500 truncate">admin@anaero.tech</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-900 truncate">
+                {user?.username || 'User'}
+              </span>
+              <RoleIcon size={14} className={roleConfig.color} title={roleConfig.label} />
+            </div>
+            <span className="text-xs text-gray-500 truncate block">{user?.email || ''}</span>
           </div>
+          <button
+            onClick={handleLogout}
+            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            title="Logout"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </div>
     </div>

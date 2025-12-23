@@ -7,8 +7,10 @@ import {
     getFilteredRowModel,
     flexRender,
 } from '@tanstack/react-table';
+import { useAuth } from '../components/AuthContext';
 
 const Database = ({ onViewPlot }) => {
+    const { authFetch, canPerform } = useAuth();
     const [activeTable, setActiveTable] = useState('tests');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -27,7 +29,7 @@ const Database = ({ onViewPlot }) => {
             else if (activeTable === 'inoculums') endpoint = '/api/v1/inoculum';
             else if (activeTable === 'tests') endpoint = '/api/v1/tests?include_devices=true';
 
-            const response = await fetch(endpoint);
+            const response = await authFetch(endpoint);
             const result = await response.json();
             // Sort by ID descending (newest first) in case backend sorting isn't working
             const sortedData = result.sort((a, b) => b.id - a.id);
@@ -112,66 +114,72 @@ const Database = ({ onViewPlot }) => {
                         >
                             View Plot
                         </button>
-                        <button
-                            onClick={() => window.open(`/api/v1/tests/${test.id}/download`, '_blank')}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                            Download
-                        </button>
+                        {canPerform('delete_test') && (
+                            <button
+                                onClick={() => window.open(`/api/v1/tests/${test.id}/download`, '_blank')}
+                                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Download
+                            </button>
+                        )}
                         {test.status === 'running' ? (
-                            <button
-                                onClick={async () => {
-                                    if (window.confirm('Are you sure you want to stop this test?')) {
-                                        try {
-                                            const response = await fetch(`/api/v1/tests/${test.id}/stop`, {
-                                                method: 'POST'
-                                            });
-                                            if (response.ok) {
-                                                fetchData(); // Refresh list
-                                            } else {
-                                                const err = await response.json();
-                                                alert('Failed to stop test: ' + (err.error || 'Unknown error'));
+                            canPerform('stop_test') && (
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm('Are you sure you want to stop this test?')) {
+                                            try {
+                                                const response = await authFetch(`/api/v1/tests/${test.id}/stop`, {
+                                                    method: 'POST'
+                                                });
+                                                if (response.ok) {
+                                                    fetchData(); // Refresh list
+                                                } else {
+                                                    const err = await response.json();
+                                                    alert('Failed to stop test: ' + (err.error || 'Unknown error'));
+                                                }
+                                            } catch (error) {
+                                                console.error('Error stopping test:', error);
+                                                alert('Error stopping test');
                                             }
-                                        } catch (error) {
-                                            console.error('Error stopping test:', error);
-                                            alert('Error stopping test');
                                         }
-                                    }
-                                }}
-                                className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
-                            >
-                                Stop
-                            </button>
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+                                >
+                                    Stop
+                                </button>
+                            )
                         ) : (
-                            <button
-                                onClick={async () => {
-                                    if (window.confirm('Are you sure you want to delete this test? This action cannot be undone.')) {
-                                        try {
-                                            const response = await fetch(`/api/v1/tests/${test.id}`, {
-                                                method: 'DELETE'
-                                            });
-                                            if (response.ok) {
-                                                fetchData(); // Refresh list
-                                            } else {
-                                                const err = await response.json();
-                                                alert('Failed to delete test: ' + err.error);
+                            canPerform('delete_test') && (
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm('Are you sure you want to delete this test? This action cannot be undone.')) {
+                                            try {
+                                                const response = await authFetch(`/api/v1/tests/${test.id}`, {
+                                                    method: 'DELETE'
+                                                });
+                                                if (response.ok) {
+                                                    fetchData(); // Refresh list
+                                                } else {
+                                                    const err = await response.json();
+                                                    alert('Failed to delete test: ' + err.error);
+                                                }
+                                            } catch (error) {
+                                                console.error('Error deleting test:', error);
+                                                alert('Error deleting test');
                                             }
-                                        } catch (error) {
-                                            console.error('Error deleting test:', error);
-                                            alert('Error deleting test');
                                         }
-                                    }
-                                }}
-                                className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-                            >
-                                Delete
-                            </button>
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            )
                         )}
                     </div>
                 );
             }
         }
-    ], [onViewPlot, fetchData]);
+    ], [onViewPlot, fetchData, canPerform]);
 
     const columns = useMemo(() => {
         if (activeTable === 'samples') return samplesColumns;

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { ChimeraProvider } from './components/ChimeraContext'
+import { AuthProvider, useAuth } from './components/AuthContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -9,15 +10,23 @@ import TestForm from './view/TestForm'
 import BlackBox from './view/BlackBox'
 import Chimera from './view/Chimera'
 import Settings from './view/Settings'
+import Login from './view/Login'
+import UserManagement from './view/UserManagement'
 import './App.css'
 
 import Plot from './view/Plot'
+import { Loader2 } from 'lucide-react'
 
-function App() {
+function AppContent() {
+  const { isAuthenticated, loading, canPerform } = useAuth()
   const [currentView, setCurrentView] = useState('dashboard')
   const [plotParams, setPlotParams] = useState(null)
 
   const handleNavigate = (view) => {
+    // Check permissions for protected views
+    if (view === 'users' && !canPerform('manage_users')) {
+      return
+    }
     setCurrentView(view)
     if (view !== 'plot') {
       setPlotParams(null)
@@ -27,6 +36,20 @@ function App() {
   const handleViewPlot = (testId, deviceId, source = 'dashboard') => {
     setPlotParams({ testId, deviceId, source })
     setCurrentView('plot')
+  }
+
+  // Show loading spinner while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login />
   }
 
   const renderView = () => {
@@ -48,23 +71,33 @@ function App() {
       case 'chimera':
         return <Chimera />
       case 'plc':
-        return <PLC />
+        return <div className="p-6">PLC - Coming Soon</div>
       case 'monitor':
         return <div className="p-6">Monitor - Coming Soon</div>
       case 'settings':
         return <Settings />
+      case 'users':
+        return canPerform('manage_users') ? <UserManagement /> : <Dashboard onViewPlot={handleViewPlot} />
       default:
         return <Dashboard onViewPlot={handleViewPlot} />
     }
   }
 
   return (
+    <ChimeraProvider>
+      <Layout currentView={currentView} onNavigate={handleNavigate}>
+        {renderView()}
+      </Layout>
+    </ChimeraProvider>
+  )
+}
+
+function App() {
+  return (
     <ToastProvider>
-      <ChimeraProvider>
-        <Layout currentView={currentView} onNavigate={handleNavigate}>
-          {renderView()}
-        </Layout>
-      </ChimeraProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ToastProvider>
   )
 }

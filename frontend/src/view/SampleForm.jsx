@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Save, FlaskConical, Tag, Scale, Atom } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../components/AuthContext';
 
 function SampleForm() {
+    const { authFetch } = useAuth();
     const toast = useToast();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -31,9 +33,8 @@ function SampleForm() {
         e.preventDefault();
         setLoading(true);
         try {
-            const response = await fetch('/api/v1/samples', {
+            const response = await authFetch('/api/v1/samples', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
 

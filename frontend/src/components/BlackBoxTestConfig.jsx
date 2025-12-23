@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Upload, Info, Check, AlertCircle, Beaker } from 'lucide-react';
+import { useAuth } from './AuthContext';
 
 // Channel Configuration Form Component
 function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear, showChimeraChannel, chimeraChannelError, setChimeraChannelError }) {
@@ -247,6 +248,7 @@ function BlackBoxTestConfig({
     chimeraChannelError,
     setChimeraChannelError
 }) {
+    const { authFetch } = useAuth();
     const [uploadingCsv, setUploadingCsv] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -270,7 +272,7 @@ function BlackBoxTestConfig({
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch('/api/v1/tests/upload-csv', {
+            const response = await authFetch('/api/v1/tests/upload-csv', {
                 method: 'POST',
                 body: formData
             });

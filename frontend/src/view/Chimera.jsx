@@ -4,8 +4,10 @@ import ChimeraPlot from '../components/ChimeraPlot';
 import ChimeraConfig from '../components/ChimeraConfig';
 import ChimeraImage from '../assets/chimera.jpg';
 import refreshIcon from '../assets/refresh.svg';
+import { useAuth } from '../components/AuthContext';
 
 function Chimera() {
+    const { authFetch } = useAuth();
     const [chimeras, setChimeras] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedDevice, setSelectedDevice] = useState(null);
@@ -19,7 +21,7 @@ function Chimera() {
     const fetchChimeras = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/v1/chimera/connected');
+            const response = await authFetch('/api/v1/chimera/connected');
             if (response.ok) {
                 const data = await response.json();
                 setChimeras(data);
@@ -49,7 +51,7 @@ function Chimera() {
     const fetchFiles = async (deviceId) => {
         setLoadingFiles(true);
         try {
-            const response = await fetch(`/api/v1/chimera/${deviceId}/files`);
+            const response = await authFetch(`/api/v1/chimera/${deviceId}/files`);
             if (response.ok) {
                 const data = await response.json();
                 setFiles(data.files || []);
@@ -66,7 +68,7 @@ function Chimera() {
 
     const fetchDeviceConfig = async (deviceId) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${deviceId}/info`);
+            const response = await authFetch(`/api/v1/chimera/${deviceId}/info`);
             if (response.ok) {
                 const data = await response.json();
                 setDeviceConfig(data);
@@ -90,11 +92,8 @@ function Chimera() {
 
     const downloadFile = async (filename) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/download`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/download`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ filename })
             });
 
@@ -127,11 +126,8 @@ function Chimera() {
         }
 
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/delete_file`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/delete_file`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ filename })
             });
 
@@ -156,11 +152,8 @@ function Chimera() {
         }
 
         try {
-            const response = await fetch(`/api/v1/tests/${testId}/stop`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+            const response = await authFetch(`/api/v1/tests/${testId}/stop`, {
+                method: 'POST'
             });
 
             if (response.ok) {
@@ -183,11 +176,8 @@ function Chimera() {
         try {
             let response;
             if (isLogging) {
-                response = await fetch(`/api/v1/chimera/${deviceId}/stop_logging`, {
+                response = await authFetch(`/api/v1/chimera/${deviceId}/stop_logging`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({})
                 });
             } else {
@@ -204,11 +194,8 @@ function Chimera() {
                     return;
                 }
 
-                response = await fetch(`/api/v1/chimera/${deviceId}/start_logging`, {
+                response = await authFetch(`/api/v1/chimera/${deviceId}/start_logging`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({
                         filename,
                         test_name: testName,
@@ -242,11 +229,8 @@ function Chimera() {
 
     const updateTiming = async (openTime, flushTime) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/timing`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/timing`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ open_time_ms: openTime, flush_time_ms: flushTime })
             });
 
@@ -267,11 +251,8 @@ function Chimera() {
 
     const calibrateSensor = async (sensorNumber, gasPercentage) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/calibrate`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/calibrate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
             });
 
@@ -292,7 +273,7 @@ function Chimera() {
     const toggleRecirculation = async (enable) => {
         try {
             const endpoint = enable ? 'enable' : 'disable';
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/${endpoint}`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/${endpoint}`, {
                 method: 'POST'
             });
 
@@ -313,11 +294,8 @@ function Chimera() {
 
     const updateRecirculationDays = async (days) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/days`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/days`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ days: parseInt(days) })
             });
 
@@ -338,11 +316,8 @@ function Chimera() {
 
     const updateRecirculationTime = async (hour, minute) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/time`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/time`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ hour: parseInt(hour), minute: parseInt(minute) })
             });
 
@@ -363,11 +338,8 @@ function Chimera() {
 
     const updateService = async (serviceSequence) => {
         try {
-            const response = await fetch(`/api/v1/chimera/${selectedDevice.device_id}/service`, {
+            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/service`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ service_sequence: serviceSequence })
             });
 

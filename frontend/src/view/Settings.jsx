@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../components/AuthContext';
 
 function Settings() {
+  const { authFetch } = useAuth();
   const [networks, setNetworks] = useState([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
@@ -19,7 +21,7 @@ function Settings() {
     setMessage({ text: '', type: '' })
 
     try {
-      const response = await fetch('/api/v1/wifi/scan')
+      const response = await authFetch('/api/v1/wifi/scan')
       const data = await response.json()
 
       if (response.ok) {
@@ -64,11 +66,8 @@ function Settings() {
     setMessage({ text: '', type: '' })
 
     try {
-      const response = await fetch('/api/v1/wifi/connect', {
+      const response = await authFetch('/api/v1/wifi/connect', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           ssid: ssid,
           password: pwd
@@ -123,7 +122,7 @@ function Settings() {
     setPullMessage({ text: '', type: '' })
 
     try {
-      const response = await fetch('/api/v1/system/git-pull', {
+      const response = await authFetch('/api/v1/system/git-pull', {
         method: 'POST'
       })
       const data = await response.json()
@@ -142,7 +141,7 @@ function Settings() {
 
   const fetchSerialLogInfo = async () => {
     try {
-      const response = await fetch('/api/v1/system/serial-log/info')
+      const response = await authFetch('/api/v1/system/serial-log/info')
       const data = await response.json()
       if (response.ok) {
         setSerialLogInfo(data)
@@ -157,7 +156,7 @@ function Settings() {
     setSerialLogMessage({ text: '', type: '' })
 
     try {
-      const response = await fetch('/api/v1/system/serial-log')
+      const response = await authFetch('/api/v1/system/serial-log')
 
       if (response.ok) {
         const blob = await response.blob()
@@ -190,7 +189,7 @@ function Settings() {
     setSerialLogMessage({ text: '', type: '' })
 
     try {
-      const response = await fetch('/api/v1/system/serial-log', {
+      const response = await authFetch('/api/v1/system/serial-log', {
         method: 'DELETE'
       })
       const data = await response.json()

@@ -10,8 +10,10 @@ import {
 import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
 import { Settings, X, Maximize2, Minimize2 } from 'lucide-react';
+import { useAuth } from '../components/AuthContext';
 
 function Plot({ initialParams, onNavigate }) {
+    const { authFetch, canPerform } = useAuth();
     const toast = useToast();
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -39,7 +41,7 @@ function Plot({ initialParams, onNavigate }) {
     // Handle initial params
     useEffect(() => {
         if (initialParams && initialParams.testId) {
-            fetch(`/api/v1/tests/${initialParams.testId}`)
+            authFetch(`/api/v1/tests/${initialParams.testId}`)
                 .then(res => res.json())
                 .then(test => {
                     setSelectedTest(test);
@@ -315,7 +317,7 @@ function Plot({ initialParams, onNavigate }) {
 
             // addDebugLog(`Requesting URL: ${url}`);
 
-            const response = await fetch(url);
+            const response = await authFetch(url);
             if (response.ok) {
                 const result = await response.json();
                 setPlotData(result);
@@ -345,7 +347,7 @@ function Plot({ initialParams, onNavigate }) {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/v1/tests');
+            const response = await authFetch('/api/v1/tests');
             if (response.ok) {
                 const result = await response.json();
                 const sortedData = result.sort((a, b) => b.id - a.id);
@@ -361,13 +363,13 @@ function Plot({ initialParams, onNavigate }) {
     const fetchTestDetails = async (testId, targetDeviceId = null) => {
         setError(null);
         try {
-            const response = await fetch(`/api/v1/tests/${testId}`);
+            const response = await authFetch(`/api/v1/tests/${testId}`);
             if (response.ok) {
                 const details = await response.json();
                 setTestDetails(details);
             }
 
-            const devicesResponse = await fetch(`/api/v1/tests/${testId}/devices`);
+            const devicesResponse = await authFetch(`/api/v1/tests/${testId}/devices`);
             if (devicesResponse.ok) {
                 const testDevices = await devicesResponse.json();
                 setDevices(testDevices);
@@ -1102,24 +1104,28 @@ function Plot({ initialParams, onNavigate }) {
                                         <h3 className="text-sm font-bold text-gray-700">Selected Points ({selectedPoints.length})</h3>
                                         {selectedPoints.length > 0 && (
                                             <div className="flex gap-2 flex-wrap">
-                                                <button
-                                                    onClick={copySelectedData}
-                                                    className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
-                                                >
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                    </svg>
-                                                    <span className="hidden sm:inline">Copy</span>
-                                                </button>
-                                                <button
-                                                    onClick={downloadSelectedData}
-                                                    className="px-2 sm:px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
-                                                >
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                    </svg>
-                                                    <span className="hidden sm:inline">CSV</span>
-                                                </button>
+                                                {canPerform('delete_test') && (
+                                                    <>
+                                                        <button
+                                                            onClick={copySelectedData}
+                                                            className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                            </svg>
+                                                            <span className="hidden sm:inline">Copy</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={downloadSelectedData}
+                                                            className="px-2 sm:px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                            </svg>
+                                                            <span className="hidden sm:inline">CSV</span>
+                                                        </button>
+                                                    </>
+                                                )}
                                                 <button
                                                     onClick={() => setSelectedPoints([])}
                                                     className="px-2 sm:px-3 py-1 text-red-600 hover:text-red-800 font-medium text-xs border border-red-300 rounded hover:bg-red-50 transition-colors"

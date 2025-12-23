@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart, Wind, Activity } from 'lucide-react';
 import CalibrationProgressBar from './CalibrationProgressBar';
 import { useCalibration } from './ChimeraContext';
+import { useAuth } from './AuthContext';
 
 function DeviceCard(props) {
+    const { authFetch } = useAuth();
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -56,7 +58,7 @@ function DeviceCard(props) {
             // Subscribe to SSE via global context (handles calibration progress)
             subscribeToDevice(props.deviceId);
 
-            fetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
+            authFetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -113,7 +115,7 @@ function DeviceCard(props) {
             setIsCalibrating(false);
             setHadCalibrationProgress(false);
             if (props.deviceType.startsWith('chimera')) {
-                fetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
+                authFetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success && data.sensor_types) {
@@ -188,11 +190,8 @@ function DeviceCard(props) {
             if (props.deviceType === 'black-box') deviceType = 'black_box';
             else if (props.deviceType === 'plc') deviceType = 'plc';
 
-            const response = await fetch(`/api/v1/${deviceType}/${props.deviceId}/name`, {
+            const response = await authFetch(`/api/v1/${deviceType}/${props.deviceId}/name`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({ name: editedName })
             });
 

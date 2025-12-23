@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from './AuthContext';
 
 const ChimeraContext = createContext();
 
@@ -33,6 +34,7 @@ export const useChimera = () => {
 export const useCalibration = useChimera;
 
 export const ChimeraProvider = ({ children }) => {
+    const { authFetch } = useAuth();
     // Map of deviceId -> calibrationProgress
     const [calibrationStates, setCalibrationStates] = useState({});
     // Map of deviceId -> chimeraStatus (status, channel, timing info)
@@ -49,7 +51,7 @@ export const ChimeraProvider = ({ children }) => {
     // Fetch timing for a device (can be called to refresh)
     const fetchDeviceTiming = async (deviceId) => {
         try {
-            const timingRes = await fetch(`/api/v1/chimera/${deviceId}/timing`);
+            const timingRes = await authFetch(`/api/v1/chimera/${deviceId}/timing`);
             if (timingRes.ok) {
                 const timingData = await timingRes.json();
                 if (timingData.success) {
@@ -76,7 +78,7 @@ export const ChimeraProvider = ({ children }) => {
 
         // Check if calibration is already in progress on the backend
         try {
-            const response = await fetch(`/api/v1/chimera/${deviceId}/sensor_info`);
+            const response = await authFetch(`/api/v1/chimera/${deviceId}/sensor_info`);
             if (response.ok) {
                 const data = await response.json();
                 if (data.is_calibrating) {

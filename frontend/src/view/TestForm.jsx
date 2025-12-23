@@ -13,8 +13,10 @@ import {
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import ChimeraTestConfig from '../components/ChimeraTestConfig';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../components/AuthContext';
 
 function TestForm() {
+    const { authFetch } = useAuth();
     const toast = useToast();
     const [testName, setTestName] = useState('');
     const [testDescription, setTestDescription] = useState('');
@@ -76,13 +78,15 @@ function TestForm() {
 
     const fetchDevices = async () => {
         try {
-            const response = await fetch('/api/v1/devices/connected');
-            const data = await response.json();
-            setDevices(data);
+            const response = await authFetch('/api/v1/devices/connected');
+            if (response.ok) {
+                const data = await response.json();
+                setDevices(data);
 
-            // Remove any selected devices that are now busy
-            const freeDeviceIds = data.filter(d => !d.active_test_id).map(d => d.id);
-            setSelectedDevices(prev => prev.filter(id => freeDeviceIds.includes(id)));
+                // Remove any selected devices that are now busy
+                const freeDeviceIds = data.filter(d => !d.active_test_id).map(d => d.id);
+                setSelectedDevices(prev => prev.filter(id => freeDeviceIds.includes(id)));
+            }
         } catch (error) {
             console.error('Error fetching devices:', error);
         }
@@ -121,9 +125,11 @@ function TestForm() {
 
     const fetchSamples = async () => {
         try {
-            const response = await fetch('/api/v1/samples');
-            const data = await response.json();
-            setSamples(data);
+            const response = await authFetch('/api/v1/samples');
+            if (response.ok) {
+                const data = await response.json();
+                setSamples(data);
+            }
         } catch (error) {
             console.error('Error fetching samples:', error);
         }
@@ -131,9 +137,11 @@ function TestForm() {
 
     const fetchInoculums = async () => {
         try {
-            const response = await fetch('/api/v1/inoculum');
-            const data = await response.json();
-            setInoculums(data);
+            const response = await authFetch('/api/v1/inoculum');
+            if (response.ok) {
+                const data = await response.json();
+                setInoculums(data);
+            }
         } catch (error) {
             console.error('Error fetching inoculums:', error);
         }
@@ -276,9 +284,8 @@ function TestForm() {
         setLoading(true);
         try {
             // Create test
-            const testResponse = await fetch('/api/v1/tests', {
+            const testResponse = await authFetch('/api/v1/tests', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: testName,
                     description: testDescription
@@ -309,9 +316,8 @@ function TestForm() {
             });
 
             if (configArray.length > 0) {
-                const configResponse = await fetch(`/api/v1/tests/${testId}/configurations`, {
+                const configResponse = await authFetch(`/api/v1/tests/${testId}/configurations`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ configurations: configArray })
                 });
 
@@ -327,9 +333,8 @@ function TestForm() {
             );
 
             for (const chimeraDevice of chimeraDevices) {
-                const chimeraConfigResponse = await fetch(`/api/v1/tests/${testId}/chimera-configuration`, {
+                const chimeraConfigResponse = await authFetch(`/api/v1/tests/${testId}/chimera-configuration`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         device_id: chimeraDevice.id,
                         flush_time_seconds: flushTime,
@@ -349,9 +354,8 @@ function TestForm() {
             }
 
             // Start the test immediately, passing selected devices explicitly
-            const startResponse = await fetch(`/api/v1/tests/${testId}/start`, {
+            const startResponse = await authFetch(`/api/v1/tests/${testId}/start`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ device_ids: selectedDevices })
             });
 
