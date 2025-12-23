@@ -1,4 +1,5 @@
 import time
+import threading
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
@@ -15,7 +16,8 @@ class BlackBoxHandler(SerialHandler):
         self.current_log_file = None
         self.app = None  # Flask app context for database operations
         self.test_id = None  # Current test ID for database logging
-        
+        self._tip_processing_lock = threading.Lock()  # Prevent race conditions with recovery thread
+
         # Handle automatic messages from the blackbox
         self.register_automatic_handler("tip ", self._print_tips)
         self.register_automatic_handler("counts ", lambda : None)
@@ -117,7 +119,6 @@ class BlackBoxHandler(SerialHandler):
 
                                 # Recover missed tips in a separate thread to avoid blocking serial reader
                                 # Recover from expected_tip to current_tip - 1 (exclude current tip, it's being processed now)
-                                import threading
                                 recovery_thread = threading.Thread(
                                     target=self._recover_missed_tips_background,
                                     args=(expected_tip, tip_data['tip_number'] - 1),
@@ -562,7 +563,7 @@ class BlackBoxHandler(SerialHandler):
             print("[DEBUG calculateEventLogTip] No app found - returning early")
             return
 
-        with self.app.app_context():
+        with self._tip_processing_lock, self.app.app_context():
             try:
                 tableData = db.session.query(ChannelConfiguration).filter_by(test_id = self.test_id).all()
                 print(f"[DEBUG calculateEventLogTip] Loaded {len(tableData)} channel configurations for test_id {self.test_id}")
@@ -581,7 +582,8 @@ class BlackBoxHandler(SerialHandler):
                      "inoculumMass" : [0.0] * 15,
                      "sampleMass" : [0.0] * 15,
                      "tumblerVolume" : [0.0] * 15,
-                     "gasConstants" : [0.0] * 15}
+                     "gasConstants" : [0.0] * 15,
+                     "chimeraChannel" : [None] * 15}
 
             #Dicionary to store overall running information for all channels
             overall = {"tips" : [0] * 15, "volumeSTP" : [0.0] * 15, "volumeNet" : [0.0] * 15, "volumeRecirculation" : [0.0] * 15, "inoculumVolume" : 0.0, "inoculumMass" : 0.0}
@@ -597,6 +599,7 @@ class BlackBoxHandler(SerialHandler):
                 if channelIdx >= 0 and channelIdx < 15:
                     setup["inUse"][channelIdx] = True
                     setup["names"][channelIdx] = row.notes
+                    setup["chimeraChannel"][channelIdx] = row.chimera_channel
                     sample = False
                     setup["tumblerVolume"][channelIdx] = row.tumbler_volume
                     overall["tips"][channelIdx] = row.tip_count
@@ -678,7 +681,17 @@ class BlackBoxHandler(SerialHandler):
                         #Add tip to overall, day and hour as well as the volume for each
                         overall["tips"][channelIdx] = overall["tips"][channelIdx] + 1
                         overall["volumeSTP"][channelIdx] = overall["volumeSTP"][channelIdx] + eventVolume
-                        overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
+
+                        # Only add to recirculation volume if chimera is not currently reading this channel
+                        # (gas does not go to gas bags when reading so does add to recirculation value)
+                        chimera_channel = setup["chimeraChannel"][channelIdx]
+                        if chimera_channel:
+                            from device_manager import DeviceManager
+                            reading_channel = DeviceManager().get_chimera_reading_channel(self.test_id)
+                            if reading_channel != chimera_channel:
+                                overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
+                        else:
+                            overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
 
                         hourlyTips = hourlyTips + 1
                         dailyTips = dailyTips + 1

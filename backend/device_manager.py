@@ -364,3 +364,13 @@ class DeviceManager:
         with self._app.app_context():
             device = Device.query.filter_by(serial_port=port).first()
             return device and device.id in self._active_handlers
+
+    def get_chimera_reading_channel(self, test_id: int) -> Optional[int]:
+        """Get the channel currently being read by the Chimera for a given test.
+        Returns the channel number (1-15) if reading, None otherwise."""
+        for handler in self._active_handlers.values():
+            if (handler.device_type in ['chimera', 'chimera-max'] and
+                getattr(handler, 'test_id', None) == test_id and
+                getattr(handler, 'current_status', None) == 'reading'):
+                return getattr(handler, 'current_channel', None)
+        return None
