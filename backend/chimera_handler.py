@@ -572,7 +572,7 @@ class ChimeraHandler(SerialHandler):
         """Set open and flush timing"""
         response = self.send_command(f"timingset {open_time_ms} {flush_time_ms}")
         
-        if response == "done timeset":
+        if response == "done timingset":
             self.open_time_ms = open_time_ms
             self.flush_time_ms = flush_time_ms
             return True, "Timing set successfully"
