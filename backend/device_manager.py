@@ -49,8 +49,12 @@ class DeviceManager:
         """
         if not self._app:
             return False
-        
-    
+
+        # Check if port is already connected
+        if self.is_port_connected(port):
+            print(f"[DeviceManager] Port {port} is already connected")
+            return True
+
         with self._app.app_context():
             # Auto-detect device type and get MAC address
             temp_handler = SerialHandler()
@@ -78,7 +82,9 @@ class DeviceManager:
                     return False
 
                 handler.app = self._app  # Set app context
-                handler.connect()
+                if not handler.connect():
+                    print(f"[DeviceManager] Handler failed to connect to {port}")
+                    return False
                 mac_address = handler.mac_address
 
                 # Look up device by MAC address first (robust across port changes)
@@ -155,7 +161,9 @@ class DeviceManager:
             handler = BlackBoxHandler(port)
             handler.id = device_id
             handler.app = self._app
-            handler.connect()
+            if not handler.connect():
+                print(f"[DeviceManager] BlackBox handler failed to connect to {port}")
+                return False
 
             handler.on_disconnect = lambda: self._handle_disconnect(device_id)
 
@@ -190,7 +198,9 @@ class DeviceManager:
             handler = ChimeraHandler(port)
             handler.id = device_id
             handler.app = self._app
-            handler.connect()
+            if not handler.connect():
+                print(f"[DeviceManager] Chimera handler failed to connect to {port}")
+                return False
 
             handler.on_disconnect = lambda: self._handle_disconnect(device_id)
 
@@ -254,18 +264,25 @@ class DeviceManager:
                 return None
 
             # Not in cache but marked as connected - try to reconnect
+            handler = None
             if device.device_type == "black-box":
                 handler = BlackBoxHandler(device.serial_port)
                 handler.app = self._app
                 handler.id = device.id
-                handler.connect()
+                if not handler.connect():
+                    device.connected = False
+                    db.session.commit()
+                    return None
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
             elif device.device_type in ["chimera", "chimera-max"]:
                 handler = ChimeraHandler(device.serial_port)
                 handler.app = self._app
                 handler.id = device.id
-                handler.connect()
+                if not handler.connect():
+                    device.connected = False
+                    db.session.commit()
+                    return None
                 handler.mac_address = device.mac_address
                 handler.device_name = device.name
             else:

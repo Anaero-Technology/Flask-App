@@ -44,12 +44,20 @@ class ChimeraHandler(SerialHandler):
         self.register_automatic_handler("calibration", self._handle_calibration)
         self.register_automatic_handler("valve", self._handle_valve)
         
-    def connect(self):
-        super().connect(self.port)
-        # Get device info immediately after connection
-        self._get_device_info()
-        # Start IP monitoring daemon
-        self.start_ip_monitor()
+    def connect(self) -> bool:
+        """Connect to device and get info. Returns True on success."""
+        try:
+            super().connect(self.port)
+            # Get device info immediately after connection
+            if not self._get_device_info():
+                self.disconnect()
+                return False
+            # Start IP monitoring daemon
+            self.start_ip_monitor()
+            return True
+        except Exception as e:
+            print(f"[ChimeraHandler] Connection failed: {e}")
+            return False
 
     def disconnect(self):
         # Stop IP monitoring daemon
@@ -58,7 +66,7 @@ class ChimeraHandler(SerialHandler):
     
     
     def _print_datapoint(self, line: str):
-        """Process automatic datapoint messages and send SSE notification"""
+        """Process automatic datapoint messages and send SSE notification""" 
         parts = line.split()
         # Format: datapoint [date_time] [seconds_elapsed] [channel_number] [each_sensor_data]
         # Minimum parts: datapoint + date + seconds_elapsed + channel + 1 sensor (8 parts) = 12 parts
@@ -166,8 +174,9 @@ class ChimeraHandler(SerialHandler):
 
     def _handle_recirculate(self, line: str):
         """Process automatic recirculate messages and save to database
-        Format: recirculate [date_time] [seconds_elapsed] [channel_number] [gas_name1] [peak_value1] [peak_part1_0-4] [gas_name2] [peak_value2] [peak_part2_0-4]...
-        Each sensor has: gas_name, peak_value, and 5 peak_parts
+        Format: recirculate [date_time] [seconds_elapsed] [channel_number_r] [sensor_num] [gas_name] [peak_value] [peak_part0-4] ...
+        Each sensor has: sensor_num, gas_name, peak_value, and 5 peak_parts (8 values per sensor)
+        Channel number has _r suffix that needs to be stripped
         """
         parts = line.split()
         if len(parts) < 6:
@@ -185,23 +194,25 @@ class ChimeraHandler(SerialHandler):
                 return
 
             seconds_elapsed = int(parts[2])
-            channel = int(parts[3])
+            # Channel number has _r suffix, strip it
+            channel_str = parts[3].rstrip('_r')
+            channel = int(channel_str)
 
             sensor_data = []
-            sensor_num = 1
             i = 4  # Start after recirculate, date_time, seconds_elapsed, channel
 
-            # Parse sensors: gas_name, peak_value, and 5 peak_parts (7 values per sensor)
-            while i + 6 < len(parts):
+            # Parse sensors: sensor_num, gas_name, peak_value, and 5 peak_parts (8 values per sensor)
+            while i + 7 < len(parts):
                 try:
-                    gas_name = parts[i]
-                    peak_value = float(parts[i + 1])
+                    sensor_num = int(parts[i])
+                    gas_name = parts[i + 1]
+                    peak_value = float(parts[i + 2])
                     peak_parts = [
-                        float(parts[i + 2]),
                         float(parts[i + 3]),
                         float(parts[i + 4]),
                         float(parts[i + 5]),
-                        float(parts[i + 6])
+                        float(parts[i + 6]),
+                        float(parts[i + 7])
                     ]
 
                     sensor_data.append({
@@ -210,8 +221,7 @@ class ChimeraHandler(SerialHandler):
                         "peak_value": peak_value,
                         "peak_parts": peak_parts
                     })
-                    sensor_num += 1
-                    i += 7  # Move to next sensor (gas_name + peak_value + 5 peak_parts)
+                    i += 8  # Move to next sensor (sensor_num + gas_name + peak_value + 5 peak_parts)
                 except (ValueError, IndexError):
                     break
 
@@ -333,15 +343,19 @@ class ChimeraHandler(SerialHandler):
         self.device_name = name
         return True
     
-    def _get_device_info(self):
-        """Get device information using the info command"""
-        if self.connection.is_open:
-            response = self.send_command("info")
-            if response and response.startswith("info"):
+    def _get_device_info(self) -> bool:
+        """Get device information using the info command. Returns True on success."""
+        if not self.connection.is_open:
+            return False
+
+        response = self.send_command("info", timeout=2.0)
+
+        if response and response.startswith("info"):
+            try:
                 # Parse: info [logging_state] [filename] [current_channel] [seconds_elapsed] chimera-max [mac_address]
                 # OR: info [logging_state] [filename] [seconds_elapsed] chimera-max [mac_address] (missing channel)
                 parts = response.split()
-                
+
                 if len(parts) >= 7:
                     self.is_logging = (parts[1] == "true")
                     self.current_log_file = parts[2] if parts[2] != "none" else None
@@ -349,20 +363,25 @@ class ChimeraHandler(SerialHandler):
                     self.seconds_elapsed = int(parts[4])
                     # parts[5] should be "chimera-max"
                     self.mac_address = parts[6]
-                    print(f"[DEBUG] Parsed info (7 parts): logging={self.is_logging}, file={self.current_log_file}")
+                    return True
                 elif len(parts) >= 6:
                     # Handle format where channel is missing
                     self.is_logging = (parts[1] == "true")
                     self.current_log_file = parts[2] if parts[2] != "none" else None
-                    self.current_channel = 0 # Unknown
+                    self.current_channel = 0  # Unknown
                     self.seconds_elapsed = int(parts[3])
                     # parts[4] should be "chimera-max"
                     self.mac_address = parts[5]
-                    print(f"[DEBUG] Parsed info (6 parts): logging={self.is_logging}, file={self.current_log_file}")
+                    return True
                 else:
-                    print(f"[DEBUG] Info response too short: {response}")
-            else:
-                print(f"[DEBUG] Invalid info response: {response}")
+                    print(f"[ChimeraHandler] Info response too short: {response}")
+                    return False
+            except (IndexError, ValueError) as e:
+                print(f"[ChimeraHandler] Failed to parse info response: {e}")
+                return False
+
+        print(f"[ChimeraHandler] No valid info response received")
+        return False
     
     def get_info(self) -> Dict:
         """Get current device information"""
@@ -1024,11 +1043,13 @@ class ChimeraHandler(SerialHandler):
 
                         # Send ipset command to chimera
                         if self.connection and self.connection.is_open:
-                            command = f"ipset http://{current_ip}:5173\n"
                             try:
-                                self.connection.write(command.encode())
-                                print(f"[CHIMERA IP MONITOR] Sent: ipset {current_ip}")
-                                self.last_known_ip = current_ip
+                                response = self.send_command(f"ipset http://{current_ip}:5173", timeout=2.0)
+                                if response == "done ipset":
+                                    print(f"[CHIMERA IP MONITOR] ipset successful")
+                                    self.last_known_ip = current_ip
+                                else:
+                                    print(f"[CHIMERA IP MONITOR] ipset unexpected response: {response}")
                             except Exception as e:
                                 print(f"[CHIMERA IP MONITOR] Failed to send ipset command: {e}")
                         else:
@@ -1042,17 +1063,20 @@ class ChimeraHandler(SerialHandler):
                         if self.connection and self.connection.is_open:
                             # Clear old SSIDs first
                             try:
-                                self.connection.write(b"clearssids\n")
-                                time.sleep(0.1)
+                                response = self.send_command("clearssids", timeout=2.0)
+                                if response == "done clearssids":
+                                    print(f"[CHIMERA IP MONITOR] Cleared SSIDs")
+                                else:
+                                    print(f"[CHIMERA IP MONITOR] clearssids unexpected response: {response}")
                             except Exception as e:
                                 print(f"[CHIMERA IP MONITOR] Failed to clear SSIDs: {e}")
-                            
+
                             # Send all current SSIDs
                             for ssid in ssids:
-                                command = f"ssidadd {ssid}\n"
                                 try:
-                                    self.connection.write(command.encode())
-                                    time.sleep(0.1)
+                                    response = self.send_command(f"ssidadd {ssid}", timeout=2.0)
+                                    if response != "done ssidadd":
+                                        print(f"[CHIMERA IP MONITOR] ssidadd unexpected response: {response}")
                                 except Exception as e:
                                     print(f"[CHIMERA IP MONITOR] Failed to send ssidadd: {e}")
                         else:

@@ -22,10 +22,18 @@ class BlackBoxHandler(SerialHandler):
         self.register_automatic_handler("tip ", self._print_tips)
         self.register_automatic_handler("counts ", lambda : None)
 
-    def connect(self):
-        super().connect(self.port)
-        # Get device info immediately after connection
-        self._get_device_info()
+    def connect(self) -> bool:
+        """Connect to device and get info. Returns True on success."""
+        try:
+            super().connect(self.port)
+            # Get device info immediately after connection
+            if not self._get_device_info():
+                self.disconnect()
+                return False
+            return True
+        except Exception as e:
+            print(f"[BlackBoxHandler] Connection failed: {e}")
+            return False
     
     def _print_tips(self, line: str):
         """Prints automatic tip messages and sends SSE notification"""
@@ -156,30 +164,40 @@ class BlackBoxHandler(SerialHandler):
             traceback.print_exc()
             pass
   
-    def _get_device_info(self):
-        """Get device information using the info command (auto appends \n at end of command)"""
-        if self.connection.is_open:
-            self.clear_buffer()
-            self.send_command_no_wait("info")
+    def _get_device_info(self) -> bool:
+        """Get device information using the info command. Returns True on success."""
+        if not self.connection.is_open:
+            return False
 
-            # Keep reading until we get the info response (may receive other messages first)
-            start_time = time.time()
-            response = None
-            while time.time() - start_time < 2.0:
-                resp = self.read_line(timeout=0.5)
-                if resp and resp.startswith("info"):
-                    response = resp
-                    break
+        self.clear_buffer()
+        self.send_command_no_wait("info")
 
-            if response and response.startswith("info"):
+        # Keep reading until we get the info response (may receive other messages first)
+        start_time = time.time()
+        response = None
+        while time.time() - start_time < 5.0:
+            resp = self.read_line(timeout=0.5)
+            if resp and resp.startswith("info"):
+                response = resp
+                break
+
+        if response and response.startswith("info"):
+            try:
                 # Parse: info [logging_state] [logging_file] [device_name] black-box [mac_address]
                 parts = response.split()
+                if len(parts) >= 6:
+                    self.is_logging = (parts[1] == "1")
+                    self.current_log_file = parts[2] if parts[2] != "none" else None
+                    self.device_name = parts[3]
+                    # parts[4] should be "black-box"
+                    self.mac_address = parts[5]
+                    return True
+            except (IndexError, ValueError) as e:
+                print(f"[BlackBoxHandler] Failed to parse info response: {e}")
+                return False
 
-                self.is_logging = (parts[1] == "1")
-                self.current_log_file = parts[2] if parts[2] != "none" else None
-                self.device_name = parts[3]
-                # parts[4] should be "black-box"
-                self.mac_address = parts[5]
+        print(f"[BlackBoxHandler] No valid info response received")
+        return False
 
     def get_info(self) -> Dict:
         """Get current device information"""
