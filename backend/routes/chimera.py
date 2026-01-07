@@ -690,42 +690,11 @@ def disable_recirculation(device_id):
         db.session.close()
 
 
-@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/days', methods=['POST'])
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/delay', methods=['POST'])
 @jwt_required()
 @require_role(['admin', 'operator'])
-def set_recirculation_days(device_id):
-    try:
-        # Get device from database
-        device = Device.query.get(device_id)
-        if not device or not device.connected:
-            return jsonify({"error": "Device not found or not connected"}), 404
-        
-        # Get handler
-        handler = device_manager.get_chimera(device_id)
-        if not handler:
-            return jsonify({"error": "Device handler not found"}), 404
-        
-        data = request.get_json()
-        days = data.get('days')
-        
-        if days is None:
-            return jsonify({"error": "days is required"}), 400
-        
-        success, message = handler.set_recirculation_days(days)
-        
-        return jsonify({
-            "success": success,
-            "message": message
-        })
-        
-    finally:
-        db.session.close()
-
-
-@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/time', methods=['POST'])
-@jwt_required()
-@require_role(['admin', 'operator'])
-def set_recirculation_time(device_id):
+def set_recirculation_delay(device_id):
+    """Set the delay between periodic recirculation runs in seconds."""
     try:
         # Get device from database
         device = Device.query.get(device_id)
@@ -738,13 +707,12 @@ def set_recirculation_time(device_id):
             return jsonify({"error": "Device handler not found"}), 404
 
         data = request.get_json()
-        hour = data.get('hour')
-        minute = data.get('minute')
+        seconds = data.get('seconds')
 
-        if hour is None or minute is None:
-            return jsonify({"error": "hour and minute are required"}), 400
+        if seconds is None:
+            return jsonify({"error": "seconds is required"}), 400
 
-        success, message = handler.set_recirculation_time(hour, minute)
+        success, message = handler.set_recirculation_delay(seconds)
 
         return jsonify({
             "success": success,

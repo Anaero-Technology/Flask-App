@@ -24,9 +24,7 @@ class ChimeraHandler(SerialHandler):
         self.flush_time_ms = 0  # Flush time (channel 15)
         self.service_sequence = "111111111111111"  # 15 channels
         self.recirculation_mode = 0  # 0=disabled, 1=automatic, 2=manual
-        self.recirculation_days = 1
-        self.recirculation_hour = 0
-        self.recirculation_minute = 0
+        self.recirculation_delay_seconds = None  # Seconds between periodic recirculation runs (must be set for periodic mode)
         self.sensor_types = {}
         self.past_data = {}
         self.app = None  # Flask app context for database operations
@@ -736,42 +734,24 @@ class ChimeraHandler(SerialHandler):
         """Disable recirculation (backward compatibility - sets to disabled mode)"""
         return self.set_recirculate(0)
     
-    def set_recirculation_days(self, days: int) -> Tuple[bool, str]:
-        """Set number of days between recirculation runs"""
-        if days <= 0:
-            return False, "Days must be greater than 0"
-        
-        response = self.send_command(f"recirculatesetdays {days}")
-        
-        if response == "done recirculatesetdays":
-            self.recirculation_days = days
-            return True, "Recirculation days set successfully"
-        elif response == "failed recirculatesetdays nofiles":
-            return False, "Files not working"
-        elif response == "failed recirculatesetdays invalidvalue":
-            return False, "Invalid number of days"
-        elif response == "failed recirculatesetdays logging":
-            return False, "Cannot change recirculation days while logging"
-        else:
-            return False, f"Unexpected response: {response}"
-    
-    def set_recirculation_time(self, hour: int, minute: int) -> Tuple[bool, str]:
-        """Set recirculation time"""
-        if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            return False, "Invalid time values"
+    def set_recirculation_delay(self, seconds: int) -> Tuple[bool, str]:
+        """Set the time between periodic recirculation runs in automatic mode.
 
-        response = self.send_command(f"recirculatesettime {hour} {minute}")
+        Args:
+            seconds: Time between recirculation runs (must be > 0)
+        """
+        if seconds <= 0:
+            return False, "Seconds must be greater than 0"
 
-        if response == "done recirculatesettime":
-            self.recirculation_hour = hour
-            self.recirculation_minute = minute
-            return True, "Recirculation time set successfully"
-        elif response == "failed recirculatesettime nofiles":
-            return False, "Files not working"
-        elif response == "failed recirculatesettime invalidtime":
-            return False, "Invalid time values"
-        elif response == "failed recirculatesettime logging":
-            return False, "Cannot change recirculation time while logging"
+        response = self.send_command(f"recirculatedelayset {seconds}")
+
+        if response == "done recirculatedelayset":
+            self.recirculation_delay_seconds = seconds
+            return True, "Recirculation delay set successfully"
+        elif response == "failed recirculatedelayset nofiles":
+            return False, "SD card not working"
+        elif response == "failed recirculatedelayset invalidtime":
+            return False, "Invalid seconds value"
         else:
             return False, f"Unexpected response: {response}"
     
@@ -809,36 +789,21 @@ class ChimeraHandler(SerialHandler):
         response = self.send_command("recirculateinfo")
 
         if response and response.startswith("recirculateinfo "):
-            # Parse: recirculateinfo [recirculating] [days_between] [hour] [minute] [last_year] [last_month] [last_day]
+            # Parse: recirculateinfo [mode] [delay_seconds]
             parts = response.split()
-            if len(parts) >= 8:
-                recirculating = parts[1] == "1"
-                days_between = int(parts[2])
-                hour = int(parts[3])
-                minute = int(parts[4])
-                last_year = int(parts[5])
-                last_month = int(parts[6])
-                last_day = int(parts[7])
+            if len(parts) >= 3:
+                mode = int(parts[1])
+                delay_seconds = int(parts[2])
 
                 # Update internal state
-                # recirculating is 0=disabled, 1=automatic, 2=manual
-                self.recirculation_mode = recirculating
-                self.recirculation_days = days_between
-                self.recirculation_hour = hour
-                self.recirculation_minute = minute
+                self.recirculation_mode = mode
+                self.recirculation_delay_seconds = delay_seconds
 
                 mode_names = ['disabled', 'automatic', 'manual']
                 info = {
-                    "recirculation_mode": recirculating,
-                    "recirculation_mode_name": mode_names[recirculating] if 0 <= recirculating <= 2 else 'unknown',
-                    "days_between": days_between,
-                    "hour": hour,
-                    "minute": minute,
-                    "last_recirculation_date": {
-                        "year": last_year,
-                        "month": last_month,
-                        "day": last_day
-                    }
+                    "recirculation_mode": mode,
+                    "recirculation_mode_name": mode_names[mode] if 0 <= mode <= 2 else 'unknown',
+                    "delay_seconds": delay_seconds
                 }
 
                 return True, info

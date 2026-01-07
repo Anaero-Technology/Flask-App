@@ -197,10 +197,7 @@ class ChimeraConfiguration(db.Model):
 
    # Recirculation settings - mode can be 'off', 'volume', or 'periodic'
    recirculation_mode = Column(String, nullable=False, default='off')
-   recirculation_days = Column(Integer, nullable=True)  # Days between recirculation for periodic mode
-   recirculation_hour = Column(Integer, nullable=True)  # Hour (0-23) for periodic recirculation
-   recirculation_minute = Column(Integer, nullable=True)  # Minute (0-59) for periodic recirculation
-   last_recirculation_time = Column(DateTime, nullable=True)
+   recirculation_delay_seconds = Column(Integer, nullable=True)  # Seconds between periodic recirculation runs (required for periodic mode)
 
    # Service sequence - which channels are in service (15 chars, '1' or '0')
    service_sequence = Column(String(15), nullable=False, default='111111111111111')

@@ -6,12 +6,8 @@ function ChimeraTestConfig({
     setFlushTime,
     recirculationMode,
     setRecirculationMode,
-    recirculationDays,
-    setRecirculationDays,
-    recirculationHour,
-    setRecirculationHour,
-    recirculationMinute,
-    setRecirculationMinute,
+    recirculationDelaySeconds,
+    setRecirculationDelaySeconds,
     serviceSequence,
     setServiceSequence,
     channelSettings,
@@ -109,44 +105,38 @@ function ChimeraTestConfig({
                         )}
                     </div>
 
-                    {/* Periodic Schedule - Inline */}
+                    {/* Periodic Delay - Inline */}
                     {recirculationMode === 'periodic' && (
                         <div className="flex items-center gap-4 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 animate-fadeIn">
                             <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-blue-800">Every</span>
                                 <input
                                     type="number"
-                                    min="1"
-                                    value={recirculationDays}
-                                    onChange={(e) => setRecirculationDays(parseInt(e.target.value) || 1)}
+                                    min="0"
+                                    value={Math.floor(recirculationDelaySeconds / 3600)}
+                                    onChange={(e) => {
+                                        const hours = parseInt(e.target.value) || 0;
+                                        const currentMinutes = Math.floor((recirculationDelaySeconds % 3600) / 60);
+                                        setRecirculationDelaySeconds(hours * 3600 + currentMinutes * 60);
+                                    }}
                                     className="w-12 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                                <span className="text-xs text-blue-800">days</span>
+                                <span className="text-xs text-blue-800">hrs</span>
                             </div>
-                            <div className="w-px h-4 bg-blue-200"></div>
                             <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-blue-800">At</span>
-                                <div className="flex items-center gap-1">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="23"
-                                        placeholder="HH"
-                                        value={recirculationHour}
-                                        onChange={(e) => setRecirculationHour(parseInt(e.target.value) || 0)}
-                                        className="w-10 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                    <span className="text-blue-400 font-bold">:</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="59"
-                                        placeholder="MM"
-                                        value={recirculationMinute}
-                                        onChange={(e) => setRecirculationMinute(parseInt(e.target.value) || 0)}
-                                        className="w-10 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                </div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="59"
+                                    value={Math.floor((recirculationDelaySeconds % 3600) / 60)}
+                                    onChange={(e) => {
+                                        const minutes = parseInt(e.target.value) || 0;
+                                        const currentHours = Math.floor(recirculationDelaySeconds / 3600);
+                                        setRecirculationDelaySeconds(currentHours * 3600 + minutes * 60);
+                                    }}
+                                    className="w-12 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-blue-800">mins</span>
                             </div>
                         </div>
                     )}

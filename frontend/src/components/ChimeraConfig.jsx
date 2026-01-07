@@ -148,10 +148,7 @@ function ChimeraConfig({ device }) {
             if (recircResponse.ok) {
                 const recircData = await recircResponse.json();
                 config.recirculation_enabled = recircData.recirculation_enabled || false;
-                config.recirculation_days = recircData.days_between || 1;
-                config.recirculation_hour = recircData.hour || 0;
-                config.recirculation_minute = recircData.minute || 0;
-                config.last_recirculation_date = recircData.last_recirculation_date;
+                config.recirculation_delay_seconds = recircData.delay_seconds || 0;
             }
 
             setDeviceConfig(config);
@@ -254,45 +251,24 @@ function ChimeraConfig({ device }) {
         }
     };
 
-    const updateRecirculationDays = async (days) => {
+    const updateRecirculationDelay = async (seconds) => {
         try {
-            const response = await authFetch(`/api/v1/chimera/${device.id}/recirculation/days`, {
+            const response = await authFetch(`/api/v1/chimera/${device.id}/recirculation/delay`, {
                 method: 'POST',
-                body: JSON.stringify({ days: parseInt(days) })
+                body: JSON.stringify({ seconds: parseInt(seconds) })
             });
 
             if (response.ok) {
                 const data = await response.json();
-                alert(data.message || 'Recirculation days updated');
+                alert(data.message || 'Recirculation delay updated');
                 fetchDeviceConfig();
             } else {
                 const errorData = await response.json();
-                alert(errorData.error || 'Failed to update days');
+                alert(errorData.error || 'Failed to update delay');
             }
         } catch (error) {
-            console.error('Error updating days:', error);
-            alert('Failed to update days');
-        }
-    };
-
-    const updateRecirculationTime = async (hour, minute) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${device.id}/recirculation/time`, {
-                method: 'POST',
-                body: JSON.stringify({ hour: parseInt(hour), minute: parseInt(minute) })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                alert(data.message || 'Recirculation time updated');
-                fetchDeviceConfig();
-            } else {
-                const errorData = await response.json();
-                alert(errorData.error || 'Failed to update time');
-            }
-        } catch (error) {
-            console.error('Error updating time:', error);
-            alert('Failed to update time');
+            console.error('Error updating delay:', error);
+            alert('Failed to update delay');
         }
     };
 
@@ -478,70 +454,39 @@ function ChimeraConfig({ device }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                 {/* Frequency */}
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Frequency (Days)</label>
-                                    <div className="flex gap-2">
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Delay Between Runs</label>
+                                    <div className="flex gap-2 items-center">
                                         <input
                                             type="number"
-                                            id={`recirculationDays-${device.id}`}
-                                            min="1"
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
-                                            defaultValue={deviceConfig.recirculation_days || 1}
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                const days = document.getElementById(`recirculationDays-${device.id}`).value;
-                                                if (days) {
-                                                    updateRecirculationDays(days);
-                                                } else {
-                                                    alert('Please enter number of days');
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                                        >
-                                            Set
-                                        </button>
-                                    </div>
-                                    {deviceConfig.last_recirculation_date && (
-                                        <p className="text-xs text-gray-400 mt-2">
-                                            Last run: {deviceConfig.last_recirculation_date.year}/{deviceConfig.last_recirculation_date.month}/{deviceConfig.last_recirculation_date.day}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Schedule Time */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Schedule Time (HH:MM)</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="number"
-                                            id={`recirculationHour-${device.id}`}
+                                            id={`recirculationHours-${device.id}`}
                                             min="0"
-                                            max="23"
                                             placeholder="HH"
                                             className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
-                                            defaultValue={deviceConfig.recirculation_hour || 0}
+                                            defaultValue={Math.floor((deviceConfig.recirculation_delay_seconds || 0) / 3600)}
                                         />
-                                        <span className="self-center text-gray-400">:</span>
+                                        <span className="text-gray-500 text-sm">hrs</span>
                                         <input
                                             type="number"
-                                            id={`recirculationMinute-${device.id}`}
+                                            id={`recirculationMinutes-${device.id}`}
                                             min="0"
                                             max="59"
                                             placeholder="MM"
                                             className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-sm"
-                                            defaultValue={deviceConfig.recirculation_minute || 0}
+                                            defaultValue={Math.floor(((deviceConfig.recirculation_delay_seconds || 0) % 3600) / 60)}
                                         />
+                                        <span className="text-gray-500 text-sm">mins</span>
                                         <button
                                             onClick={() => {
-                                                const hour = document.getElementById(`recirculationHour-${device.id}`).value;
-                                                const minute = document.getElementById(`recirculationMinute-${device.id}`).value;
-                                                if (hour !== '' && minute !== '') {
-                                                    updateRecirculationTime(hour, minute);
+                                                const hours = parseInt(document.getElementById(`recirculationHours-${device.id}`).value) || 0;
+                                                const minutes = parseInt(document.getElementById(`recirculationMinutes-${device.id}`).value) || 0;
+                                                const totalSeconds = hours * 3600 + minutes * 60;
+                                                if (totalSeconds > 0) {
+                                                    updateRecirculationDelay(totalSeconds);
                                                 } else {
-                                                    alert('Please enter both hour and minute');
+                                                    alert('Please enter a delay greater than 0');
                                                 }
                                             }}
-                                            className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                                            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
                                         >
                                             Set
                                         </button>

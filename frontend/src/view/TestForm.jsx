@@ -33,9 +33,7 @@ function TestForm() {
     // Global Chimera recirculation settings (applies to all chimera channels)
     const [recirculationMode, setRecirculationMode] = useState('off'); // 'off', 'volume', or 'periodic'
     const [serviceSequence, setServiceSequence] = useState('111111111111111'); // 15 channels
-    const [recirculationDays, setRecirculationDays] = useState(1);
-    const [recirculationHour, setRecirculationHour] = useState(0);
-    const [recirculationMinute, setRecirculationMinute] = useState(0);
+    const [recirculationDelaySeconds, setRecirculationDelaySeconds] = useState(0); // Seconds between periodic recirculation (0 = not set)
     // Per-channel settings: { 1: { volumeThreshold: 1000, openTime: 1 }, 2: {...}, ... }
     const [channelSettings, setChannelSettings] = useState({});
     const [applyAllOpenTimeValue, setApplyAllOpenTimeValue] = useState(600);
@@ -245,6 +243,11 @@ function TestForm() {
             }
         }
 
+        // Validate periodic recirculation has a delay set
+        if (recirculationMode === 'periodic' && recirculationDelaySeconds <= 0) {
+            missing.push('recirculation delay time');
+        }
+
         return {
             isValid: missing.length === 0,
             missing: missing
@@ -339,9 +342,7 @@ function TestForm() {
                         device_id: chimeraDevice.id,
                         flush_time_seconds: flushTime,
                         recirculation_mode: recirculationMode,
-                        recirculation_days: recirculationMode === 'periodic' ? recirculationDays : null,
-                        recirculation_hour: recirculationMode === 'periodic' ? recirculationHour : null,
-                        recirculation_minute: recirculationMode === 'periodic' ? recirculationMinute : null,
+                        recirculation_delay_seconds: recirculationMode === 'periodic' ? recirculationDelaySeconds : null,
                         service_sequence: serviceSequence,
                         channel_settings: channelSettings
                     })
@@ -523,12 +524,8 @@ function TestForm() {
                         setFlushTime={setFlushTime}
                         recirculationMode={recirculationMode}
                         setRecirculationMode={setRecirculationMode}
-                        recirculationDays={recirculationDays}
-                        setRecirculationDays={setRecirculationDays}
-                        recirculationHour={recirculationHour}
-                        setRecirculationHour={setRecirculationHour}
-                        recirculationMinute={recirculationMinute}
-                        setRecirculationMinute={setRecirculationMinute}
+                        recirculationDelaySeconds={recirculationDelaySeconds}
+                        setRecirculationDelaySeconds={setRecirculationDelaySeconds}
                         serviceSequence={serviceSequence}
                         setServiceSequence={setServiceSequence}
                         channelSettings={channelSettings}

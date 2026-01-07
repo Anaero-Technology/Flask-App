@@ -826,15 +826,10 @@ def start_test(test_id):
                 print(chimera_handler.set_recirculate(chimera_mode))
                 print(f"[DEBUG] Chimera recirculation mode set to {chimera_mode} ({chimera_config.recirculation_mode})")
 
-                # If periodic mode, also set the schedule
+                # If periodic mode, also set the delay
                 if chimera_config.recirculation_mode == 'periodic':
-                    if chimera_config.recirculation_days:
-                        chimera_handler.set_recirculation_days(chimera_config.recirculation_days)
-                    if chimera_config.recirculation_hour is not None:
-                        chimera_handler.set_recirculation_time(
-                            chimera_config.recirculation_hour,
-                            chimera_config.recirculation_minute or 0
-                        )
+                    if chimera_config.recirculation_delay_seconds:
+                        chimera_handler.set_recirculation_delay(chimera_config.recirculation_delay_seconds)
 
         # Use exactly the device_ids that were explicitly selected by the user
         all_device_ids = device_ids
@@ -1100,13 +1095,18 @@ def create_chimera_configuration(test_id):
             device_id=device_id
         ).first()
 
+        recirculation_mode = data.get('recirculation_mode', 'off')
+        recirculation_delay_seconds = data.get('recirculation_delay_seconds')
+
+        # Validate: periodic mode requires a delay to be set
+        if recirculation_mode == 'periodic' and (not recirculation_delay_seconds or recirculation_delay_seconds <= 0):
+            return jsonify({"error": "Periodic recirculation requires a delay time to be set"}), 400
+
         if existing:
             # Update existing
             existing.flush_time_seconds = data.get('flush_time_seconds', 30.0)
-            existing.recirculation_mode = data.get('recirculation_mode', 'off')
-            existing.recirculation_days = data.get('recirculation_days')
-            existing.recirculation_hour = data.get('recirculation_hour')
-            existing.recirculation_minute = data.get('recirculation_minute')
+            existing.recirculation_mode = recirculation_mode
+            existing.recirculation_delay_seconds = recirculation_delay_seconds
             existing.service_sequence = data.get('service_sequence', '111111111111111')
             chimera_config = existing
         else:
@@ -1115,10 +1115,8 @@ def create_chimera_configuration(test_id):
                 test_id=test_id,
                 device_id=device_id,
                 flush_time_seconds=data.get('flush_time_seconds', 30.0),
-                recirculation_mode=data.get('recirculation_mode', 'off'),
-                recirculation_days=data.get('recirculation_days'),
-                recirculation_hour=data.get('recirculation_hour'),
-                recirculation_minute=data.get('recirculation_minute'),
+                recirculation_mode=recirculation_mode,
+                recirculation_delay_seconds=recirculation_delay_seconds,
                 service_sequence=data.get('service_sequence', '111111111111111')
             )
             db.session.add(chimera_config)
