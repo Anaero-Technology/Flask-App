@@ -561,9 +561,8 @@ def send_command(device_id):
         db.session.close()
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/stream', methods=['GET'])
-@jwt_required()
 def stream(device_id):
-    """SSE endpoint for real-time blackbox notifications for a specific device"""
+    """SSE endpoint for real-time blackbox notifications for a specific device."""
     try:
         # Verify device exists and is connected
         device = Device.query.get(device_id)
