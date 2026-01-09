@@ -12,6 +12,21 @@ import { useToast } from '../components/Toast';
 import { Settings, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 
+// Format gas names with proper subscripts (for Plotly - uses HTML)
+const formatGasName = (name) => {
+    if (!name) return name;
+    return name.replace(/([A-Za-z])(\d+)/g, '$1<sub>$2</sub>');
+};
+
+// Format gas names with Unicode subscripts (for React text/dropdowns)
+const formatGasNameUnicode = (name) => {
+    if (!name) return name;
+    const subscripts = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+    return name.replace(/([A-Za-z])(\d+)/g, (_match, letter, num) => {
+        return letter + num.split('').map(d => subscripts[d] || d).join('');
+    });
+};
+
 function Plot({ initialParams, onNavigate }) {
     const { authFetch, canPerform } = useAuth();
     const toast = useToast();
@@ -461,6 +476,13 @@ function Plot({ initialParams, onNavigate }) {
     const [selectedChannel, setSelectedChannel] = useState(null);
     const [error, setError] = useState(null);
     const [selectedGas, setSelectedGas] = useState(null);
+    const [unitFilter, setUnitFilter] = useState('all'); // 'all', 'ppm', 'percent'
+
+    // Check if a gas uses ppm units
+    const isPpmGas = (gasName) => {
+        if (!gasName) return false;
+        return gasName === 'H2' || gasName === 'CO' || gasName.includes('H2S') || gasName.includes('NH3');
+    };
 
     // Set default selected gas and channel when data loads
     useEffect(() => {
@@ -504,7 +526,13 @@ function Plot({ initialParams, onNavigate }) {
 
             if (groupingMode === 'channel') {
                 if (!selectedChannel) return [];
-                filteredData = plotData.data.filter(d => d.channel_number === selectedChannel);
+                filteredData = plotData.data.filter(d => {
+                    if (d.channel_number !== selectedChannel) return false;
+                    // Apply unit filter
+                    if (unitFilter === 'ppm') return isPpmGas(d.gas_name);
+                    if (unitFilter === 'percent') return !isPpmGas(d.gas_name);
+                    return true; // 'all'
+                });
 
                 // Group by Gas
                 filteredData.forEach(d => {
@@ -514,7 +542,7 @@ function Plot({ initialParams, onNavigate }) {
                             y: [],
                             text: [],
                             customdata: [],
-                            name: d.gas_name
+                            name: formatGasName(d.gas_name)
                         };
                     }
                     groups[d.gas_name].x.push(getXValue(d));
@@ -602,7 +630,7 @@ function Plot({ initialParams, onNavigate }) {
                 };
             });
         }
-    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel]);
+    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel, unitFilter]);
 
     // Handle plot initialization and attach native Plotly event listeners
     const handlePlotInitialized = useCallback((figure, graphDiv) => {
@@ -674,15 +702,21 @@ function Plot({ initialParams, onNavigate }) {
             let isPPM = false;
 
             if (groupingMode === 'gas') {
-                if (selectedGas && (selectedGas.includes('NH3') || selectedGas.includes('H2S') || selectedGas.toLowerCase().includes('ppm'))) {
+                if (selectedGas && (selectedGas.includes('NH3') || selectedGas.includes('H2S') || selectedGas === 'H2' || selectedGas === 'CO' || selectedGas.toLowerCase().includes('ppm'))) {
                     unit = 'Concentration (ppm)';
                     isPPM = true;
                 }
             } else {
-                // In channel mode, we might have mixed units, but usually gases on one device share unit types or we just show generic
-                // For now, let's assume % unless we detect PPM gases in the data for this channel
-                // This is a simplification; ideally we'd have dual axis or normalized data if units differ
-                unit = 'Concentration';
+                // In channel mode, use the unit filter to determine axis title
+                if (unitFilter === 'ppm') {
+                    unit = 'Concentration (ppm)';
+                    isPPM = true;
+                } else if (unitFilter === 'percent') {
+                    unit = 'Concentration (%)';
+                } else {
+                    // 'all' - show mixed units indicator
+                    unit = 'Concentration (% / ppm)';
+                }
             }
 
             layout.yaxis = {
@@ -925,7 +959,7 @@ function Plot({ initialParams, onNavigate }) {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     {availableGases.map(gas => (
-                                        <option key={gas} value={gas}>{gas}</option>
+                                        <option key={gas} value={gas}>{formatGasNameUnicode(gas)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -944,6 +978,39 @@ function Plot({ initialParams, onNavigate }) {
                                         <option key={channel} value={channel}>Channel {channel}</option>
                                     ))}
                                 </select>
+                            </div>
+                        )}
+
+                        {/* Unit Filter (Chimera Only - Channel Mode) */}
+                        {selectedDevice?.device_type.includes('chimera') && groupingMode === 'channel' && (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">Unit Filter</label>
+                                <div className="flex bg-gray-100 p-1 rounded-lg">
+                                    <button
+                                        onClick={() => setUnitFilter('all')}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                                            unitFilter === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        onClick={() => setUnitFilter('ppm')}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                                            unitFilter === 'ppm' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        ppm
+                                    </button>
+                                    <button
+                                        onClick={() => setUnitFilter('percent')}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                                            unitFilter === 'percent' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        %
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -1031,7 +1098,13 @@ function Plot({ initialParams, onNavigate }) {
                                                 {selectedDevice.name} Data
                                             </h3>
                                             <p className="text-xs sm:text-sm text-gray-500 truncate">
-                                                {aggregation === 'none' ? 'Raw' : aggregation} • {getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric}
+                                                {aggregation === 'none' ? 'Timestamp' : aggregation} • {
+                                                    selectedDevice?.device_type.includes('chimera')
+                                                        ? (groupingMode === 'gas' && selectedGas
+                                                            ? formatGasNameUnicode(selectedGas)
+                                                            : `Channel ${selectedChannel || '?'}${unitFilter !== 'all' ? ` (${unitFilter})` : ''}`)
+                                                        : (getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric)
+                                                }
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
