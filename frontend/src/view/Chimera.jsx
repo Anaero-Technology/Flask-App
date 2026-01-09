@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard';
-import ChimeraPlot from '../components/ChimeraPlot';
 import ChimeraConfig from '../components/ChimeraConfig';
 import ChimeraImage from '../assets/chimera.jpg';
 import refreshIcon from '../assets/refresh.svg';
@@ -427,9 +426,6 @@ function Chimera() {
                                 )}
                             </div>
                         </div>
-
-                        {/* Real-time Plot Section */}
-                        <ChimeraPlot deviceId={device.device_id} />
                     </div>
                 ))}
 
