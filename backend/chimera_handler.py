@@ -138,6 +138,8 @@ class ChimeraHandler(SerialHandler):
                         print(f"SSE publish failed: {e}")
 
                 # Save to database if test_id is set
+                if not (self.test_id and self.app and hasattr(self, 'id')):
+                    print(f"[CHIMERA DATAPOINT] ERROR NOT SAVING - test_id={self.test_id}, app={self.app is not None}, has_id={hasattr(self, 'id')}, id={getattr(self, 'id', 'NO_ATTR')}")
                 if self.test_id and self.app and hasattr(self, 'id'):
                     try:
                         with self.app.app_context():
@@ -226,6 +228,8 @@ class ChimeraHandler(SerialHandler):
             print(f"[CHIMERA RECIRCULATE] Channel {channel} - {len(sensor_data)} sensors")
 
             # Save to database if test_id is set
+            if not (self.test_id and self.app and hasattr(self, 'id')):
+                print(f"[CHIMERA RECIRCULATE]  ERROR NOT SAVING - test_id={self.test_id}, app={self.app is not None}, has_id={hasattr(self, 'id')}, id={getattr(self, 'id', 'NO_ATTR')}")
             if self.test_id and self.app and hasattr(self, 'id'):
                 try:
                     with self.app.app_context():
@@ -464,12 +468,18 @@ class ChimeraHandler(SerialHandler):
             if line.startswith("file "):
                 parts = line.split()
                 if len(parts) >= 3:
-                    filename = parts[1]
-                    filesize = int(parts[2])
-                    files.append({
-                        "name": filename,
-                        "size": filesize
-                    })
+                    # Filesize is always the last part, filename is everything in between
+                    # This handles filenames with spaces like "test .txt"
+                    try:
+                        filesize = int(parts[-1])
+                        filename = " ".join(parts[1:-1])
+                        files.append({
+                            "name": filename,
+                            "size": filesize
+                        })
+                    except ValueError:
+                        print(f"[ChimeraHandler] Failed to parse file line: {line}")
+                        continue
             elif line == "done files":
                 return True, files
     

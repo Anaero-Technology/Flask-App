@@ -50,12 +50,20 @@ class DeviceManager:
         if not self._app:
             return False
 
-        # Check if port is already connected
-        if self.is_port_connected(port):
-            print(f"[DeviceManager] Port {port} is already connected")
-            return True
+        with self._lock, self._app.app_context():
+            print(f"[DeviceManager] DEBUG: Acquired lock for {port}")
 
-        with self._app.app_context():
+            # Check if port is already connected
+            if self.is_port_connected(port):
+                print(f"[DeviceManager] Port {port} is already connected")
+                # Ensure database reflects connected state
+                device = Device.query.filter_by(serial_port=port).first()
+                if device and not device.connected:
+                    device.connected = True
+                    db.session.commit()
+                return True
+
+            print(f"[DeviceManager] DEBUG: Port {port} not connected, proceeding with connection")
             # Auto-detect device type and get MAC address
             temp_handler = SerialHandler()
             device_type = None
@@ -82,18 +90,22 @@ class DeviceManager:
                     return False
 
                 handler.app = self._app  # Set app context
+                print(f"[DeviceManager] DEBUG: Calling handler.connect() for {port}")
                 if not handler.connect():
                     print(f"[DeviceManager] Handler failed to connect to {port}")
                     return False
                 mac_address = handler.mac_address
+                print(f"[DeviceManager] DEBUG: Handler connected, MAC={mac_address}")
 
                 # Look up device by MAC address first (robust across port changes)
                 device = None
                 if mac_address:
                     device = Device.query.filter_by(mac_address=mac_address).first()
+                    print(f"[DeviceManager] DEBUG: Found device by MAC: {device.id if device else None}, active_test_id={device.active_test_id if device else None}")
 
                 # Check if already connected
                 if device and device.id in self._active_handlers:
+                    print(f"[DeviceManager] DEBUG: Device {device.id} already in _active_handlers, disconnecting duplicate")
                     handler.disconnect()  # Don't need duplicate connection
                     return True
 
@@ -104,6 +116,7 @@ class DeviceManager:
                         device.serial_port = port
                     device.connected = True
                     device.logging = handler.is_logging
+                    print(f"[DeviceManager] DEBUG: Setting handler.test_id = {device.active_test_id}")
                     handler.set_test_id(device.active_test_id)
                     if device_name:
                         device.name = device_name
@@ -129,12 +142,14 @@ class DeviceManager:
                     db.session.refresh(device)
 
                 handler.id = device.id
+                print(f"[DeviceManager] DEBUG: Set handler.id = {device.id}")
 
                 # Set the disconnect callback (pass device_id, not port)
                 handler.on_disconnect = lambda: self._handle_disconnect(device.id)
 
                 # Store handler by device_id (not port)
                 self._active_handlers[device.id] = handler
+                print(f"[DeviceManager] DEBUG: Handler added to _active_handlers. Final state: test_id={handler.test_id}, id={handler.id}, app={handler.app is not None}")
 
                 return True
 
@@ -166,6 +181,7 @@ class DeviceManager:
                 return False
 
             handler.on_disconnect = lambda: self._handle_disconnect(device_id)
+            handler.set_test_id(device.active_test_id)
 
             self._active_handlers[device_id] = handler
 
@@ -203,6 +219,7 @@ class DeviceManager:
                 return False
 
             handler.on_disconnect = lambda: self._handle_disconnect(device_id)
+            handler.set_test_id(device.active_test_id)
 
             self._active_handlers[device_id] = handler
 
@@ -264,32 +281,26 @@ class DeviceManager:
                 return None
 
             # Not in cache but marked as connected - try to reconnect
-            handler = None
             if device.device_type == "black-box":
                 handler = BlackBoxHandler(device.serial_port)
-                handler.app = self._app
-                handler.id = device.id
-                if not handler.connect():
-                    device.connected = False
-                    db.session.commit()
-                    return None
-                handler.mac_address = device.mac_address
-                handler.device_name = device.name
             elif device.device_type in ["chimera", "chimera-max"]:
                 handler = ChimeraHandler(device.serial_port)
-                handler.app = self._app
-                handler.id = device.id
-                if not handler.connect():
-                    device.connected = False
-                    db.session.commit()
-                    return None
-                handler.mac_address = device.mac_address
-                handler.device_name = device.name
             else:
                 return None
 
+            handler.app = self._app
+            handler.id = device.id
+            if not handler.connect():
+                device.connected = False
+                db.session.commit()
+                return None
+
+            handler.mac_address = device.mac_address
+            handler.device_name = device.name
+            handler.set_test_id(device.active_test_id)
             handler.on_disconnect = lambda: self._handle_disconnect(device_id)
             self._active_handlers[device_id] = handler
+            print(f"[DeviceManager] get_device recreated handler for device {device.id}, test_id={device.active_test_id}")
             return handler
 
     def get_device_by_port(self, port: str):
