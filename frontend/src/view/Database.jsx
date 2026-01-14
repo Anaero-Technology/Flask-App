@@ -116,7 +116,27 @@ const Database = ({ onViewPlot }) => {
                         </button>
                         {canPerform('delete_test') && (
                             <button
-                                onClick={() => window.open(`/api/v1/tests/${test.id}/download`, '_blank')}
+                                onClick={async () => {
+                                    try {
+                                        const response = await authFetch(`/api/v1/tests/${test.id}/download`);
+                                        if (response.ok) {
+                                            const blob = await response.blob();
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `test_${test.id}_data.csv`;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            window.URL.revokeObjectURL(url);
+                                            a.remove();
+                                        } else {
+                                            alert('Download failed');
+                                        }
+                                    } catch (error) {
+                                        console.error('Download error:', error);
+                                        alert('Download failed');
+                                    }
+                                }}
                                 className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                             >
                                 Download
