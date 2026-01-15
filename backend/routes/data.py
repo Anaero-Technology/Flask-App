@@ -68,10 +68,47 @@ def get_device_data(test_id, device_id):
         data = []
         
         # Apply aggregation if needed (for raw data models)
-        if aggregation in ['daily', 'hourly', 'minute'] and model in [ChimeraRawData, BlackboxRawData]:
-            # Get all data first (limit doesn't apply easily before aggregation without subquery)
-            results = query.order_by(model.seconds_elapsed.asc()).all()
-            # Raw data aggregation not implemented yet - returns raw data
+        if aggregation in ['daily', 'hourly', 'minute'] and model == ChimeraRawData:
+            # Aggregate Chimera data by time period, channel, and gas
+            all_results = query.order_by(model.timestamp.asc()).all()
+
+            # Group by time period, channel, and gas - take max peak_value in each bucket
+            groups = {}
+            for row in all_results:
+                if aggregation == 'daily':
+                    time_key = int(row.seconds_elapsed // 86400)  # days
+                elif aggregation == 'hourly':
+                    time_key = int(row.seconds_elapsed // 3600)  # hours
+                else:  # minute
+                    time_key = int(row.seconds_elapsed // 60)  # minutes
+
+                key = (row.channel_number, row.gas_name, time_key)
+
+                # Keep the row with the highest peak_value for this bucket
+                if key not in groups or row.peak_value > groups[key].peak_value:
+                    groups[key] = row
+
+            # Convert back to list, sorted by timestamp
+            results = sorted(groups.values(), key=lambda r: r.timestamp)
+
+        elif aggregation in ['daily', 'hourly', 'minute'] and model == BlackboxRawData:
+            # Aggregate BlackBox raw data by time period and channel
+            all_results = query.order_by(model.timestamp.asc()).all()
+
+            # Group by time period and channel - take last value in each bucket
+            groups = {}
+            for row in all_results:
+                if aggregation == 'daily':
+                    time_key = int(row.seconds_elapsed // 86400)
+                elif aggregation == 'hourly':
+                    time_key = int(row.seconds_elapsed // 3600)
+                else:  # minute
+                    time_key = int(row.seconds_elapsed // 60)
+
+                key = (row.channel_number, time_key)
+                groups[key] = row  # Last value wins
+
+            results = sorted(groups.values(), key=lambda r: r.timestamp)
 
         elif aggregation in ['daily', 'hourly', 'minute'] and model == BlackBoxEventLogData:
             # Aggregate event log data by time period and channel

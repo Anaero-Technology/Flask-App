@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-table';
 import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
-import { Settings, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Settings, X, Maximize2, Minimize2, Info } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 
 // Format gas names with proper subscripts (for Plotly - uses HTML)
@@ -1031,7 +1031,18 @@ function Plot({ initialParams, onNavigate }) {
 
                         {/* Time Aggregation */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-3">Time Aggregation</label>
+                            <div className="flex items-center gap-2 mb-3">
+                                <label className="block text-sm font-bold text-gray-700">Time Aggregation</label>
+                                <div className="relative group">
+                                    <Info size={14} className="text-gray-400 cursor-help" />
+                                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-56 z-50 pointer-events-none">
+                                        {selectedDevice?.device_type.includes('chimera')
+                                            ? 'Groups data by time period. Shows the maximum peak value for each gas/channel within each time bucket.'
+                                            : 'Groups data by time period. Shows the last recorded value for each channel within each time bucket.'}
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {getAggregationOptions().map(opt => (
                                     <button
