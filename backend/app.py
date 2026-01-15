@@ -893,23 +893,21 @@ def start_test(test_id):
             elif device.device_type in ['chimera', 'chimera-max']:
                 print(f"[DEBUG] Starting Chimera logging for device {device.name} (ID: {device.id})")
 
-                # Generate filename - similar to BlackBox but with 25 char limit
+                # Generate filename - Chimera supports up to 59 characters
                 import re
-                
+
                 # Clean test name: only letters, numbers, and underscores
-                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))[:10]
+                clean_test_name = re.sub(r'[^a-zA-Z0-9_]', '', test.name.replace(' ', '_'))
                 # Clean device name
-                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))[:5]
-                # Short timestamp
-                timestamp = datetime.now().strftime('%m%d%H%M')  # MMDDHHMM (8 chars)
-                
-                # Format: testname_dev_timestamp
-                filename = f"{clean_test_name}_{clean_device_name}_{timestamp}"
-                
-                # Truncate to 25 chars max
-                if len(filename) > 25:
-                    filename = filename[:25]
-                
+                clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))
+
+                # Format: testname_devicename (max 59 chars)
+                filename = f"{clean_test_name}_{clean_device_name}"
+
+                # Truncate to 59 chars max (Chimera firmware limit)
+                if len(filename) > 59:
+                    filename = filename[:59]
+
                 print(f"[DEBUG] Generated Chimera filename: '{filename}' (length: {len(filename)})")
                     
                 success, message = handler.start_logging(filename)

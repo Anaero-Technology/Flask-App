@@ -406,7 +406,7 @@ class ChimeraHandler(SerialHandler):
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
         
-        self.set_time(datetime.now())
+        self.set_time()
         self.send_command_no_wait(f"startlogging {filename}")
         
         # Read through all queued responses until we find the final result
@@ -447,29 +447,55 @@ class ChimeraHandler(SerialHandler):
                 return False, f"Stop logging failed: {response}"
             # Continue reading other queued messages
     
-    def get_files(self) -> Tuple[bool, List[Dict]]:
-        """Get list of files on SD card"""
+    def get_files(self) -> Tuple[bool, Dict]:
+        """Get list of files on SD card with memory info"""
         response = self.send_command("files")
-        
+
+        memory_info = None
         # First response might be memory info, need to look for "files start"
         if response and response.startswith("memory"):
+            # Parse memory info: "memory [total] [used]"
+            parts = response.split()
+            if len(parts) >= 3:
+                try:
+                    memory_info = {
+                        "total": int(parts[1]),
+                        "used": int(parts[2])
+                    }
+                except ValueError:
+                    pass
             # Read the next line which should be "files start"
             response = self.read_line(timeout=5)
-        
+
         if not response or response != "files start":
-            return False, []
-        
+            return False, {"memory": memory_info, "files": []}
+
         files = []
         while True:
             line = self.read_line(timeout=5)
             if not line:
-                return False, []
-            
+                return False, {"memory": memory_info, "files": files}
+
             if line.startswith("file "):
                 parts = line.split()
-                if len(parts) >= 3:
-                    # Filesize is always the last part, filename is everything in between
-                    # This handles filenames with spaces like "test .txt"
+                if len(parts) >= 4:
+                    # Format: file [filename] [size] [timestamp]
+                    # Timestamp is last, size is second to last, filename is everything in between
+                    try:
+                        timestamp = int(parts[-1])
+                        filesize = int(parts[-2])
+                        filename = " ".join(parts[1:-2])
+                        print(f"[ChimeraHandler] Parsed: name={filename}, size={filesize}, timestamp={timestamp}")
+                        files.append({
+                            "name": filename,
+                            "size": filesize,
+                            "created": timestamp
+                        })
+                    except ValueError:
+                        print(f"[ChimeraHandler] Failed to parse file line: {line}")
+                        continue
+                elif len(parts) >= 3:
+                    # Fallback for old format without timestamp: file [filename] [size]
                     try:
                         filesize = int(parts[-1])
                         filename = " ".join(parts[1:-1])
@@ -481,7 +507,7 @@ class ChimeraHandler(SerialHandler):
                         print(f"[ChimeraHandler] Failed to parse file line: {line}")
                         continue
             elif line == "done files":
-                return True, files
+                return True, {"memory": memory_info, "files": files}
     
     def download_file(self, filename: str) -> Tuple[bool, List[str], str]:
         """Download a file from SD card"""
@@ -518,34 +544,24 @@ class ChimeraHandler(SerialHandler):
         else:
             return False, f"Unexpected response: {response}"
     
-    def get_time(self) -> Tuple[bool, Optional[datetime], str]:
-        """Get current time from RTC"""
+    def get_time(self) -> Tuple[bool, Optional[datetime]]:
+        """Get current datetime from RTC"""
         response = self.send_command("timeget")
         
         if response and response.startswith("time "):
             try:
-                # Parse: time yyyy,mm,dd,hh,mm,ss
-                time_str = response[5:]  # Skip "time "
-                parts = time_str.split(',')
-                if len(parts) == 6:
-                    year = int(parts[0])
-                    month = int(parts[1])
-                    day = int(parts[2])
-                    hour = int(parts[3])
-                    minute = int(parts[4])
-                    second = int(parts[5])
-                    
-                    dt = datetime(year, month, day, hour, minute, second)
-                    return True, dt, "Time retrieved successfully"
+                # Parse: time <unix_timestamp>
+                timestamp = int(response[5:])  # Skip "time "
+                dt = datetime.fromtimestamp(timestamp)
+                return True, dt
             except (ValueError, IndexError):
-                return False, None, "Failed to parse time"
+                return False, None
         
-        return False, None, f"Unexpected response: {response}"
+        return False, None
     
-    def set_time(self, dt: datetime) -> Tuple[bool, str]:
-        """Set time in RTC"""
-        cmd = f"timeset {dt.year} {dt.month} {dt.day} {dt.hour} {dt.minute} {dt.second}"
-        response = self.send_command(cmd)
+    def set_time(self) -> Tuple[bool, str]:
+        """Set time in RTC to UNIX timestamp."""
+        response = self.send_command(f"timeset {time.time()}")
         
         if response == "done timeset":
             return True, "Time set successfully"

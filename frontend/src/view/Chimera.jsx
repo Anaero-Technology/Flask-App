@@ -11,6 +11,7 @@ function Chimera() {
     const [loading, setLoading] = useState(true);
     const [selectedDevice, setSelectedDevice] = useState(null);
     const [files, setFiles] = useState([]);
+    const [memoryInfo, setMemoryInfo] = useState(null);
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [showFileManager, setShowFileManager] = useState(false);
     const [showConfig, setShowConfig] = useState(false);
@@ -54,6 +55,7 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 setFiles(data.files || []);
+                setMemoryInfo(data.memory || null);
             } else {
                 alert('Failed to fetch files');
             }
@@ -460,6 +462,27 @@ function Chimera() {
                             <div className="text-center py-8">Loading files...</div>
                         ) : (
                             <div>
+                                {/* SD Card Memory Info */}
+                                {memoryInfo && (
+                                    <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-600">SD Card Storage</span>
+                                            <span className="font-medium">
+                                                {((memoryInfo.total - memoryInfo.used) / (1024 * 1024)).toFixed(1)} MB free
+                                                <span className="text-gray-500 ml-1">
+                                                    of {(memoryInfo.total / (1024 * 1024)).toFixed(1)} MB
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="bg-blue-600 h-2 rounded-full"
+                                                style={{ width: `${(memoryInfo.used / memoryInfo.total) * 100}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 {files.length === 0 ? (
                                     <div className="text-center text-gray-500 py-8">
                                         No files found
@@ -473,6 +496,11 @@ function Chimera() {
                                                     <span className="text-gray-500 ml-2">
                                                         ({(file.size / 1024).toFixed(1)} KB)
                                                     </span>
+                                                    {file.created && (
+                                                        <span className="text-gray-400 ml-2 text-sm">
+                                                            {new Date(file.created * 1000).toLocaleDateString()}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <button

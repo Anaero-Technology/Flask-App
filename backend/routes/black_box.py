@@ -419,11 +419,11 @@ def get_time(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
-        timestamp = handler.get_time()
+        success, dt = handler.get_time()
         
         return jsonify({
-            "timestamp": timestamp,
-            "success": timestamp is not None
+            "success": success,
+            "datetime": dt
         })
         
     finally:
@@ -445,13 +445,7 @@ def set_time(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
-        data = request.get_json()
-        timestamp = data.get('timestamp')
-        
-        if not timestamp:
-            return jsonify({"error": "timestamp is required (format: year,month,day,hour,minute,second)"}), 400
-        
-        success, message = handler.set_time(timestamp)
+        success, message = handler.set_time()
         
         return jsonify({
             "success": success,

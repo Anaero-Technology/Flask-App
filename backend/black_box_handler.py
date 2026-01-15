@@ -41,7 +41,7 @@ class BlackBoxHandler(SerialHandler):
             # Extract the file line after "tip "
             file_line = line[4:]  # Skip "tip "
             
-            # Parse the CSV line: Tip Number, Time Stamp, Seconds Elapsed, Channel Number, Temperature, Pressure
+            # Parse the CSV line: Tip Number, Datetime, Seconds Elapsed, Channel Number, Temperature, Pressure
             parts = file_line.split()
 
             # Parse timestamp: YYYY.MM.DD.HH.MM.SS
@@ -213,7 +213,7 @@ class BlackBoxHandler(SerialHandler):
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
 
-        self.set_time(time.strftime("%Y,%m,%d,%H,%M,%S"))
+        self.set_time()
         self.send_command_no_wait(f"start /{filename}.txt")
 
         # Read responses until we get the final result
@@ -421,16 +421,17 @@ class BlackBoxHandler(SerialHandler):
         else:
             return False, "Unknown error"
     
-    def get_time(self) -> Optional[str]:
-        """Get current time from RTC"""
+    def get_time(self) -> Tuple[bool, Optional[datetime]]:
+        """Get current datetime from RTC"""
         response = self.send_command("getTime")
         if response and response.startswith("time "):
-            return response[5:]  # Return timestamp after "time "
-        return None
+            time_str = int(response[5:])
+            return True, datetime.fromtimestamp(time_str)  # Return timestamp after "time "
+        return False, None
     
-    def set_time(self, timestamp: str) -> Tuple[bool, str]:
-        """Set time in RTC. Format: year,month,day,hour,minute,second"""
-        response = self.send_command(f"setTime {timestamp}")
+    def set_time(self) -> Tuple[bool, str]:
+        """Set time in RTC to UNIX timestamp. """
+        response = self.send_command(f"setTime {time.time()}")
         
         if response == "done setTime":
             return True, "Time set successfully"

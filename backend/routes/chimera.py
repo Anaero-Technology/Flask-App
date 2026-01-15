@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_sse import sse
 from flask_jwt_extended import jwt_required
-from datetime import datetime
+from datetime import datetime, timezone
 from device_manager import DeviceManager
 from database.models import *
 from utils.auth import require_role
@@ -297,11 +297,12 @@ def get_files(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
-        success, files = handler.get_files()
-        
+        success, result = handler.get_files()
+
         return jsonify({
             "success": success,
-            "files": files
+            "memory": result.get("memory"),
+            "files": result.get("files", [])
         })
         
     finally:
@@ -387,12 +388,11 @@ def get_time(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
-        success, dt, message = handler.get_time()
+        success, dt = handler.get_time()
         
         return jsonify({
             "success": success,
-            "timestamp": dt.isoformat() if dt else None,
-            "message": message
+            "datetime": dt
         })
         
     finally:
@@ -408,30 +408,24 @@ def set_time(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
-        data = request.get_json()
-        timestamp = data.get('timestamp')
-        
-        if not timestamp:
-            return jsonify({"error": "timestamp is required (ISO format)"}), 400
-        
-        try:
-            dt = datetime.fromisoformat(timestamp)
-        except ValueError:
-            return jsonify({"error": "Invalid timestamp format"}), 400
-        
-        success, message = handler.set_time(dt)
-        
+
+        # Use UTC time - frontend will convert to local time when displaying
+        dt = datetime.now(timezone.utc)
+
+        success, message = handler.set_time()
+
         return jsonify({
             "success": success,
-            "message": message
+            "message": message,
+            "timestamp": int(dt.timestamp()),
+            "utc_time": dt.isoformat() + "Z"
         })
-        
+
     finally:
         db.session.close()
 
