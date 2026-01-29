@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Settings, Edit2, Save, Circle, FlaskConical, Clock, LineChart, Wind, Activity } from 'lucide-react';
+import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity } from 'lucide-react';
 import CalibrationProgressBar from './CalibrationProgressBar';
+import ChimeraConfigTooltip from './ChimeraConfigTooltip';
+import BlackBoxConfigTooltip from './BlackBoxConfigTooltip';
 import { useCalibration } from './ChimeraContext';
 import { useAuth } from './AuthContext';
 
@@ -420,10 +422,21 @@ function DeviceCard(props) {
 
                         {props.activeTestName && (
                             <>
-                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-100">
-                                    <FlaskConical size={10} />
-                                    <span className="truncate max-w-[120px]" title={props.activeTestName}>{props.activeTestName}</span>
-                                </div>
+                                {(props.deviceType === 'chimera' || props.deviceType === 'chimera-max') ? (
+                                    <ChimeraConfigTooltip
+                                        testId={props.activeTestId}
+                                        activeTestName={props.activeTestName}
+                                        currentChannel={chimeraStatus?.channel}
+                                        isFlushing={isFlushing}
+                                        deviceName={props.name}
+                                    />
+                                ) : props.deviceType === 'black-box' ? (
+                                    <BlackBoxConfigTooltip
+                                        testId={props.activeTestId}
+                                        deviceId={props.deviceId}
+                                        activeTestName={props.activeTestName}
+                                    />
+                                ) : null}
                                 {props.testStartTime && (
                                     <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
                                         <Clock size={10} />

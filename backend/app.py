@@ -721,10 +721,10 @@ def get_test(test_id):
         test = Test.query.get(test_id)
         if not test:
             return jsonify({"error": "Test not found"}), 404
-        
+
         # Get channel configurations for this test
         configurations = ChannelConfiguration.query.filter_by(test_id=test_id).all()
-        
+
         return jsonify({
             "id": test.id,
             "name": test.name,
@@ -748,6 +748,156 @@ def get_test(test_id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/<int:test_id>/chimera-configuration", methods=['GET'])
+@jwt_required()
+def get_chimera_configuration(test_id):
+    """Get comprehensive test configuration including Chimera timing and channel details"""
+    try:
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+
+        # Get Chimera configuration for this test
+        chimera_config = ChimeraConfiguration.query.filter_by(test_id=test_id).first()
+
+        if not chimera_config:
+            return jsonify({
+                "test_id": test_id,
+                "test_name": test.name,
+                "test_status": test.status,
+                "chimera_config": None,
+                "channels": []
+            }), 200
+
+        # Build Chimera config response
+        chimera_config_data = {
+            "id": chimera_config.id,
+            "flush_time_seconds": chimera_config.flush_time_seconds,
+            "recirculation_mode": chimera_config.recirculation_mode,
+            "recirculation_delay_seconds": chimera_config.recirculation_delay_seconds,
+            "service_sequence": chimera_config.service_sequence
+        }
+
+        # Get all channel configurations for this Chimera config
+        channel_configs = ChimeraChannelConfiguration.query.filter_by(
+            chimera_config_id=chimera_config.id
+        ).all()
+
+        channels = []
+        for channel_cfg in channel_configs:
+            # Get sample information linked to this channel
+            sample_name = "Unconfigured"
+
+            # Find BlackBox configuration for this Chimera channel
+            bb_config = ChannelConfiguration.query.filter_by(
+                test_id=test_id,
+                chimera_channel=channel_cfg.channel_number
+            ).first()
+
+            if bb_config:
+                inoculum_name = None
+                substrate_name = None
+
+                if bb_config.inoculum_sample_id:
+                    inoculum = Sample.query.get(bb_config.inoculum_sample_id)
+                    inoculum_name = inoculum.sample_name if inoculum else "Unknown Inoculum"
+
+                if bb_config.substrate_sample_id:
+                    substrate = Sample.query.get(bb_config.substrate_sample_id)
+                    substrate_name = substrate.sample_name if substrate else "Unknown Substrate"
+
+                if inoculum_name and substrate_name:
+                    sample_name = f"{inoculum_name} + {substrate_name}"
+                elif inoculum_name:
+                    sample_name = inoculum_name
+                elif substrate_name:
+                    sample_name = substrate_name
+
+            channels.append({
+                "channel_number": channel_cfg.channel_number,
+                "open_time_seconds": channel_cfg.open_time_seconds,
+                "volume_threshold_ml": channel_cfg.volume_threshold_ml,
+                "sample_name": sample_name
+            })
+
+        # Sort channels by channel number
+        channels.sort(key=lambda x: x['channel_number'])
+
+        return jsonify({
+            "test_id": test_id,
+            "test_name": test.name,
+            "test_status": test.status,
+            "chimera_config": chimera_config_data,
+            "channels": channels
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/v1/tests/<int:test_id>/blackbox-configuration/<int:device_id>", methods=['GET'])
+@jwt_required()
+def get_blackbox_configuration(test_id, device_id):
+    """Get BlackBox channel-to-sample mapping for a specific device in a test"""
+    try:
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        # Get all channel configurations for this test and device
+        channel_configs = ChannelConfiguration.query.filter_by(
+            test_id=test_id,
+            device_id=device_id
+        ).all()
+
+        channels = []
+        for channel_cfg in channel_configs:
+            inoculum_name = None
+            substrate_name = None
+
+            if channel_cfg.inoculum_sample_id:
+                inoculum = Sample.query.get(channel_cfg.inoculum_sample_id)
+                inoculum_name = inoculum.sample_name if inoculum else "Unknown Inoculum"
+
+            if channel_cfg.substrate_sample_id:
+                substrate = Sample.query.get(channel_cfg.substrate_sample_id)
+                substrate_name = substrate.sample_name if substrate else "Unknown Substrate"
+
+            # Determine sample name display
+            if inoculum_name and substrate_name:
+                sample_name = f"{inoculum_name} + {substrate_name}"
+            elif inoculum_name:
+                sample_name = inoculum_name
+            elif substrate_name:
+                sample_name = substrate_name
+            else:
+                sample_name = "Unconfigured"
+
+            channels.append({
+                "channel_number": channel_cfg.channel_number,
+                "sample_name": sample_name,
+                "inoculum_weight_grams": channel_cfg.inoculum_weight_grams,
+                "substrate_weight_grams": channel_cfg.substrate_weight_grams,
+                "tumbler_volume": channel_cfg.tumbler_volume
+            })
+
+        # Sort channels by channel number
+        channels.sort(key=lambda x: x['channel_number'])
+
+        return jsonify({
+            "test_id": test_id,
+            "device_id": device_id,
+            "device_name": device.name,
+            "test_name": test.name,
+            "channels": channels
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
 @jwt_required()
@@ -798,13 +948,11 @@ def start_test(test_id):
                 current_open_time_ms = channel_times[0] if channel_times else 600000
                 flush_time_ms = int(chimera_config.flush_time_seconds * 1000)
                 success, msg = chimera_handler.set_all_timing(current_open_time_ms, flush_time_ms)
-                print(f"[DEBUG] Chimera timing set: open={current_open_time_ms}ms, flush={flush_time_ms}ms - {msg}")
                 if not success:
                     return jsonify({"error": f"Failed to configure Chimera timing on {chimera_device.name}: {msg}"}), 500
 
                 # 2. Set service sequence (which channels are in service)
                 success, msg = chimera_handler.set_service(chimera_config.service_sequence)
-                print(f"[DEBUG] Chimera service sequence set to {chimera_config.service_sequence} - {msg}")
                 if not success:
                     return jsonify({"error": f"Failed to configure Chimera service sequence on {chimera_device.name}: {msg}"}), 500
 
@@ -813,18 +961,16 @@ def start_test(test_id):
                     chimera_config_id=chimera_config.id
                 ).all()
                 for channel_cfg in channel_configs:
-                    success, msg = chimera_handler.set_channel_timing(
+                    chimera_handler.set_channel_timing(
                         channel_cfg.channel_number,
                         channel_cfg.open_time_seconds
                     )
-                    print(f"[DEBUG] Chimera channel {channel_cfg.channel_number} timing set to {channel_cfg.open_time_seconds}s - {msg}")
 
                 # 4. Set recirculation mode 
                 # Map mode: 'volume' -> 2, 'periodic' -> 1, 'off' -> 0
                 mode_map = {'off': 0, 'periodic': 1, 'volume': 2}
                 chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
-                print(chimera_handler.set_recirculate(chimera_mode))
-                print(f"[DEBUG] Chimera recirculation mode set to {chimera_mode} ({chimera_config.recirculation_mode})")
+                chimera_handler.set_recirculate(chimera_mode)
 
                 # If periodic mode, also set the delay
                 if chimera_config.recirculation_mode == 'periodic':
