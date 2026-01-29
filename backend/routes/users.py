@@ -7,6 +7,22 @@ from utils.auth import require_role, log_audit, VALID_ROLES
 users_bp = Blueprint('users', __name__)
 
 
+@users_bp.route('/api/v1/users/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    """
+    Get current user's data.
+    """
+    user_id = get_jwt_identity()
+    user_id = int(user_id) if user_id is not None else None
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify(user.to_dict())
+
+
 @users_bp.route('/api/v1/users', methods=['GET'])
 @jwt_required()
 @require_role(['admin'])
@@ -252,3 +268,37 @@ def list_roles():
         {"id": "viewer", "name": "Viewer", "description": "Read-only access to tests and data"}
     ]
     return jsonify(roles)
+
+
+@users_bp.route('/api/v1/user/preferences', methods=['PUT'])
+@jwt_required()
+def update_user_preferences():
+    """
+    Update current user's preferences (csv_delimiter).
+
+    Request body:
+        {
+            "csv_delimiter": "string"  // ',', ';', or '\t'
+        }
+    """
+    user_id = get_jwt_identity()
+    user_id = int(user_id) if user_id is not None else None
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    if 'csv_delimiter' in data:
+        delimiter = data['csv_delimiter']
+        # Validate delimiter
+        if delimiter not in [',', ';', '\t']:
+            return jsonify({"error": "Invalid delimiter. Must be ',', ';', or '\\t'"}), 400
+        user.csv_delimiter = delimiter
+
+    db.session.commit()
+
+    return jsonify(user.to_dict())

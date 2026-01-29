@@ -20,6 +20,7 @@ class User(db.Model):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    csv_delimiter = Column(String(1), nullable=False, default=',')  # CSV delimiter preference: ',', ';', '\t'
 
     def to_dict(self):
         return {
@@ -29,7 +30,8 @@ class User(db.Model):
             'role': self.role,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by': self.created_by
+            'created_by': self.created_by,
+            'csv_delimiter': self.csv_delimiter
         }
 
 

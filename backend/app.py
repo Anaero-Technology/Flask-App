@@ -1488,6 +1488,11 @@ def download_test_data(test_id):
         if not test:
             return jsonify({"error": "Test not found"}), 404
 
+        # Get current user's CSV delimiter preference
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        csv_delimiter = user.csv_delimiter if user else ','
+
         # 1. Fetch BlackBox Event Log Data
         bb_events = db.session.query(
             BlackBoxEventLogData, Device.name
@@ -1523,9 +1528,9 @@ def download_test_data(test_id):
              return jsonify({"error": "No data found for this test"}), 404
 
         # Helper to create CSV string
-        def create_csv_string(header, rows, row_mapper):
+        def create_csv_string(header, rows, row_mapper, delimiter=','):
             output = io.StringIO()
-            writer = csv.writer(output)
+            writer = csv.writer(output, delimiter=delimiter)
             writer.writerow(header)
             for row in rows:
                 writer.writerow(row_mapper(row))
@@ -1602,17 +1607,17 @@ def download_test_data(test_id):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                 if has_bb_events:
-                    csv_data = create_csv_string(bb_event_header, bb_events, map_bb_event)
+                    csv_data = create_csv_string(bb_event_header, bb_events, map_bb_event, csv_delimiter)
                     zf.writestr(f"{test.name}_gfm_events.csv", csv_data)
-                
+
                 if has_bb_raw:
-                    csv_data = create_csv_string(bb_raw_header, bb_raw, map_bb_raw)
+                    csv_data = create_csv_string(bb_raw_header, bb_raw, map_bb_raw, csv_delimiter)
                     zf.writestr(f"{test.name}_gfm_raw.csv", csv_data)
 
                 if has_chimera:
-                    csv_data = create_csv_string(chimera_header, chimera_data, map_chimera)
+                    csv_data = create_csv_string(chimera_header, chimera_data, map_chimera, csv_delimiter)
                     zf.writestr(f"{test.name}_chimera.csv", csv_data)
-            
+
             zip_buffer.seek(0)
             return send_file(
                 zip_buffer,
@@ -1623,17 +1628,17 @@ def download_test_data(test_id):
 
         elif has_bb_events:
             # Return BlackBox Events CSV
-            csv_content = create_csv_string(bb_event_header, bb_events, map_bb_event)
+            csv_content = create_csv_string(bb_event_header, bb_events, map_bb_event, csv_delimiter)
             return send_file(
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
                 as_attachment=True,
                 download_name=f"{test.name}_gfm_events.csv"
             )
-        
+
         elif has_bb_raw:
              # Return BlackBox Raw CSV
-            csv_content = create_csv_string(bb_raw_header, bb_raw, map_bb_raw)
+            csv_content = create_csv_string(bb_raw_header, bb_raw, map_bb_raw, csv_delimiter)
             return send_file(
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
@@ -1643,7 +1648,7 @@ def download_test_data(test_id):
 
         elif has_chimera:
              # Return Chimera CSV
-            csv_content = create_csv_string(chimera_header, chimera_data, map_chimera)
+            csv_content = create_csv_string(chimera_header, chimera_data, map_chimera, csv_delimiter)
             return send_file(
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',

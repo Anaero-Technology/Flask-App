@@ -15,6 +15,9 @@ function Settings() {
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
   const [downloadingLog, setDownloadingLog] = useState(false)
   const [clearingLog, setClearingLog] = useState(false)
+  const [csvDelimiter, setCsvDelimiter] = useState(',')
+  const [savingDelimiter, setSavingDelimiter] = useState(false)
+  const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -207,10 +210,49 @@ function Settings() {
     }
   }
 
+  const loadUserPreferences = async () => {
+    try {
+      // Get user data which includes csv_delimiter
+      const response = await authFetch('/api/v1/users/me')
+      if (response.ok) {
+        const user = await response.json()
+        setCsvDelimiter(user.csv_delimiter || ',')
+      }
+    } catch (error) {
+      console.error('Error loading user preferences:', error)
+    }
+  }
+
+  const saveDelimiterPreference = async () => {
+    setSavingDelimiter(true)
+    setDelimiterMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/user/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          csv_delimiter: csvDelimiter
+        })
+      })
+
+      if (response.ok) {
+        setDelimiterMessage({ text: 'CSV delimiter preference saved', type: 'success' })
+      } else {
+        const data = await response.json()
+        setDelimiterMessage({ text: data.error || 'Failed to save preference', type: 'error' })
+      }
+    } catch (error) {
+      setDelimiterMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
+    } finally {
+      setSavingDelimiter(false)
+    }
+  }
+
   useEffect(() => {
     // Auto-scan on component mount
     scanNetworks()
     fetchSerialLogInfo()
+    loadUserPreferences()
   }, [])
 
   return (
@@ -338,6 +380,49 @@ function Settings() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* User Preferences */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Preferences</h2>
+
+          {/* Delimiter Message Display */}
+          {delimiterMessage.text && (
+            <div className={`mb-4 p-3 rounded ${
+              delimiterMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {delimiterMessage.text}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                CSV Delimiter
+              </label>
+              <div className="flex items-center gap-3">
+                <select
+                  value={csvDelimiter}
+                  onChange={(e) => setCsvDelimiter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value=",">Comma (,)</option>
+                  <option value=";">Semicolon (;)</option>
+                  <option value="\t">Tab</option>
+                </select>
+                <button
+                  onClick={saveDelimiterPreference}
+                  disabled={savingDelimiter}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {savingDelimiter ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Choose the delimiter used when exporting data to CSV files
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* System Settings */}
