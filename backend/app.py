@@ -787,7 +787,7 @@ def get_chimera_configuration(test_id):
         channels = []
         for channel_cfg in channel_configs:
             # Get sample information linked to this channel
-            sample_name = "Unconfigured"
+            sample_name = None
 
             # Find BlackBox configuration for this Chimera channel
             bb_config = ChannelConfiguration.query.filter_by(
@@ -875,7 +875,7 @@ def get_blackbox_configuration(test_id, device_id):
             elif substrate_name:
                 sample_name = substrate_name
             else:
-                sample_name = "Unconfigured"
+                sample_name = None
 
             channels.append({
                 "channel_number": channel_cfg.channel_number,

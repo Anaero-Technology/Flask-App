@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "title": "Settings",
+    "wifi": "WiFi Networks",
+    "scan_networks": "Scan Networks",
+    "scanning": "Scanning...",
+    "no_networks": "No networks found. Click \"Scan Networks\" to search.",
+    "signal": "Signal",
+    "password": "Password",
+    "connect": "Connect",
+    "connecting": "Connecting...",
+    "connected": "Successfully connected to {{ssid}}",
+    "connection_failed": "Failed to connect",
+    "preferences_title": "Preferences",
+    "csv_delimiter": "CSV Delimiter",
+    "csv_delimiter_help": "Choose the delimiter used when exporting data to CSV files",
+    "comma": "Comma (,)",
+    "semicolon": "Semicolon (;)",
+    "tab": "Tab",
+    "system": "System",
+    "update_software": "Update Software",
+    "pull_github": "Pull latest changes from GitHub repository",
+    "pull_from_github": "Pull from GitHub",
+    "pulling": "Pulling...",
+    "serial_log": "Serial Communication Log",
+    "download_serial_log": "Download Serial Log",
+    "download": "Download",
+    "downloading": "Downloading...",
+    "clear_log": "Clear Log",
+    "clearing": "Clearing...",
+    "download_all_serial": "Download all serial messages received from devices",
+    "delimiter_saved": "CSV delimiter preference saved",
+    "language_saved": "Language preference saved"
+  },
+  "login": {
+    "title": "Login",
+    "username": "Username",
+    "password": "Password",
+    "login_button": "Login",
+    "invalid_credentials": "Invalid username or password",
+    "error": "Login failed"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "active_tests": "Active Tests",
+    "recent_tests": "Recent Tests",
+    "devices": "Devices"
+  },
+  "test_form": {
+    "title": "Start New Test",
+    "test_name": "Test Name",
+    "description": "Description",
+    "select_device": "Select Device",
+    "start_test": "Start Test",
+    "test_started": "Test started successfully"
+  },
+  "sample_form": {
+    "title": "Create Sample",
+    "sample_name": "Sample Name",
+    "substrate_type": "Substrate Type",
+    "create_sample": "Create Sample",
+    "sample_created": "Sample created successfully"
+  }
+}

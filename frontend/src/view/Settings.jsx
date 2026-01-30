@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../components/AuthContext';
+import { useI18n } from '../components/i18nContext';
+import { useTranslation } from 'react-i18next';
 
 function Settings() {
   const { authFetch } = useAuth();
+  const { changeLanguage, currentLanguage } = useI18n();
+  const { t: tCommon } = useTranslation('common');
+  const { t: tPages } = useTranslation('pages');
   const [networks, setNetworks] = useState([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
@@ -18,6 +23,9 @@ function Settings() {
   const [csvDelimiter, setCsvDelimiter] = useState(',')
   const [savingDelimiter, setSavingDelimiter] = useState(false)
   const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
+  const [language, setLanguage] = useState('en')
+  const [savingLanguage, setSavingLanguage] = useState(false)
+  const [languageMessage, setLanguageMessage] = useState({ text: '', type: '' })
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -102,12 +110,12 @@ function Settings() {
 
   const getSignalStrength = (signal) => {
     const signalNum = parseInt(signal)
-    if (isNaN(signalNum)) return 'Unknown'
+    if (isNaN(signalNum)) return tPages('settings.signal_unknown')
 
-    if (signalNum >= -50) return 'Excellent'
-    if (signalNum >= -60) return 'Good'
-    if (signalNum >= -70) return 'Fair'
-    return 'Weak'
+    if (signalNum >= -50) return tPages('settings.signal_excellent')
+    if (signalNum >= -60) return tPages('settings.signal_good')
+    if (signalNum >= -70) return tPages('settings.signal_fair')
+    return tPages('settings.signal_weak')
   }
 
   const getSignalIcon = (signal) => {
@@ -212,11 +220,12 @@ function Settings() {
 
   const loadUserPreferences = async () => {
     try {
-      // Get user data which includes csv_delimiter
+      // Get user data which includes csv_delimiter and language
       const response = await authFetch('/api/v1/users/me')
       if (response.ok) {
         const user = await response.json()
         setCsvDelimiter(user.csv_delimiter || ',')
+        setLanguage(user.language || 'en')
       }
     } catch (error) {
       console.error('Error loading user preferences:', error)
@@ -236,15 +245,43 @@ function Settings() {
       })
 
       if (response.ok) {
-        setDelimiterMessage({ text: 'CSV delimiter preference saved', type: 'success' })
+        setDelimiterMessage({ text: tPages('settings.delimiter_saved'), type: 'success' })
       } else {
         const data = await response.json()
-        setDelimiterMessage({ text: data.error || 'Failed to save preference', type: 'error' })
+        setDelimiterMessage({ text: data.error || tPages('settings.save_preference_failed'), type: 'error' })
       }
     } catch (error) {
       setDelimiterMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
     } finally {
       setSavingDelimiter(false)
+    }
+  }
+
+  const saveLanguagePreference = async (newLanguage) => {
+    setSavingLanguage(true)
+    setLanguageMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/user/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          language: newLanguage
+        })
+      })
+
+      if (response.ok) {
+        setLanguage(newLanguage)
+        // Update the app language
+        await changeLanguage(newLanguage)
+        setLanguageMessage({ text: tPages('settings.language_saved'), type: 'success' })
+      } else {
+        const data = await response.json()
+        setLanguageMessage({ text: data.error || tPages('settings.save_preference_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setLanguageMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
+    } finally {
+      setSavingLanguage(false)
     }
   }
 
@@ -258,18 +295,18 @@ function Settings() {
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Settings</h1>
+        <h1 className="text-3xl font-bold mb-6">{tPages('settings.title')}</h1>
 
         {/* WiFi Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">WiFi Networks</h2>
+            <h2 className="text-xl font-semibold">{tPages('settings.wifi')}</h2>
             <button
               onClick={scanNetworks}
               disabled={loading}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {loading ? 'Scanning...' : 'Scan Networks'}
+              {loading ? tPages('settings.scanning') : tPages('settings.scan_networks')}
             </button>
           </div>
 
@@ -285,11 +322,11 @@ function Settings() {
           {/* Networks List */}
           {loading ? (
             <div className="text-center py-8 text-gray-500">
-              Scanning for networks...
+              {tPages('settings.scanning_for_networks')}
             </div>
           ) : networks.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No networks found. Click "Scan Networks" to search.
+              {tPages('settings.no_networks')}
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
@@ -325,7 +362,7 @@ function Settings() {
                               handleNetworkSelect(network, index)
                             }}
                           >
-                            {isSelected ? 'Hide' : 'Connect'}
+                            {isSelected ? tPages('settings.hide') : tPages('settings.connect')}
                           </button>
                         </div>
                       </div>
@@ -336,14 +373,14 @@ function Settings() {
                           <form onSubmit={(e) => handleConnectWithPassword(e, network)} className="space-y-3">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Password
+                                {tPages('settings.password')}
                               </label>
                               <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Enter WiFi password"
+                                placeholder={tPages('settings.enter_password')}
                                 autoFocus
                                 required
                                 onClick={(e) => e.stopPropagation()}
@@ -360,7 +397,7 @@ function Settings() {
                                 className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
                                 disabled={connecting}
                               >
-                                Cancel
+                                {tPages('settings.cancel')}
                               </button>
                               <button
                                 type="submit"
@@ -368,7 +405,7 @@ function Settings() {
                                 disabled={connecting || !password}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {connecting ? 'Connecting...' : 'Connect'}
+                                {connecting ? tPages('settings.connecting') : tPages('settings.connect')}
                               </button>
                             </div>
                           </form>
@@ -384,9 +421,9 @@ function Settings() {
 
         {/* User Preferences */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Preferences</h2>
+          <h2 className="text-xl font-semibold mb-4">{tCommon('preferences')}</h2>
 
-          {/* Delimiter Message Display */}
+          {/* Messages Display */}
           {delimiterMessage.text && (
             <div className={`mb-4 p-3 rounded ${
               delimiterMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -395,10 +432,41 @@ function Settings() {
             </div>
           )}
 
+          {languageMessage.text && (
+            <div className={`mb-4 p-3 rounded ${
+              languageMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {languageMessage.text}
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                CSV Delimiter
+                {tCommon('language')}
+              </label>
+              <div className="flex items-center gap-3">
+                <select
+                  value={language}
+                  onChange={(e) => saveLanguagePreference(e.target.value)}
+                  disabled={savingLanguage}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="en">{tCommon('english')}</option>
+                  <option value="es">{tCommon('spanish')}</option>
+                  <option value="fr">{tCommon('french')}</option>
+                  <option value="de">{tCommon('german')}</option>
+                  <option value="zh">{tCommon('chinese')}</option>
+                </select>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Choose your preferred display language
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {tPages('settings.csv_delimiter')}
               </label>
               <div className="flex items-center gap-3">
                 <select
@@ -406,20 +474,20 @@ function Settings() {
                   onChange={(e) => setCsvDelimiter(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value=",">Comma (,)</option>
-                  <option value=";">Semicolon (;)</option>
-                  <option value="\t">Tab</option>
+                  <option value=",">{tPages('settings.comma')}</option>
+                  <option value=";">{tPages('settings.semicolon')}</option>
+                  <option value="\t">{tPages('settings.tab')}</option>
                 </select>
                 <button
                   onClick={saveDelimiterPreference}
                   disabled={savingDelimiter}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {savingDelimiter ? 'Saving...' : 'Save'}
+                  {savingDelimiter ? 'Saving...' : tCommon('save')}
                 </button>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                Choose the delimiter used when exporting data to CSV files
+                {tPages('settings.csv_delimiter_help')}
               </p>
             </div>
           </div>

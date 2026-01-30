@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from './AuthContext';
+import { useTranslation } from 'react-i18next';
 import logo from '../assets/logo.png';
 import {
   LayoutDashboard,
@@ -32,25 +33,27 @@ const ROLE_CONFIG = {
 
 function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
   const { user, logout, canPerform } = useAuth();
+  const { t: tSidebar } = useTranslation('sidebar');
+  const { t: tCommon } = useTranslation('common');
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'test', label: 'Start Test', icon: FlaskConical, permission: 'start_test' },
-    { id: 'database', label: 'Database', icon: Database },
-    { id: 'plot', label: 'Plot', icon: LineChart },
-    { id: 'upload', label: 'Upload Data', icon: Upload, permission: 'modify_test' },
+    { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+    { id: 'test', labelKey: 'start_test', icon: FlaskConical, permission: 'start_test' },
+    { id: 'database', labelKey: 'database', icon: Database },
+    { id: 'plot', labelKey: 'plot', icon: LineChart },
+    { id: 'upload', labelKey: 'upload_data', icon: Upload, permission: 'modify_test' },
   ];
 
   const secondaryItems = [
-    { id: 'blackbox', label: 'BlackBox', icon: Box },
-    { id: 'chimera', label: 'Chimera', icon: Activity },
-    { id: 'plc', label: 'PLC', icon: Cpu },
-    { id: 'monitor', label: 'Monitor', icon: Monitor },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'blackbox', labelKey: 'blackbox', icon: Box },
+    { id: 'chimera', labelKey: 'chimera', icon: Activity },
+    { id: 'plc', labelKey: 'plc', icon: Cpu },
+    { id: 'monitor', labelKey: 'monitor', icon: Monitor },
+    { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
 
   const adminItems = [
-    { id: 'users', label: 'User Management', icon: Users, permission: 'manage_users' },
+    { id: 'users', labelKey: 'user_management', icon: Users, permission: 'manage_users' },
   ];
 
   const handleLogout = async () => {
@@ -80,7 +83,7 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
         onClick={() => onNavigate(item.id)}
       >
         <Icon size={20} className={`mr-3 ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-        <span className="text-sm font-medium">{item.label}</span>
+        <span className="text-sm font-medium">{tSidebar(item.labelKey)}</span>
         {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />}
       </li>
     );
@@ -100,7 +103,7 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <img src={logo} className="h-8 w-8 object-contain" alt="Logo" />
-          <span className="text-lg font-bold text-gray-900 tracking-tight">Anaero Technology</span>
+          <span className="text-lg font-bold text-gray-900 tracking-tight">{tCommon('app_name')}</span>
         </div>
         {/* Close button for mobile */}
         <button
@@ -120,19 +123,19 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
             className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-medium"
           >
             <PlusCircle size={18} />
-            Create Sample
+            {tSidebar('create_sample')}
           </button>
         </div>
       )}
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-2">
-        <div className="px-6 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Main</div>
+        <div className="px-6 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">{tSidebar('main')}</div>
         <ul>
           {filterItems(menuItems).map(item => <NavItem key={item.id} item={item} />)}
         </ul>
 
-        <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tools</div>
+        <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{tSidebar('tools')}</div>
         <ul>
           {filterItems(secondaryItems).map(item => <NavItem key={item.id} item={item} />)}
         </ul>
@@ -140,7 +143,7 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
         {/* Admin Section - Only show if user has admin permissions */}
         {filterItems(adminItems).length > 0 && (
           <>
-            <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Admin</div>
+            <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{tSidebar('admin')}</div>
             <ul>
               {filterItems(adminItems).map(item => <NavItem key={item.id} item={item} />)}
             </ul>
@@ -166,7 +169,7 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
           <button
             onClick={handleLogout}
             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Logout"
+            title={tSidebar('logout')}
           >
             <LogOut size={18} />
           </button>

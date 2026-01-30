@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const BlackBoxConfigTooltip = ({ testId, deviceId, activeTestName }) => {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(false);
     const [show, setShow] = useState(false);
@@ -41,7 +43,7 @@ const BlackBoxConfigTooltip = ({ testId, deviceId, activeTestName }) => {
     const groupChannelsBySample = (channels) => {
         const groups = {};
         channels.forEach(ch => {
-            const sample = ch.sample_name || 'Unconfigured';
+            const sample = ch.sample_name || tPages('config_tooltip.unconfigured');
             if (!groups[sample]) {
                 groups[sample] = [];
             }
@@ -83,19 +85,19 @@ const BlackBoxConfigTooltip = ({ testId, deviceId, activeTestName }) => {
                     onMouseLeave={handleMouseLeave}
                 >
                     {loading ? (
-                        <div className="text-xs text-gray-500 text-center py-2">Loading...</div>
+                        <div className="text-xs text-gray-500 text-center py-2">{tPages('config_tooltip.loading')}</div>
                     ) : (
                         <>
                             {/* Header */}
                             <div className="mb-2 pb-2 border-b border-gray-200">
                                 <p className="text-xs font-bold text-gray-900">{config.test_name}</p>
-                                <p className="text-xs text-gray-500">Test Configuration - {config.device_name}</p>
+                                <p className="text-xs text-gray-500">{tPages('config_tooltip.test_configuration')} - {config.device_name}</p>
                             </div>
 
                             {/* Channels Grouped by Sample */}
                             <div className="pt-2">
                                 <p className="text-xs font-semibold text-gray-600 mb-2">
-                                    Channels ({channels.length}/15)
+                                    {tPages('config_tooltip.channels')} ({channels.length}/15)
                                 </p>
                                 <div className="space-y-1.5">
                                     {Object.entries(channelsBySample).map(([sample, chNumbers]) => (

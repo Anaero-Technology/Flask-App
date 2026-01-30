@@ -7,11 +7,13 @@ import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
 import { RefreshCw, Server, Activity, CheckCircle, FlaskConical } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 
 
 function Dashboard({ onViewPlot }) {
   const { authFetch } = useAuth();
+  const { t: tPages } = useTranslation('pages');
   const [devices, setDevices] = useState([])
   const [activeTests, setActiveTests] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
@@ -195,14 +197,14 @@ function Dashboard({ onViewPlot }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">System Overview</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('dashboard.title')}</h1>
         </div>
         <button
           onClick={discoverDevices}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all font-medium"
         >
           <RefreshCw size={18} className={loading ? 'animate-spin text-blue-500' : 'text-gray-400'} />
-          <span>{loading ? 'Scanning...' : 'Scan Devices'}</span>
+          <span>{loading ? tPages('dashboard.scanning') : tPages('dashboard.scan_devices')}</span>
         </button>
       </div>
 
@@ -213,7 +215,7 @@ function Dashboard({ onViewPlot }) {
             <Server size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">Total Devices</p>
+            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.total_devices')}</p>
             <p className="text-2xl font-bold text-gray-900">{totalDevices}</p>
           </div>
         </div>
@@ -222,7 +224,7 @@ function Dashboard({ onViewPlot }) {
             <Activity size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">Active Logging</p>
+            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.active_logging')}</p>
             <p className="text-2xl font-bold text-gray-900">{activeLogging}</p>
           </div>
         </div>
@@ -231,7 +233,7 @@ function Dashboard({ onViewPlot }) {
             <FlaskConical size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">Running Tests</p>
+            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.running_tests')}</p>
             <p className="text-2xl font-bold text-gray-900">{runningTests}</p>
           </div>
         </div>
@@ -245,7 +247,7 @@ function Dashboard({ onViewPlot }) {
           {activeLogging > 0 && (
             <section>
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                Active Devices
+                {tPages('dashboard.active_devices')}
               </h2>
               <div className="grid grid-cols-1 gap-4">
                 {devices
@@ -274,7 +276,7 @@ function Dashboard({ onViewPlot }) {
           {/* Unassigned Devices Section */}
           <section className="-mt-2">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              Available Devices
+              {tPages('dashboard.available_devices')}
             </h2>
             {unassignedDevices.length > 0 ? (
               <div className="grid grid-cols-1 gap-4">
@@ -296,8 +298,8 @@ function Dashboard({ onViewPlot }) {
               </div>
             ) : (
               <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-                <p className="text-gray-500">No available devices found.</p>
-                {activeLogging > 0 && <p className="text-sm text-gray-400 mt-1">All devices are currently assigned to active tests.</p>}
+                <p className="text-gray-500">{tPages('dashboard.no_available_devices')}</p>
+                {activeLogging > 0 && <p className="text-sm text-gray-400 mt-1">{tPages('dashboard.all_devices_assigned')}</p>}
               </div>
             )}
           </section>
@@ -306,7 +308,7 @@ function Dashboard({ onViewPlot }) {
         {/* Sidebar Notifications */}
         <div className="lg:col-span-1">
           <div className="sticky top-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-5">Recent Activity</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-5">{tPages('dashboard.recent_activity')}</h2>
             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
               {recentEvents.length > 0 ? (
                 recentEvents.map((event) => (
@@ -316,7 +318,7 @@ function Dashboard({ onViewPlot }) {
                         event.type === 'gas_analysis' ? 'bg-purple-100 text-purple-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
-                        {event.type === 'tip' || event.type === 'raw_data' ? 'Tip' : event.type === 'gas_analysis' ? 'Gas' : 'Event'}
+                        {event.type === 'tip' ? tPages('dashboard.event_tip') : event.type === 'raw_data' ? tPages('dashboard.event_raw_data') : event.type === 'gas_analysis' ? tPages('dashboard.event_gas_analysis') : 'Event'}
                       </span>
                       <span className="text-xs text-gray-400">
                         {new Date(event.timestamp * 1000).toLocaleTimeString()}
@@ -352,7 +354,7 @@ function Dashboard({ onViewPlot }) {
                 ))
               ) : (
                 <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-300 text-gray-500 text-sm">
-                  No recent activity
+                  {tPages('dashboard.no_recent_activity')}
                 </div>
               )}
             </div>

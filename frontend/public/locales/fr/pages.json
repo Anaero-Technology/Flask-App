@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "title": "Paramètres",
+    "wifi": "Réseaux WiFi",
+    "scan_networks": "Analyser les Réseaux",
+    "scanning": "Analyse en cours...",
+    "no_networks": "Aucun réseau trouvé. Cliquez sur \"Analyser les Réseaux\" pour rechercher.",
+    "signal": "Signal",
+    "password": "Mot de Passe",
+    "connect": "Connecter",
+    "connecting": "Connexion...",
+    "connected": "Connecté avec succès à {{ssid}}",
+    "connection_failed": "Échec de la connexion",
+    "preferences_title": "Préférences",
+    "csv_delimiter": "Délimiteur CSV",
+    "csv_delimiter_help": "Choisissez le délimiteur utilisé lors de l'export de données vers des fichiers CSV",
+    "comma": "Virgule (,)",
+    "semicolon": "Point-virgule (;)",
+    "tab": "Tabulation",
+    "system": "Système",
+    "update_software": "Mettre à Jour le Logiciel",
+    "pull_github": "Récupérer les dernières modifications du référentiel GitHub",
+    "pull_from_github": "Mettre à Jour depuis GitHub",
+    "pulling": "Mise à jour...",
+    "serial_log": "Journal de Communication Série",
+    "download_serial_log": "Télécharger le Journal Série",
+    "download": "Télécharger",
+    "downloading": "Téléchargement...",
+    "clear_log": "Effacer le Journal",
+    "clearing": "Effacement...",
+    "download_all_serial": "Télécharger tous les messages série reçus des appareils",
+    "delimiter_saved": "Préférence de délimiteur CSV enregistrée",
+    "language_saved": "Préférence de langue enregistrée"
+  },
+  "login": {
+    "title": "Connexion",
+    "username": "Nom d'Utilisateur",
+    "password": "Mot de Passe",
+    "login_button": "Connexion",
+    "invalid_credentials": "Nom d'utilisateur ou mot de passe invalide",
+    "error": "Erreur de connexion"
+  },
+  "dashboard": {
+    "title": "Tableau de Bord",
+    "active_tests": "Tests Actifs",
+    "recent_tests": "Tests Récents",
+    "devices": "Appareils"
+  },
+  "test_form": {
+    "title": "Démarrer un Nouveau Test",
+    "test_name": "Nom du Test",
+    "description": "Description",
+    "select_device": "Sélectionner un Appareil",
+    "start_test": "Démarrer le Test",
+    "test_started": "Test démarré avec succès"
+  },
+  "sample_form": {
+    "title": "Créer un Échantillon",
+    "sample_name": "Nom de l'Échantillon",
+    "substrate_type": "Type de Substrat",
+    "create_sample": "Créer un Échantillon",
+    "sample_created": "Échantillon créé avec succès"
+  }
+}

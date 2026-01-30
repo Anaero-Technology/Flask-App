@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "title": "Configuración",
+    "wifi": "Redes WiFi",
+    "scan_networks": "Escanear Redes",
+    "scanning": "Escaneando...",
+    "no_networks": "No se encontraron redes. Haz clic en \"Escanear Redes\" para buscar.",
+    "signal": "Señal",
+    "password": "Contraseña",
+    "connect": "Conectar",
+    "connecting": "Conectando...",
+    "connected": "Conectado exitosamente a {{ssid}}",
+    "connection_failed": "Error al conectar",
+    "preferences_title": "Preferencias",
+    "csv_delimiter": "Delimitador CSV",
+    "csv_delimiter_help": "Elige el delimitador utilizado al exportar datos a archivos CSV",
+    "comma": "Coma (,)",
+    "semicolon": "Punto y coma (;)",
+    "tab": "Tabulación",
+    "system": "Sistema",
+    "update_software": "Actualizar Software",
+    "pull_github": "Obtener cambios más recientes del repositorio de GitHub",
+    "pull_from_github": "Actualizar desde GitHub",
+    "pulling": "Actualizando...",
+    "serial_log": "Registro de Comunicación Serial",
+    "download_serial_log": "Descargar Registro Serial",
+    "download": "Descargar",
+    "downloading": "Descargando...",
+    "clear_log": "Limpiar Registro",
+    "clearing": "Limpiando...",
+    "download_all_serial": "Descargar todos los mensajes seriales recibidos de dispositivos",
+    "delimiter_saved": "Preferencia de delimitador CSV guardada",
+    "language_saved": "Preferencia de idioma guardada"
+  },
+  "login": {
+    "title": "Iniciar Sesión",
+    "username": "Nombre de Usuario",
+    "password": "Contraseña",
+    "login_button": "Iniciar Sesión",
+    "invalid_credentials": "Nombre de usuario o contraseña inválidos",
+    "error": "Error al iniciar sesión"
+  },
+  "dashboard": {
+    "title": "Panel de Control",
+    "active_tests": "Pruebas Activas",
+    "recent_tests": "Pruebas Recientes",
+    "devices": "Dispositivos"
+  },
+  "test_form": {
+    "title": "Iniciar Nueva Prueba",
+    "test_name": "Nombre de Prueba",
+    "description": "Descripción",
+    "select_device": "Seleccionar Dispositivo",
+    "start_test": "Iniciar Prueba",
+    "test_started": "Prueba iniciada exitosamente"
+  },
+  "sample_form": {
+    "title": "Crear Muestra",
+    "sample_name": "Nombre de Muestra",
+    "substrate_type": "Tipo de Sustrato",
+    "create_sample": "Crear Muestra",
+    "sample_created": "Muestra creada exitosamente"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "errors": {
+    "network_scan_failed": "Netzwerkscan fehlgeschlagen",
+    "network_scan_error": "Fehler beim Netzwerkscan: {{error}}",
+    "save_preference_failed": "Einstellung konnte nicht gespeichert werden",
+    "save_preference_error": "Fehler beim Speichern der Einstellung: {{error}}",
+    "load_preferences_error": "Fehler beim Laden der Benutzereinstellungen",
+    "no_data_provided": "Keine Daten angegeben",
+    "invalid_delimiter": "Ungültiges Trennzeichen. Muss ',', ';' oder Tabulator sein",
+    "invalid_language": "Ungültige Sprachauswahl"
+  },
+  "success": {
+    "networks_scanned": "Netzwerke erfolgreich gescannt",
+    "preference_saved": "Einstellung erfolgreich gespeichert",
+    "connected_to_network": "Erfolgreich verbunden mit {{ssid}}"
+  }
+}

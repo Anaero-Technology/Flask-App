@@ -274,11 +274,12 @@ def list_roles():
 @jwt_required()
 def update_user_preferences():
     """
-    Update current user's preferences (csv_delimiter).
+    Update current user's preferences (csv_delimiter, language).
 
     Request body:
         {
-            "csv_delimiter": "string"  // ',', ';', or '\t'
+            "csv_delimiter": "string",  // ',', ';', or '\t'
+            "language": "string"        // 'en', 'es', 'fr', 'de'
         }
     """
     user_id = get_jwt_identity()
@@ -298,6 +299,13 @@ def update_user_preferences():
         if delimiter not in [',', ';', '\t']:
             return jsonify({"error": "Invalid delimiter. Must be ',', ';', or '\\t'"}), 400
         user.csv_delimiter = delimiter
+
+    if 'language' in data:
+        language = data['language']
+        # Validate language
+        if language not in ['en', 'es', 'fr', 'de', 'zh']:
+            return jsonify({"error": "Invalid language. Must be 'en', 'es', 'fr', 'de', or 'zh'"}), 400
+        user.language = language
 
     db.session.commit()
 

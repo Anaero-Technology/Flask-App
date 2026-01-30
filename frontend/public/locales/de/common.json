@@ -1,0 +1,22 @@
+{
+  "app_name": "Anaerobe Technologie",
+  "settings": "Einstellungen",
+  "preferences": "Einstellungen",
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "delete": "Löschen",
+  "edit": "Bearbeiten",
+  "create": "Erstellen",
+  "back": "Zurück",
+  "close": "Schließen",
+  "loading": "Wird geladen",
+  "error": "Fehler",
+  "success": "Erfolg",
+  "warning": "Warnung",
+  "info": "Information",
+  "language": "Sprache",
+  "english": "Englisch",
+  "spanish": "Spanisch",
+  "french": "Französisch",
+  "german": "Deutsch"
+}

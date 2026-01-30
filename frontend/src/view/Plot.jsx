@@ -11,6 +11,7 @@ import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
 import { Settings, X, Maximize2, Minimize2, Info } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 // Format gas names with proper subscripts (for Plotly - uses HTML)
 const formatGasName = (name) => {
@@ -30,6 +31,7 @@ const formatGasNameUnicode = (name) => {
 function Plot({ initialParams, onNavigate }) {
     const { authFetch, canPerform } = useAuth();
     const toast = useToast();
+    const { t: tPages } = useTranslation('pages');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [globalFilter, setGlobalFilter] = useState('');
@@ -113,8 +115,8 @@ function Plot({ initialParams, onNavigate }) {
 
         if (device.device_type.includes('chimera')) {
             return [
-                { value: 'peak_value', label: 'Peak Value' },
-                { value: 'gas_name', label: 'Gas Name' }
+                { value: 'peak_value', label: tPages('plot.peak_value_label') },
+                { value: 'gas_name', label: tPages('plot.gas_name_label') }
             ];
         }
 
@@ -124,28 +126,28 @@ function Plot({ initialParams, onNavigate }) {
             const firstItem = plotData.data[0];
             const options = [];
 
-            if (firstItem.hasOwnProperty('temperature')) options.push({ value: 'temperature', label: 'Temperature (°C)' });
-            if (firstItem.hasOwnProperty('pressure')) options.push({ value: 'pressure', label: 'Pressure (mbar)' });
+            if (firstItem.hasOwnProperty('temperature')) options.push({ value: 'temperature', label: tPages('plot.temperature_label') });
+            if (firstItem.hasOwnProperty('pressure')) options.push({ value: 'pressure', label: tPages('plot.pressure_label') });
 
             // Event Log specific
-            if (firstItem.hasOwnProperty('cumulative_tips')) options.push({ value: 'cumulative_tips', label: 'Cumulative Tips (tips)' });
-            if (firstItem.hasOwnProperty('total_volume_stp')) options.push({ value: 'total_volume_stp', label: 'Total Volume STP (mL)' });
-            if (firstItem.hasOwnProperty('net_volume_per_gram')) options.push({ value: 'net_volume_per_gram', label: 'Net Volume/Gram (mL/g)' });
+            if (firstItem.hasOwnProperty('cumulative_tips')) options.push({ value: 'cumulative_tips', label: tPages('plot.cumulative_tips_label') });
+            if (firstItem.hasOwnProperty('total_volume_stp')) options.push({ value: 'total_volume_stp', label: tPages('plot.total_volume_label') });
+            if (firstItem.hasOwnProperty('net_volume_per_gram')) options.push({ value: 'net_volume_per_gram', label: tPages('plot.net_volume_label') });
 
             // Raw specific
-            if (firstItem.hasOwnProperty('tip_number')) options.push({ value: 'tip_number', label: 'Tip Number (tips)' });
+            if (firstItem.hasOwnProperty('tip_number')) options.push({ value: 'tip_number', label: tPages('plot.tips_label') });
 
             return options;
         }
 
         // Default fallback if no data yet (assume Event Log structure as primary)
         return [
-            { value: 'temperature', label: 'Temperature (°C)' },
-            { value: 'pressure', label: 'Pressure (mbar)' },
-            { value: 'cumulative_tips', label: 'Cumulative Tips (tips)' },
-            { value: 'total_volume_stp', label: 'Total Volume STP (mL)' }
+            { value: 'temperature', label: tPages('plot.temperature_label') },
+            { value: 'pressure', label: tPages('plot.pressure_label') },
+            { value: 'cumulative_tips', label: tPages('plot.cumulative_tips_label') },
+            { value: 'total_volume_stp', label: tPages('plot.total_volume_label') }
         ];
-    }, [devices, selectedDeviceId, plotData]);
+    }, [devices, selectedDeviceId, plotData, tPages]);
 
     const getAggregationOptions = useCallback(() => {
         const device = devices.find(d => d.id === selectedDeviceId);
@@ -167,7 +169,7 @@ function Plot({ initialParams, onNavigate }) {
         const common = [
             {
                 accessorKey: 'timestamp',
-                header: 'Timestamp',
+                header: tPages('plot.timestamp_label'),
                 cell: info => {
                     const val = info.getValue();
                     // Handle both seconds (from backend) and ISO strings (if any legacy)
@@ -177,15 +179,15 @@ function Plot({ initialParams, onNavigate }) {
             },
             {
                 accessorKey: 'channel_number',
-                header: 'Channel',
+                header: tPages('plot.channel_label'),
             }
         ];
 
         if (device.device_type.includes('chimera')) {
             return [
                 ...common,
-                { accessorKey: 'gas_name', header: 'Gas Name' },
-                { accessorKey: 'peak_value', header: 'Peak Value' },
+                { accessorKey: 'gas_name', header: tPages('plot.gas_name_label') },
+                { accessorKey: 'peak_value', header: tPages('plot.peak_value_label') },
             ];
         }
 
@@ -194,7 +196,7 @@ function Plot({ initialParams, onNavigate }) {
             ...common,
             {
                 accessorKey: 'temperature',
-                header: 'Temp (°C)',
+                header: tPages('plot.temp_label'),
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(2) : '-';
@@ -202,16 +204,16 @@ function Plot({ initialParams, onNavigate }) {
             },
             {
                 accessorKey: 'pressure',
-                header: 'Pressure (mbar)',
+                header: tPages('plot.pressure_label'),
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(2) : '-';
                 }
             },
-            { accessorKey: 'cumulative_tips', header: 'Tips (tips)' },
+            { accessorKey: 'cumulative_tips', header: tPages('plot.cumulative_tips_label') },
             {
                 accessorKey: 'total_volume_stp',
-                header: 'Vol STP (mL)',
+                header: tPages('plot.total_volume_label'),
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(4) : '-';
@@ -219,14 +221,14 @@ function Plot({ initialParams, onNavigate }) {
             },
             {
                 accessorKey: 'net_volume_per_gram',
-                header: 'Net Vol/g (mL/g)',
+                header: tPages('plot.net_volume_label'),
                 cell: info => {
                     const val = info.getValue();
                     return typeof val === 'number' ? val.toFixed(4) : '-';
                 }
             },
         ];
-    }, [selectedDeviceId, devices]);
+    }, [selectedDeviceId, devices, tPages]);
 
     // Copy selected data to clipboard
     const copySelectedData = useCallback(() => {
@@ -248,12 +250,12 @@ function Plot({ initialParams, onNavigate }) {
 
         const tsv = [headers, ...rows].join('\n');
         navigator.clipboard.writeText(tsv).then(() => {
-            toast.info('Data copied to clipboard!');
+            toast.info(tPages('plot.data_copied'));
         }).catch(err => {
             console.error('Failed to copy:', err);
-            toast.error('Failed to copy data');
+            toast.error(tPages('plot.copy_failed'));
         });
-    }, [selectedPoints, selectedDataColumns, toast]);
+    }, [selectedPoints, selectedDataColumns, toast, tPages]);
 
     // Download selected data as CSV
     const downloadSelectedData = useCallback(() => {
@@ -408,39 +410,41 @@ function Plot({ initialParams, onNavigate }) {
     };
 
     const columns = useMemo(() => [
-        { accessorKey: 'name', header: 'Name', size: 150 },
-        { accessorKey: 'description', header: 'Description', size: 200 },
+        { accessorKey: 'name', header: tPages('plot.table_name'), size: 150 },
+        { accessorKey: 'description', header: tPages('plot.table_description'), size: 200 },
         {
             accessorKey: 'status',
-            header: 'Status',
+            header: tPages('plot.table_status'),
             size: 100,
             cell: info => {
                 const status = info.getValue();
                 const colorClass = status === 'running' ? 'bg-green-100 text-green-800' :
                     status === 'completed' ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-800';
+                const translatedStatus = status === 'running' ? tPages('plot.running') :
+                    status === 'completed' ? tPages('plot.completed') : status;
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colorClass}`}>
-                        {status}
+                        {translatedStatus}
                     </span>
                 );
             }
         },
         {
             accessorKey: 'date_created',
-            header: 'Created',
+            header: tPages('plot.table_created'),
             size: 120,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
         {
             accessorKey: 'date_ended',
-            header: 'Ended',
+            header: tPages('plot.table_ended'),
             size: 120,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
         {
             id: 'actions',
-            header: 'Actions',
+            header: tPages('plot.table_actions'),
             size: 100,
             cell: ({ row }) => (
                 <button
@@ -452,11 +456,11 @@ function Plot({ initialParams, onNavigate }) {
                     }}
                     className="text-blue-600 hover:text-blue-900 font-medium text-sm"
                 >
-                    View Plot
+                    {tPages('plot.view_plot')}
                 </button>
             )
         }
-    ], []);
+    ], [tPages]);
 
     const table = useReactTable({
         data,
@@ -683,10 +687,10 @@ function Plot({ initialParams, onNavigate }) {
         // Chimera Layout
         if (device && device.device_type.includes('chimera')) {
             // Dynamic X-axis title based on mode
-            let xAxisTitle = 'Time (Date/Time)';
-            if (xAxisMode === 'day') xAxisTitle = 'Elapsed Time (days)';
-            else if (xAxisMode === 'hour') xAxisTitle = 'Elapsed Time (hours)';
-            else if (xAxisMode === 'minute') xAxisTitle = 'Elapsed Time (minutes)';
+            let xAxisTitle = tPages('plot.x_axis_timestamp');
+            if (xAxisMode === 'day') xAxisTitle = tPages('plot.elapsed_time_days');
+            else if (xAxisMode === 'hour') xAxisTitle = tPages('plot.elapsed_time_hours');
+            else if (xAxisMode === 'minute') xAxisTitle = tPages('plot.elapsed_time_minutes');
 
             layout.xaxis = {
                 title: {
@@ -698,24 +702,24 @@ function Plot({ initialParams, onNavigate }) {
             };
 
             // Determine unit based on selected gas (if in gas mode) or generally
-            let unit = 'Concentration (%)';
+            let unit = tPages('plot.concentration_percent');
             let isPPM = false;
 
             if (groupingMode === 'gas') {
                 if (selectedGas && (selectedGas.includes('NH3') || selectedGas.includes('H2S') || selectedGas === 'H2' || selectedGas === 'CO' || selectedGas.toLowerCase().includes('ppm'))) {
-                    unit = 'Concentration (ppm)';
+                    unit = tPages('plot.concentration_ppm');
                     isPPM = true;
                 }
             } else {
                 // In channel mode, use the unit filter to determine axis title
                 if (unitFilter === 'ppm') {
-                    unit = 'Concentration (ppm)';
+                    unit = tPages('plot.concentration_ppm');
                     isPPM = true;
                 } else if (unitFilter === 'percent') {
-                    unit = 'Concentration (%)';
+                    unit = tPages('plot.concentration_percent');
                 } else {
                     // 'all' - show mixed units indicator
-                    unit = 'Concentration (% / ppm)';
+                    unit = tPages('plot.concentration_mixed');
                 }
             }
 
@@ -735,10 +739,10 @@ function Plot({ initialParams, onNavigate }) {
             }
         } else {
             // BlackBox Layout
-            let xTitle = 'Time (Date/Time)';
-            if (xAxisMode === 'day') xTitle = 'Elapsed Time (days)';
-            if (xAxisMode === 'hour') xTitle = 'Elapsed Time (hours)';
-            if (xAxisMode === 'minute') xTitle = 'Elapsed Time (minutes)';
+            let xTitle = tPages('plot.x_axis_timestamp');
+            if (xAxisMode === 'day') xTitle = tPages('plot.elapsed_time_days');
+            if (xAxisMode === 'hour') xTitle = tPages('plot.elapsed_time_hours');
+            if (xAxisMode === 'minute') xTitle = tPages('plot.elapsed_time_minutes');
 
             const yLabel = getMetricOptions().find(o => o.value === yAxisMetric)?.label || yAxisMetric;
 
@@ -761,7 +765,7 @@ function Plot({ initialParams, onNavigate }) {
         }
 
         return layout;
-    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode]);
+    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode, tPages]);
 
     if (showPlotView && selectedTest) {
         const selectedDevice = devices.find(d => d.id === selectedDeviceId);
@@ -832,7 +836,6 @@ function Plot({ initialParams, onNavigate }) {
                             } else {
                                 setShowPlotView(false);
                                 setSelectedTest(null);
-                                setTestDetails(null);
                                 setDevices([]);
                                 setSelectedDeviceId(null);
                                 setSelectedPoints([]);
@@ -840,7 +843,7 @@ function Plot({ initialParams, onNavigate }) {
                         }}
                         className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
                     >
-                        <span>←</span> Back
+                        <span>←</span> {initialParams ? (initialParams.source === 'database' ? tPages('plot.back_to_database') : tPages('plot.back_to_dashboard')) : tPages('plot.back_to_tests')}
                     </button>
                     <h2 className="text-lg font-bold text-gray-800 truncate mx-4">{selectedTest.name}</h2>
                     <button
@@ -876,7 +879,6 @@ function Plot({ initialParams, onNavigate }) {
                                     } else {
                                         setShowPlotView(false);
                                         setSelectedTest(null);
-                                        setTestDetails(null);
                                         setDevices([]);
                                         setSelectedDeviceId(null);
                                         setSelectedPoints([]);
@@ -884,11 +886,11 @@ function Plot({ initialParams, onNavigate }) {
                                 }}
                                 className="hidden lg:flex text-gray-600 hover:text-gray-900 items-center gap-2 mb-4"
                             >
-                                <span>←</span> {initialParams ? `Back to ${initialParams.source === 'database' ? 'Database' : 'Dashboard'}` : 'Back to Tests'}
+                                <span>←</span> {initialParams ? (initialParams.source === 'database' ? tPages('plot.back_to_database') : tPages('plot.back_to_dashboard')) : tPages('plot.back_to_tests')}
                             </button>
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">{selectedTest.name}</h2>
-                                <p className="text-sm text-gray-500 mt-1">Plot Settings</p>
+                                <p className="text-sm text-gray-500 mt-1">{tPages('plot.plot_settings')}</p>
                             </div>
                             <button
                                 onClick={() => setSettingsPanelOpen(false)}
@@ -902,7 +904,7 @@ function Plot({ initialParams, onNavigate }) {
                     <div className="p-6 flex-1 overflow-y-auto space-y-7">
                         {/* Device Selection */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-3">Device</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.device')}</label>
                             <div className="space-y-2">
                                 {devices.map(device => (
                                     <button
@@ -925,7 +927,7 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Grouping Mode (Chimera Only) */}
                         {selectedDevice?.device_type.includes('chimera') && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Grouping Mode</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.grouping_mode')}</label>
                                 <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
                                     <button
                                         onClick={() => setGroupingMode('gas')}
@@ -934,7 +936,7 @@ function Plot({ initialParams, onNavigate }) {
                                             : 'text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        Group by Gas
+                                        {tPages('plot.group_by_gas')}
                                     </button>
                                     <button
                                         onClick={() => setGroupingMode('channel')}
@@ -943,7 +945,7 @@ function Plot({ initialParams, onNavigate }) {
                                             : 'text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        Group by Channel
+                                        {tPages('plot.group_by_channel')}
                                     </button>
                                 </div>
                             </div>
@@ -952,7 +954,7 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Gas Selection (Chimera Only - Gas Mode) */}
                         {selectedDevice?.device_type.includes('chimera') && groupingMode === 'gas' && availableGases.length > 0 && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Select Gas</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.select_gas')}</label>
                                 <select
                                     value={selectedGas || ''}
                                     onChange={(e) => setSelectedGas(e.target.value)}
@@ -968,14 +970,14 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Channel Selection (Chimera Only - Channel Mode) */}
                         {selectedDevice?.device_type.includes('chimera') && groupingMode === 'channel' && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Select Channel</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.select_channel')}</label>
                                 <select
                                     value={selectedChannel || ''}
                                     onChange={(e) => setSelectedChannel(Number(e.target.value))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     {[...new Set(plotData?.data?.map(d => d.channel_number) || [])].sort((a, b) => a - b).map(channel => (
-                                        <option key={channel} value={channel}>Channel {channel}</option>
+                                        <option key={channel} value={channel}>{tPages('plot.channel_label')} {channel}</option>
                                     ))}
                                 </select>
                             </div>
@@ -984,7 +986,7 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Unit Filter (Chimera Only - Channel Mode) */}
                         {selectedDevice?.device_type.includes('chimera') && groupingMode === 'channel' && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Unit Filter</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.unit_filter')}</label>
                                 <div className="flex bg-gray-100 p-1 rounded-lg">
                                     <button
                                         onClick={() => setUnitFilter('all')}
@@ -992,7 +994,7 @@ function Plot({ initialParams, onNavigate }) {
                                             unitFilter === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                     >
-                                        All
+                                        {tPages('plot.unit_all')}
                                     </button>
                                     <button
                                         onClick={() => setUnitFilter('ppm')}
@@ -1000,7 +1002,7 @@ function Plot({ initialParams, onNavigate }) {
                                             unitFilter === 'ppm' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                     >
-                                        ppm
+                                        {tPages('plot.unit_ppm')}
                                     </button>
                                     <button
                                         onClick={() => setUnitFilter('percent')}
@@ -1008,7 +1010,7 @@ function Plot({ initialParams, onNavigate }) {
                                             unitFilter === 'percent' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                     >
-                                        %
+                                        {tPages('plot.unit_percent')}
                                     </button>
                                 </div>
                             </div>
@@ -1016,29 +1018,29 @@ function Plot({ initialParams, onNavigate }) {
 
                         {/* X-Axis Mode */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-3">X-Axis Mode</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.x_axis_mode')}</label>
                             <select
                                 value={xAxisMode}
                                 onChange={(e) => setXAxisMode(e.target.value)}
                                 className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
-                                <option value="timestamp">Timestamp</option>
-                                <option value="day">Days Elapsed</option>
-                                <option value="hour">Hours Elapsed</option>
-                                <option value="minute">Minutes Elapsed</option>
+                                <option value="timestamp">{tPages('plot.x_axis_timestamp')}</option>
+                                <option value="day">{tPages('plot.x_axis_days')}</option>
+                                <option value="hour">{tPages('plot.x_axis_hours')}</option>
+                                <option value="minute">{tPages('plot.x_axis_minutes')}</option>
                             </select>
                         </div>
 
                         {/* Time Aggregation */}
                         <div>
                             <div className="flex items-center gap-2 mb-3">
-                                <label className="block text-sm font-bold text-gray-700">Time Aggregation</label>
+                                <label className="block text-sm font-bold text-gray-700">{tPages('plot.time_aggregation')}</label>
                                 <div className="relative group">
                                     <Info size={14} className="text-gray-400 cursor-help" />
                                     <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-56 z-50 pointer-events-none">
                                         {selectedDevice?.device_type.includes('chimera')
-                                            ? 'Groups data by time period. Shows the maximum peak value for each gas/channel within each time bucket.'
-                                            : 'Groups data by time period. Shows the last recorded value for each channel within each time bucket.'}
+                                            ? tPages('plot.aggregation_chimera_tooltip')
+                                            : tPages('plot.aggregation_blackbox_tooltip')}
                                         <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                                     </div>
                                 </div>
@@ -1053,7 +1055,7 @@ function Plot({ initialParams, onNavigate }) {
                                             : 'text-gray-500 hover:text-gray-700'
                                             }`}
                                     >
-                                        {opt === 'none' ? 'None' : opt}
+                                        {opt === 'none' ? tPages('plot.aggregation_none') : tPages(`plot.aggregation_${opt}`)}
                                     </button>
                                 ))}
                             </div>
@@ -1061,18 +1063,18 @@ function Plot({ initialParams, onNavigate }) {
 
                         {/* Graph Type */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-3">Graph Type</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.graph_type')}</label>
                             <div className="grid grid-cols-3 gap-2">
                                 {['scatter', 'line', 'bar'].map(type => (
                                     <button
                                         key={type}
                                         onClick={() => setGraphType(type)}
-                                        className={`py-2 text-sm font-medium rounded-lg border transition-all capitalize ${graphType === type
+                                        className={`py-2 text-sm font-medium rounded-lg border transition-all ${graphType === type
                                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                                             : 'border-gray-200 hover:border-gray-300 text-gray-600'
                                             }`}
                                     >
-                                        {type}
+                                        {tPages(`plot.graph_${type}`)}
                                     </button>
                                 ))}
                             </div>
@@ -1081,7 +1083,7 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Y-Axis Metric (BlackBox Only) */}
                         {!selectedDevice?.device_type.includes('chimera') && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Y-Axis Metric</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">{tPages('plot.y_axis_metric')}</label>
                                 <select
                                     value={yAxisMetric}
                                     onChange={(e) => setYAxisMetric(e.target.value)}
@@ -1106,7 +1108,7 @@ function Plot({ initialParams, onNavigate }) {
                                     <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                         <div className="min-w-0 flex-1">
                                             <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                                                {selectedDevice.name} Data
+                                                {selectedDevice.name} {tPages('plot.data_header')}
                                             </h3>
                                             <p className="text-xs sm:text-sm text-gray-500 truncate">
                                                 {aggregation === 'none' ? 'Timestamp' : aggregation} • {
@@ -1135,7 +1137,7 @@ function Plot({ initialParams, onNavigate }) {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                                 </svg>
-                                                <span className="hidden sm:inline">Refresh</span>
+                                                <span className="hidden sm:inline">{tPages('plot.refresh')}</span>
                                             </button>
                                         </div>
                                     </div>
@@ -1144,7 +1146,7 @@ function Plot({ initialParams, onNavigate }) {
                                         {fetchingData ? (
                                             <div className="h-full flex flex-col justify-center items-center text-gray-400">
                                                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-                                                <p>Loading data...</p>
+                                                <p>{tPages('plot.loading_data')}</p>
                                             </div>
                                         ) : error ? (
                                             <div className="h-full flex flex-col justify-center items-center text-red-500 bg-red-50 rounded-lg border-2 border-dashed border-red-200 p-6 text-center">
@@ -1171,12 +1173,12 @@ function Plot({ initialParams, onNavigate }) {
                                                 <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                                 </svg>
-                                                <p className="font-medium text-gray-600 mb-2">Device is configured but no data has been collected</p>
-                                                <p className="text-sm text-gray-500">Data would appear here once the device starts sending measurements</p>
+                                                <p className="font-medium text-gray-600 mb-2">{tPages('plot.configured_no_data')}</p>
+                                                <p className="text-sm text-gray-500">{tPages('plot.no_data_collected')}</p>
                                             </div>
                                         ) : (
                                             <div className="h-full flex justify-center items-center text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                                                No data available for this selection
+                                                {tPages('plot.no_data_available')}
                                             </div>
                                         )}
                                     </div>
@@ -1185,7 +1187,7 @@ function Plot({ initialParams, onNavigate }) {
                                 {/* Selected Data Table */}
                                 <div className="bg-white flex-1 flex flex-col min-h-0">
                                     <div className="px-4 sm:px-6 py-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                                        <h3 className="text-sm font-bold text-gray-700">Selected Points ({selectedPoints.length})</h3>
+                                        <h3 className="text-sm font-bold text-gray-700">{tPages('plot.selected_points')} ({selectedPoints.length})</h3>
                                         {selectedPoints.length > 0 && (
                                             <div className="flex gap-2 flex-wrap">
                                                 {canPerform('delete_test') && (
@@ -1197,7 +1199,7 @@ function Plot({ initialParams, onNavigate }) {
                                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                             </svg>
-                                                            <span className="hidden sm:inline">Copy</span>
+                                                            <span className="hidden sm:inline">{tPages('plot.copy')}</span>
                                                         </button>
                                                         <button
                                                             onClick={downloadSelectedData}
@@ -1206,7 +1208,7 @@ function Plot({ initialParams, onNavigate }) {
                                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                             </svg>
-                                                            <span className="hidden sm:inline">CSV</span>
+                                                            <span className="hidden sm:inline">{tPages('plot.download_csv')}</span>
                                                         </button>
                                                     </>
                                                 )}
@@ -1214,7 +1216,7 @@ function Plot({ initialParams, onNavigate }) {
                                                     onClick={() => setSelectedPoints([])}
                                                     className="px-2 sm:px-3 py-1 text-red-600 hover:text-red-800 font-medium text-xs border border-red-300 rounded hover:bg-red-50 transition-colors"
                                                 >
-                                                    Clear
+                                                    {tPages('plot.clear')}
                                                 </button>
                                             </div>
                                         )}
@@ -1250,7 +1252,7 @@ function Plot({ initialParams, onNavigate }) {
                                             </table>
                                         ) : (
                                             <div className="h-full flex justify-center items-center text-gray-400 italic text-sm">
-                                                Select points on the graph to view data
+                                                {tPages('plot.select_points_message')}
                                             </div>
                                         )}
                                     </div>
@@ -1258,7 +1260,7 @@ function Plot({ initialParams, onNavigate }) {
                                     {selectedPoints.length > 0 && (
                                         <div className="px-6 py-2 border-t border-gray-200 flex items-center justify-between bg-gray-50">
                                             <span className="text-xs text-gray-500">
-                                                Page {selectedTable.getState().pagination.pageIndex + 1} of {selectedTable.getPageCount()}
+                                                {tPages('plot.pagination_page')} {selectedTable.getState().pagination.pageIndex + 1} {tPages('plot.pagination_of')} {selectedTable.getPageCount()}
                                             </span>
                                             <div className="flex gap-2">
                                                 <button
@@ -1266,14 +1268,14 @@ function Plot({ initialParams, onNavigate }) {
                                                     disabled={!selectedTable.getCanPreviousPage()}
                                                     className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 hover:bg-white"
                                                 >
-                                                    Prev
+                                                    {tPages('plot.pagination_prev')}
                                                 </button>
                                                 <button
                                                     onClick={() => selectedTable.nextPage()}
                                                     disabled={!selectedTable.getCanNextPage()}
                                                     className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 hover:bg-white"
                                                 >
-                                                    Next
+                                                    {tPages('plot.pagination_next')}
                                                 </button>
                                             </div>
                                         </div>
@@ -1285,8 +1287,8 @@ function Plot({ initialParams, onNavigate }) {
                                 <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
-                                <p className="font-medium text-gray-600 mb-2">Test is configured but no data has been collected</p>
-                                <p className="text-sm text-gray-500">Data will appear here once devices start sending measurements</p>
+                                <p className="font-medium text-gray-600 mb-2">{tPages('plot.test_configured_no_data')}</p>
+                                <p className="text-sm text-gray-500">{tPages('plot.test_data_wait')}</p>
                             </div>
                         )}
                     </div>
@@ -1298,11 +1300,11 @@ function Plot({ initialParams, onNavigate }) {
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Data Visualization</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{tPages('plot.title')}</h1>
                 <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
                     <input
                         type="text"
-                        placeholder="Search tests..."
+                        placeholder={tPages('plot.search_placeholder')}
                         value={globalFilter ?? ''}
                         onChange={e => setGlobalFilter(e.target.value)}
                         className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 sm:flex-none sm:w-64 text-sm sm:text-base"
@@ -1311,7 +1313,7 @@ function Plot({ initialParams, onNavigate }) {
                         onClick={fetchTests}
                         className="px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base whitespace-nowrap"
                     >
-                        Refresh
+                        {tPages('plot.refresh')}
                     </button>
                 </div>
             </div>
@@ -1361,12 +1363,12 @@ function Plot({ initialParams, onNavigate }) {
                         {/* Pagination */}
                         <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 sm:py-4 border-t border-gray-200 gap-3">
                             <div className="text-xs sm:text-sm text-gray-700 text-center sm:text-left">
-                                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+                                {tPages('plot.pagination_showing')} {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} {tPages('plot.pagination_to')}{' '}
                                 {Math.min(
                                     (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
                                     table.getFilteredRowModel().rows.length
                                 )}{' '}
-                                of {table.getFilteredRowModel().rows.length}
+                                {tPages('plot.pagination_of')} {table.getFilteredRowModel().rows.length}
                             </div>
 
                             <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
@@ -1375,7 +1377,7 @@ function Plot({ initialParams, onNavigate }) {
                                     disabled={!table.getCanPreviousPage()}
                                     className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
-                                    {'<<'}
+                                    {tPages('plot.pagination_first')}
                                 </button>
                                 <button
                                     onClick={() => table.previousPage()}
@@ -1399,7 +1401,7 @@ function Plot({ initialParams, onNavigate }) {
                                     disabled={!table.getCanNextPage()}
                                     className="px-2 sm:px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
-                                    {'>>'}
+                                    {tPages('plot.pagination_last')}
                                 </button>
                                 <select
                                     value={table.getState().pagination.pageSize}

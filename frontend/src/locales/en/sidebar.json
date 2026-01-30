@@ -1,0 +1,18 @@
+{
+  "main": "Main",
+  "tools": "Tools",
+  "admin": "Admin",
+  "dashboard": "Dashboard",
+  "start_test": "Start Test",
+  "database": "Database",
+  "plot": "Plot",
+  "upload_data": "Upload Data",
+  "blackbox": "BlackBox",
+  "chimera": "Chimera",
+  "plc": "PLC",
+  "monitor": "Monitor",
+  "settings": "Settings",
+  "user_management": "User Management",
+  "create_sample": "Create Sample",
+  "logout": "Logout"
+}

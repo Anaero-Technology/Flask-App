@@ -1,0 +1,17 @@
+{
+  "errors": {
+    "network_scan_failed": "网络扫描失败",
+    "network_scan_error": "扫描网络时出错: {{error}}",
+    "save_preference_failed": "保存偏好设置失败",
+    "save_preference_error": "保存偏好设置时出错: {{error}}",
+    "load_preferences_error": "加载用户偏好设置时出错",
+    "no_data_provided": "未提供任何数据",
+    "invalid_delimiter": "无效的分隔符。必须为','、';'或制表符",
+    "invalid_language": "无效的语言选择"
+  },
+  "success": {
+    "networks_scanned": "网络扫描成功",
+    "preference_saved": "偏好设置保存成功",
+    "connected_to_network": "成功连接到 {{ssid}}"
+  }
+}

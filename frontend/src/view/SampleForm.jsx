@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Save, FlaskConical, Tag, Scale, Atom } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../components/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 function SampleForm() {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const toast = useToast();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -39,7 +41,7 @@ function SampleForm() {
             });
 
             if (response.ok) {
-                toast.success('Sample created successfully!');
+                toast.success(tPages('sample_form.sample_created'));
                 setFormData({
                     sample_name: '', substrate_source: '', description: '',
                     substrate_type: '', substrate_subtype: '', is_inoculum: false,
@@ -48,7 +50,7 @@ function SampleForm() {
                 });
             } else {
                 const error = await response.json();
-                toast.error(error.error || 'Failed to create sample');
+                toast.error(error.error || tPages('sample_form.sample_creation_failed'));
             }
         } catch (error) {
             toast.error(error.message);
@@ -66,14 +68,14 @@ function SampleForm() {
             {/* --- Header (Transparent) --- */}
             <div className="flex justify-between items-end mb-6 shrink-0">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Create Sample</h1>
-                    <p className="text-gray-500 mt-1">Register a new substrate or inoculum.</p>
+                    <h1 className="text-3xl font-bold text-gray-900">{tPages('sample_form.title')}</h1>
+                    <p className="text-gray-500 mt-1">{tPages('sample_form.subtitle')}</p>
                 </div>
                 {/* Visual Indicator only, toggle is below */}
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border ${formData.is_inoculum ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                     }`}>
                     <FlaskConical size={14} />
-                    {formData.is_inoculum ? 'Inoculum' : 'Substrate'}
+                    {formData.is_inoculum ? tPages('sample_form.inoculum') : tPages('sample_form.substrate')}
                 </div>
             </div>
 
@@ -88,24 +90,24 @@ function SampleForm() {
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-3 text-gray-900">
                                 <Tag size={18} className="text-gray-400" />
-                                <h2 className="font-semibold">Identification</h2>
+                                <h2 className="font-semibold">{tPages('sample_form.identification')}</h2>
                             </div>
 
                             <div className="flex flex-col gap-4">
                                 {/* Name & Toggle Group */}
                                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
                                     <Field
-                                        label="Sample Name"
+                                        label={tPages('sample_form.sample_name')}
                                         name="sample_name"
                                         value={formData.sample_name}
                                         onChange={handleChange}
-                                        placeholder="e.g. WW-Batch-001"
+                                        placeholder={tPages('sample_form.sample_name_placeholder')}
                                         className="w-full"
                                     />
 
                                     {/* Inoculum Toggle - Inside Sample Section */}
                                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                                        <span className="text-xs font-bold text-gray-500 uppercase">Is Inoculum?</span>
+                                        <span className="text-xs font-bold text-gray-500 uppercase">{tPages('sample_form.is_inoculum')}</span>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
                                                 type="checkbox"
@@ -121,22 +123,22 @@ function SampleForm() {
 
                                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
                                     <Field
-                                        label="Source / Origin"
+                                        label={tPages('sample_form.source_origin')}
                                         name="substrate_source"
                                         value={formData.substrate_source}
                                         onChange={handleChange}
-                                        placeholder="e.g. Local Farm"
+                                        placeholder={tPages('sample_form.source_origin_placeholder')}
                                     />
                                     <div className="grid grid-cols-2 gap-3">
                                         <Field
-                                            label="Type"
+                                            label={tPages('sample_form.type')}
                                             name="substrate_type"
                                             value={formData.substrate_type}
                                             onChange={handleChange}
 
                                         />
                                         <Field
-                                            label="Sub-Type"
+                                            label={tPages('sample_form.sub_type')}
                                             name="substrate_subtype"
                                             value={formData.substrate_subtype}
                                             onChange={handleChange}
@@ -154,24 +156,24 @@ function SampleForm() {
                         <div>
                             <div className="flex items-center gap-2 mb-3 text-gray-900">
                                 <Scale size={18} className="text-gray-400" />
-                                <h2 className="font-semibold">Physical Properties</h2>
+                                <h2 className="font-semibold">{tPages('sample_form.physical_properties')}</h2>
                             </div>
                             <div className="grid grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <Field
-                                    label="Total Solids (TS)"
+                                    label={tPages('sample_form.total_solids')}
                                     name="substrate_percent_ts"
                                     type="number"
                                     step="0.01"
-                                    suffix="%"
+                                    suffix={tPages('sample_form.percent')}
                                     value={formData.substrate_percent_ts}
                                     onChange={handleChange}
                                 />
                                 <Field
-                                    label="Volatile Solids (VS)"
+                                    label={tPages('sample_form.volatile_solids')}
                                     name="substrate_percent_vs"
                                     type="number"
                                     step="0.01"
-                                    suffix="%"
+                                    suffix={tPages('sample_form.percent')}
                                     value={formData.substrate_percent_vs}
                                     onChange={handleChange}
                                 />
@@ -182,33 +184,33 @@ function SampleForm() {
                         <div>
                             <div className="flex items-center gap-2 mb-3 text-gray-900">
                                 <Atom size={18} className="text-gray-400" />
-                                <h2 className="font-semibold">Chemical Composition</h2>
+                                <h2 className="font-semibold">{tPages('sample_form.chemical_composition')}</h2>
                             </div>
                             <div className="grid grid-cols-3 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <Field
-                                    label="Carbon"
+                                    label={tPages('sample_form.carbon')}
                                     name="c_content"
                                     type="number"
                                     step="0.01"
-                                    suffix="g/kg"
+                                    suffix={tPages('sample_form.g_per_kg')}
                                     value={formData.c_content}
                                     onChange={handleChange}
                                 />
                                 <Field
-                                    label="Nitrogen"
+                                    label={tPages('sample_form.nitrogen')}
                                     name="n_content"
                                     type="number"
                                     step="0.01"
-                                    suffix="g/kg"
+                                    suffix={tPages('sample_form.g_per_kg')}
                                     value={formData.n_content}
                                     onChange={handleChange}
                                 />
                                 <Field
-                                    label="Ash Content"
+                                    label={tPages('sample_form.ash_content')}
                                     name="ash_content"
                                     type="number"
                                     step="0.01"
-                                    suffix="g/kg"
+                                    suffix={tPages('sample_form.g_per_kg')}
                                     value={formData.ash_content}
                                     onChange={handleChange}
                                 />
@@ -217,13 +219,13 @@ function SampleForm() {
 
                         {/* Description (Filling remaining space) */}
                         <div className="flex-1 flex flex-col">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Notes & Description</label>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">{tPages('sample_form.notes_description')}</label>
                             <textarea
                                 name="description"
                                 value={formData.description}
                                 onChange={handleChange}
                                 className="flex-1 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none shadow-sm"
-                                placeholder="Add any specific details..."
+                                placeholder={tPages('sample_form.notes_placeholder')}
                             />
                         </div>
                     </div>
@@ -243,7 +245,7 @@ function SampleForm() {
                         `}
                     >
                         {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={20} />}
-                        <span>Save Sample</span>
+                        <span>{tPages('sample_form.save_sample')}</span>
                     </button>
                 </div>
 

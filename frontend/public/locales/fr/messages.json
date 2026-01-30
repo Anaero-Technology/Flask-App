@@ -1,0 +1,17 @@
+{
+  "errors": {
+    "network_scan_failed": "Échec de l'analyse des réseaux",
+    "network_scan_error": "Erreur lors de l'analyse des réseaux: {{error}}",
+    "save_preference_failed": "Échec de l'enregistrement de la préférence",
+    "save_preference_error": "Erreur lors de l'enregistrement de la préférence: {{error}}",
+    "load_preferences_error": "Erreur lors du chargement des préférences utilisateur",
+    "no_data_provided": "Aucune donnée fournie",
+    "invalid_delimiter": "Délimiteur invalide. Doit être ',', ';' ou tabulation",
+    "invalid_language": "Sélection de langue invalide"
+  },
+  "success": {
+    "networks_scanned": "Réseaux analysés avec succès",
+    "preference_saved": "Préférence enregistrée avec succès",
+    "connected_to_network": "Connecté avec succès à {{ssid}}"
+  }
+}

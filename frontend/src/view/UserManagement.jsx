@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
 import {
@@ -16,16 +17,17 @@ import {
     Loader2
 } from 'lucide-react';
 
-const ROLES = [
-    { id: 'admin', name: 'Admin', icon: ShieldAlert, color: 'text-red-600 bg-red-50', description: 'Full access' },
-    { id: 'operator', name: 'Operator', icon: ShieldCheck, color: 'text-blue-600 bg-blue-50', description: 'Manage tests & devices' },
-    { id: 'technician', name: 'Technician', icon: Shield, color: 'text-green-600 bg-green-50', description: 'Run tests' },
-    { id: 'viewer', name: 'Viewer', icon: Eye, color: 'text-gray-600 bg-gray-50', description: 'View only' },
-];
-
 function UserManagement() {
     const { authFetch, user: currentUser } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const toast = useToast();
+
+    const ROLES = [
+        { id: 'admin', name: tPages('user_management.role_admin'), icon: ShieldAlert, color: 'text-red-600 bg-red-50', description: tPages('user_management.role_admin_desc') },
+        { id: 'operator', name: tPages('user_management.role_operator'), icon: ShieldCheck, color: 'text-blue-600 bg-blue-50', description: tPages('user_management.role_operator_desc') },
+        { id: 'technician', name: tPages('user_management.role_technician'), icon: Shield, color: 'text-green-600 bg-green-50', description: tPages('user_management.role_technician_desc') },
+        { id: 'viewer', name: tPages('user_management.role_viewer'), icon: Eye, color: 'text-gray-600 bg-gray-50', description: tPages('user_management.role_viewer_desc') },
+    ];
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -43,10 +45,10 @@ function UserManagement() {
                 const data = await response.json();
                 setUsers(data);
             } else {
-                toast.error('Failed to load users');
+                toast.error(tPages('user_management.failed_load_users'));
             }
         } catch (err) {
-            toast.error('Failed to load users');
+            toast.error(tPages('user_management.failed_load_users'));
         } finally {
             setLoading(false);
         }
@@ -69,15 +71,15 @@ function UserManagement() {
             const data = await response.json();
 
             if (response.ok) {
-                toast.success(`User ${data.username} created successfully`);
+                toast.success(tPages('user_management.user_created_success', { username: data.username }));
                 setShowCreateModal(false);
                 setFormData({ username: '', email: '', password: '', role: 'viewer' });
                 fetchUsers();
             } else {
-                toast.error(data.error || 'Failed to create user');
+                toast.error(data.error || tPages('user_management.failed_create_user'));
             }
         } catch (err) {
-            toast.error('Failed to create user');
+            toast.error(tPages('user_management.failed_create_user'));
         } finally {
             setSaving(false);
         }
@@ -102,15 +104,15 @@ function UserManagement() {
             const data = await response.json();
 
             if (response.ok) {
-                toast.success(`User ${data.username} updated successfully`);
+                toast.success(tPages('user_management.user_updated_success', { username: data.username }));
                 setShowEditModal(false);
                 setSelectedUser(null);
                 fetchUsers();
             } else {
-                toast.error(data.error || 'Failed to update user');
+                toast.error(data.error || tPages('user_management.failed_update_user'));
             }
         } catch (err) {
-            toast.error('Failed to update user');
+            toast.error(tPages('user_management.failed_update_user'));
         } finally {
             setSaving(false);
         }
@@ -130,22 +132,22 @@ function UserManagement() {
             const data = await response.json();
 
             if (response.ok) {
-                toast.success(`Password reset for ${selectedUser.username}`);
+                toast.success(tPages('user_management.password_reset_success', { username: selectedUser.username }));
                 setShowResetPasswordModal(false);
                 setSelectedUser(null);
                 setNewPassword('');
             } else {
-                toast.error(data.error || 'Failed to reset password');
+                toast.error(data.error || tPages('user_management.failed_reset_password'));
             }
         } catch (err) {
-            toast.error('Failed to reset password');
+            toast.error(tPages('user_management.failed_reset_password'));
         } finally {
             setSaving(false);
         }
     };
 
     const handleDeactivate = async (user) => {
-        if (!confirm(`Are you sure you want to deactivate ${user.username}?`)) return;
+        if (!confirm(tPages('user_management.deactivate_confirmation', { username: user.username }))) return;
 
         try {
             const response = await authFetch(`/api/v1/users/${user.id}`, {
@@ -153,14 +155,14 @@ function UserManagement() {
             });
 
             if (response.ok) {
-                toast.success(`User ${user.username} deactivated`);
+                toast.success(tPages('user_management.user_deactivated_success', { username: user.username }));
                 fetchUsers();
             } else {
                 const data = await response.json();
-                toast.error(data.error || 'Failed to deactivate user');
+                toast.error(data.error || tPages('user_management.failed_deactivate_user'));
             }
         } catch (err) {
-            toast.error('Failed to deactivate user');
+            toast.error(tPages('user_management.failed_deactivate_user'));
         }
     };
 
@@ -200,8 +202,8 @@ function UserManagement() {
                         <Users className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                        <p className="text-gray-500 text-sm">{users.length} users total</p>
+                        <h1 className="text-2xl font-bold text-gray-900">{tPages('user_management.title')}</h1>
+                        <p className="text-gray-500 text-sm">{users.length} {tPages('user_management.users_total')}</p>
                     </div>
                 </div>
                 <button
@@ -212,7 +214,7 @@ function UserManagement() {
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                     <UserPlus size={20} />
-                    Add User
+                    {tPages('user_management.add_user')}
                 </button>
             </div>
 
@@ -221,11 +223,11 @@ function UserManagement() {
                 <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.user_header')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.role_header')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.status_header')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.created_header')}</th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.actions_header')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -241,7 +243,7 @@ function UserManagement() {
                                             <div className="font-medium text-gray-900">
                                                 {user.username}
                                                 {isCurrentUser && (
-                                                    <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">You</span>
+                                                    <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{tPages('user_management.you')}</span>
                                                 )}
                                             </div>
                                             <div className="text-sm text-gray-500">{user.email}</div>
@@ -256,11 +258,11 @@ function UserManagement() {
                                     <td className="px-6 py-4">
                                         {user.is_active ? (
                                             <span className="inline-flex items-center gap-1 text-green-600 text-sm">
-                                                <Check size={16} /> Active
+                                                <Check size={16} /> {tPages('user_management.active')}
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 text-gray-400 text-sm">
-                                                <X size={16} /> Inactive
+                                                <X size={16} /> {tPages('user_management.inactive')}
                                             </span>
                                         )}
                                     </td>
@@ -272,14 +274,14 @@ function UserManagement() {
                                             <button
                                                 onClick={() => openEditModal(user)}
                                                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                title="Edit user"
+                                                title={tPages('user_management.edit_user_tooltip')}
                                             >
                                                 <Edit2 size={18} />
                                             </button>
                                             <button
                                                 onClick={() => openResetPasswordModal(user)}
                                                 className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                                title="Reset password"
+                                                title={tPages('user_management.reset_password_tooltip')}
                                             >
                                                 <Key size={18} />
                                             </button>
@@ -287,7 +289,7 @@ function UserManagement() {
                                                 <button
                                                     onClick={() => handleDeactivate(user)}
                                                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Deactivate user"
+                                                    title={tPages('user_management.deactivate_user_tooltip')}
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -305,10 +307,10 @@ function UserManagement() {
             {showCreateModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Create New User</h2>
+                        <h2 className="text-xl font-bold text-gray-900 mb-4">{tPages('user_management.create_new_user')}</h2>
                         <form onSubmit={handleCreate} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.username_label')}</label>
                                 <input
                                     type="text"
                                     value={formData.username}
@@ -319,7 +321,7 @@ function UserManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.email_label')}</label>
                                 <input
                                     type="email"
                                     value={formData.email}
@@ -329,7 +331,7 @@ function UserManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.password_label')}</label>
                                 <input
                                     type="password"
                                     value={formData.password}
@@ -340,7 +342,7 @@ function UserManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.role_label')}</label>
                                 <select
                                     value={formData.role}
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -359,7 +361,7 @@ function UserManagement() {
                                     onClick={() => setShowCreateModal(false)}
                                     className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                 >
-                                    Cancel
+                                    {tPages('user_management.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -367,7 +369,7 @@ function UserManagement() {
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center gap-2"
                                 >
                                     {saving && <Loader2 size={16} className="animate-spin" />}
-                                    Create User
+                                    {tPages('user_management.create_user_button')}
                                 </button>
                             </div>
                         </form>
@@ -379,10 +381,10 @@ function UserManagement() {
             {showEditModal && selectedUser && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Edit User</h2>
+                        <h2 className="text-xl font-bold text-gray-900 mb-4">{tPages('user_management.edit_user')}</h2>
                         <form onSubmit={handleUpdate} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.username_label')}</label>
                                 <input
                                     type="text"
                                     value={formData.username}
@@ -393,7 +395,7 @@ function UserManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.email_label')}</label>
                                 <input
                                     type="email"
                                     value={formData.email}
@@ -403,7 +405,7 @@ function UserManagement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.role_label')}</label>
                                 <select
                                     value={formData.role}
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -417,7 +419,7 @@ function UserManagement() {
                                     ))}
                                 </select>
                                 {selectedUser.id === currentUser?.id && (
-                                    <p className="text-xs text-gray-500 mt-1">You cannot change your own role</p>
+                                    <p className="text-xs text-gray-500 mt-1">{tPages('user_management.cannot_change_own_role')}</p>
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -429,7 +431,7 @@ function UserManagement() {
                                     disabled={selectedUser.id === currentUser?.id}
                                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
-                                <label htmlFor="is_active" className="text-sm text-gray-700">Active</label>
+                                <label htmlFor="is_active" className="text-sm text-gray-700">{tPages('user_management.active_checkbox')}</label>
                             </div>
                             <div className="flex justify-end gap-3 pt-4">
                                 <button
@@ -437,7 +439,7 @@ function UserManagement() {
                                     onClick={() => setShowEditModal(false)}
                                     className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                 >
-                                    Cancel
+                                    {tPages('user_management.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -445,7 +447,7 @@ function UserManagement() {
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors flex items-center gap-2"
                                 >
                                     {saving && <Loader2 size={16} className="animate-spin" />}
-                                    Save Changes
+                                    {tPages('user_management.save_changes')}
                                 </button>
                             </div>
                         </form>
@@ -457,13 +459,13 @@ function UserManagement() {
             {showResetPasswordModal && selectedUser && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Reset Password</h2>
+                        <h2 className="text-xl font-bold text-gray-900 mb-4">{tPages('user_management.reset_password')}</h2>
                         <p className="text-gray-600 mb-4">
-                            Set a new password for <strong>{selectedUser.username}</strong>
+                            {tPages('user_management.set_new_password_for')} <strong>{selectedUser.username}</strong>
                         </p>
                         <form onSubmit={handleResetPassword} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{tPages('user_management.new_password_label')}</label>
                                 <input
                                     type="password"
                                     value={newPassword}
@@ -471,7 +473,7 @@ function UserManagement() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     required
                                     minLength={6}
-                                    placeholder="Minimum 6 characters"
+                                    placeholder={tPages('user_management.min_characters_placeholder')}
                                 />
                             </div>
                             <div className="flex justify-end gap-3 pt-4">
@@ -480,7 +482,7 @@ function UserManagement() {
                                     onClick={() => setShowResetPasswordModal(false)}
                                     className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                 >
-                                    Cancel
+                                    {tPages('user_management.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -488,7 +490,7 @@ function UserManagement() {
                                     className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-orange-400 transition-colors flex items-center gap-2"
                                 >
                                     {saving && <Loader2 size={16} className="animate-spin" />}
-                                    Reset Password
+                                    {tPages('user_management.reset_password_button')}
                                 </button>
                             </div>
                         </form>

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 
 const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushing, deviceName }) => {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(false);
     const [show, setShow] = useState(false);
@@ -38,7 +40,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
     };
 
     const formatTime = (seconds) => {
-        if (!seconds && seconds !== 0) return 'N/A';
+        if (!seconds && seconds !== 0) return tPages('chimera_config.na');
         if (seconds < 60) return `${Math.round(seconds)}s`;
         if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
         return `${Math.round(seconds / 3600)}h`;
@@ -56,7 +58,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
     const groupChannelsBySample = (channels) => {
         const groups = {};
         channels.forEach(ch => {
-            const sample = ch.sample_name || 'Unconfigured';
+            const sample = ch.sample_name || tPages('config_tooltip.unconfigured');
             if (!groups[sample]) {
                 groups[sample] = [];
             }
@@ -100,30 +102,30 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                     onMouseLeave={handleMouseLeave}
                 >
                     {loading ? (
-                        <div className="text-xs text-gray-500 text-center py-2">Loading...</div>
+                        <div className="text-xs text-gray-500 text-center py-2">{tPages('chimera_config.loading')}</div>
                     ) : (
                         <>
                             {/* Header */}
                             <div className="mb-2 pb-2 border-b border-gray-200">
                                 <p className="text-xs font-bold text-gray-900">{config.test_name}</p>
-                                <p className="text-xs text-gray-500">Test Configuration - {deviceName}</p>
+                                <p className="text-xs text-gray-500">{tPages('chimera_config.test_configuration')} - {deviceName}</p>
                             </div>
 
                             {/* Timing */}
                             <div className="space-y-1 text-xs mb-3 pb-2 border-b border-gray-200">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Flush:</span>
+                                    <span className="text-gray-600">{tPages('chimera_config.flush')}:</span>
                                     <span className="font-semibold text-gray-900">{formatTime(chimera.flush_time_seconds)}</span>
                                 </div>
 
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Recirculation:</span>
+                                    <span className="text-gray-600">{tPages('chimera_config.recirculation')}:</span>
                                     <span className="font-semibold text-gray-900 capitalize">
                                         {chimera.recirculation_mode === 'off'
-                                            ? 'Off'
+                                            ? tPages('chimera_config.off')
                                             : chimera.recirculation_mode === 'periodic'
                                             ? `${formatTime(chimera.recirculation_delay_seconds)}`
-                                            : 'Volume'}
+                                            : tPages('chimera_config.volume')}
                                     </span>
                                 </div>
                             </div>
@@ -131,7 +133,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                             {/* Channels Grouped by Sample with Opening Times */}
                             <div className="pt-2">
                                 <p className="text-xs font-semibold text-gray-600 mb-2">
-                                    Channels ({serviceChannels.length}/15)
+                                    {tPages('chimera_config.channels')} ({serviceChannels.length}/15)
                                 </p>
                                 <div className="space-y-1.5">
                                     {Object.entries(channelsByample).map(([sample, chNumbers]) => (
@@ -142,7 +144,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                                             <div className="flex flex-wrap gap-1.5">
                                                 {chNumbers.map(ch => {
                                                     const channelData = channels.find(c => c.channel_number === ch);
-                                                    const openTime = channelData ? formatTime(channelData.open_time_seconds) : 'N/A';
+                                                    const openTime = channelData ? formatTime(channelData.open_time_seconds) : tPages('chimera_config.na');
                                                     const volumeThreshold = chimera.recirculation_mode === 'volume' && channelData && channelData.volume_threshold_ml
                                                         ? `${channelData.volume_threshold_ml}mL`
                                                         : '';
@@ -159,7 +161,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                                                                         : 'bg-green-200 text-green-900 border border-green-400 ring-1 ring-green-300'
                                                                     : 'bg-gray-100 text-gray-600 border border-gray-300'
                                                             }`}
-                                                            title={isActive ? (isFlushing ? 'Flushing' : 'Reading') : 'Idle'}
+                                                            title={isActive ? (isFlushing ? tPages('device_status.flushing') : tPages('device_status.reading')) : tPages('device_status.idle')}
                                                         >
                                                             <span>{ch}</span>
                                                             <span className="opacity-70 text-xs leading-none">{openTime}</span>

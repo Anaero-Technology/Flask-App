@@ -1,0 +1,64 @@
+{
+  "settings": {
+    "title": "Einstellungen",
+    "wifi": "WiFi-Netzwerke",
+    "scan_networks": "Netzwerke Scannen",
+    "scanning": "Scanne...",
+    "no_networks": "Keine Netzwerke gefunden. Klicken Sie auf \"Netzwerke Scannen\" zum Suchen.",
+    "signal": "Signal",
+    "password": "Passwort",
+    "connect": "Verbinden",
+    "connecting": "Verbinde...",
+    "connected": "Erfolgreich verbunden mit {{ssid}}",
+    "connection_failed": "Verbindung fehlgeschlagen",
+    "preferences_title": "Einstellungen",
+    "csv_delimiter": "CSV-Trennzeichen",
+    "csv_delimiter_help": "Wählen Sie das Trennzeichen beim Export von Daten in CSV-Dateien",
+    "comma": "Komma (,)",
+    "semicolon": "Semikolon (;)",
+    "tab": "Tabulator",
+    "system": "System",
+    "update_software": "Software Aktualisieren",
+    "pull_github": "Rufen Sie die neuesten Änderungen aus dem GitHub-Repository ab",
+    "pull_from_github": "Von GitHub Aktualisieren",
+    "pulling": "Aktualisiere...",
+    "serial_log": "Serielles Kommunikationsprotokoll",
+    "download_serial_log": "Serielles Protokoll Herunterladen",
+    "download": "Herunterladen",
+    "downloading": "Wird heruntergeladen...",
+    "clear_log": "Protokoll Löschen",
+    "clearing": "Wird gelöscht...",
+    "download_all_serial": "Laden Sie alle von Geräten empfangenen seriellen Nachrichten herunter",
+    "delimiter_saved": "CSV-Trennzeicheneinstellung gespeichert",
+    "language_saved": "Spracheinstellung gespeichert"
+  },
+  "login": {
+    "title": "Anmelden",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "login_button": "Anmelden",
+    "invalid_credentials": "Ungültiger Benutzername oder Passwort",
+    "error": "Anmeldefehler"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "active_tests": "Aktive Tests",
+    "recent_tests": "Letzte Tests",
+    "devices": "Geräte"
+  },
+  "test_form": {
+    "title": "Neuen Test Starten",
+    "test_name": "Testname",
+    "description": "Beschreibung",
+    "select_device": "Gerät Auswählen",
+    "start_test": "Test Starten",
+    "test_started": "Test erfolgreich gestartet"
+  },
+  "sample_form": {
+    "title": "Probe Erstellen",
+    "sample_name": "Probenname",
+    "substrate_type": "Substrattyp",
+    "create_sample": "Probe Erstellen",
+    "sample_created": "Probe erfolgreich erstellt"
+  }
+}

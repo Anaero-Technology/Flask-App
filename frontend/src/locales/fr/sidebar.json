@@ -1,0 +1,18 @@
+{
+  "main": "Principal",
+  "tools": "Outils",
+  "admin": "Administration",
+  "dashboard": "Tableau de Bord",
+  "start_test": "Démarrer un Test",
+  "database": "Base de Données",
+  "plot": "Graphique",
+  "upload_data": "Télécharger les Données",
+  "blackbox": "BlackBox",
+  "chimera": "Chimera",
+  "plc": "PLC",
+  "monitor": "Moniteur",
+  "settings": "Paramètres",
+  "user_management": "Gestion des Utilisateurs",
+  "create_sample": "Créer un Échantillon",
+  "logout": "Déconnexion"
+}

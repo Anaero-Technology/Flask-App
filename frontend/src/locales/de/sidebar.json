@@ -1,0 +1,18 @@
+{
+  "main": "Hauptmenü",
+  "tools": "Werkzeuge",
+  "admin": "Administration",
+  "dashboard": "Dashboard",
+  "start_test": "Test Starten",
+  "database": "Datenbank",
+  "plot": "Diagramm",
+  "upload_data": "Daten Hochladen",
+  "blackbox": "BlackBox",
+  "chimera": "Chimera",
+  "plc": "PLC",
+  "monitor": "Monitor",
+  "settings": "Einstellungen",
+  "user_management": "Benutzerverwaltung",
+  "create_sample": "Probe Erstellen",
+  "logout": "Abmelden"
+}

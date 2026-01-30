@@ -1,0 +1,23 @@
+{
+  "app_name": "Anaero Technology",
+  "settings": "Paramètres",
+  "preferences": "Préférences",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "delete": "Supprimer",
+  "edit": "Modifier",
+  "create": "Créer",
+  "back": "Retour",
+  "close": "Fermer",
+  "loading": "Chargement",
+  "error": "Erreur",
+  "success": "Succès",
+  "warning": "Avertissement",
+  "info": "Information",
+  "language": "Langue",
+  "english": "Anglais",
+  "spanish": "Espagnol",
+  "french": "Français",
+  "german": "Allemand",
+  "chinese": "Chinois"
+}

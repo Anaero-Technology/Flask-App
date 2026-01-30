@@ -1,0 +1,17 @@
+{
+  "errors": {
+    "network_scan_failed": "Error al escanear redes",
+    "network_scan_error": "Error al escanear redes: {{error}}",
+    "save_preference_failed": "Error al guardar la preferencia",
+    "save_preference_error": "Error al guardar la preferencia: {{error}}",
+    "load_preferences_error": "Error al cargar las preferencias del usuario",
+    "no_data_provided": "No se proporcionaron datos",
+    "invalid_delimiter": "Delimitador inválido. Debe ser ',', ';' o tabulación",
+    "invalid_language": "Selección de idioma inválida"
+  },
+  "success": {
+    "networks_scanned": "Redes escaneadas exitosamente",
+    "preference_saved": "Preferencia guardada exitosamente",
+    "connected_to_network": "Conectado exitosamente a {{ssid}}"
+  }
+}

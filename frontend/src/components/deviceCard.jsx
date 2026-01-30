@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import CalibrationProgressBar from './CalibrationProgressBar';
 import ChimeraConfigTooltip from './ChimeraConfigTooltip';
 import BlackBoxConfigTooltip from './BlackBoxConfigTooltip';
@@ -8,6 +9,7 @@ import { useAuth } from './AuthContext';
 
 function DeviceCard(props) {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -228,10 +230,10 @@ function DeviceCard(props) {
 
     const getDeviceLabel = () => {
         switch (props.deviceType) {
-            case 'black-box': return 'Gas Flow meter';
-            case 'chimera': return 'Gas Monitor';
-            case 'chimera-max': return 'Gas Monitor'
-            case 'plc': return 'PLC';
+            case 'black-box': return tPages('device_status.gas_flow_meter');
+            case 'chimera': return tPages('device_status.gas_monitor');
+            case 'chimera-max': return tPages('device_status.gas_monitor');
+            case 'plc': return tPages('device_status.plc');
             default: return 'Unknown';
         }
     };
@@ -317,7 +319,7 @@ function DeviceCard(props) {
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-blue-600 transition-all shadow-sm shrink-0"
                             >
                                 <LineChart size={16} />
-                                <span>View Plot</span>
+                                <span>{tPages('device_card.view_plot')}</span>
                             </button>
                         )}
 
@@ -365,13 +367,13 @@ function DeviceCard(props) {
                                                     disabled={!calibrationSensor || !calibrationGasPct}
                                                     className="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 text-sm font-medium transition-colors shadow-sm"
                                                 >
-                                                    Start
+                                                    {tPages('device_card.start')}
                                                 </button>
                                                 <button
                                                     onClick={() => setIsCalibrating(false)}
                                                     className="px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors shadow-sm"
                                                 >
-                                                    Cancel
+                                                    {tPages('device_card.cancel')}
                                                 </button>
                                             </div>
                                         </div>
@@ -383,7 +385,7 @@ function DeviceCard(props) {
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-orange-600 transition-all shadow-sm shrink-0"
                                 >
                                     <Settings size={16} />
-                                    <span>Calibrate</span>
+                                    <span>{tPages('device_card.calibrate')}</span>
                                 </button>
                             )
                         )}
@@ -396,7 +398,7 @@ function DeviceCard(props) {
                             : 'bg-gray-100 text-gray-600'
                             }`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${props.logging ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                            {props.logging ? 'Recording' : 'Idle'}
+                            {props.logging ? tPages('device_status.recording') : tPages('device_status.idle')}
                         </div>
 
                         {/* Chimera status indicator (flushing/reading + channel) */}
@@ -409,12 +411,12 @@ function DeviceCard(props) {
                                 {isFlushing ? (
                                     <>
                                         <Wind size={10} />
-                                        <span>Flushing</span>
+                                        <span>{tPages('device_status.flushing')}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Activity size={10} />
-                                        <span>Ch {chimeraStatus.channel}</span>
+                                        <span>{tPages('device_status.channel')} {chimeraStatus.channel}</span>
                                     </>
                                 )}
                             </div>
@@ -449,7 +451,7 @@ function DeviceCard(props) {
                         {!isCompact && (
                             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
                                 <Circle size={6} fill="currentColor" />
-                                Connected
+                                {tPages('device_status.connected')}
                             </div>
                         )}
                     </div>

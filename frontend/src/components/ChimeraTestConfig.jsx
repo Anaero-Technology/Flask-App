@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 
 function ChimeraTestConfig({
@@ -17,6 +18,7 @@ function ChimeraTestConfig({
     setApplyAllOpenTimeValue,
     hasBlackBoxSelected
 }) {
+    const { t: tPages } = useTranslation('pages');
 
     const toggleServiceChannel = (index) => {
         setServiceSequence(prev => {
@@ -42,7 +44,7 @@ function ChimeraTestConfig({
             <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Settings size={16} className="text-gray-500" />
-                    <h2 className="font-semibold text-gray-900 text-sm">Chimera Settings</h2>
+                    <h2 className="font-semibold text-gray-900 text-sm">{tPages('chimera_config.title')}</h2>
                 </div>
             </div>
 
@@ -54,7 +56,7 @@ function ChimeraTestConfig({
                     <div className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                         <div className="flex items-center gap-2 text-gray-600 font-medium">
                             <Clock size={14} />
-                            <span>Flush Time</span>
+                            <span>{tPages('chimera_config.flush')}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <input
@@ -64,7 +66,7 @@ function ChimeraTestConfig({
                                 onChange={(e) => setFlushTime(parseInt(e.target.value) || 30)}
                                 className="w-16 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white text-center"
                             />
-                            <span className="text-xs text-gray-500">sec</span>
+                            <span className="text-xs text-gray-500">{tPages('chimera_config.sec')}</span>
                         </div>
                     </div>
 
@@ -72,13 +74,13 @@ function ChimeraTestConfig({
                     <div className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                         <div className="flex items-center gap-2 text-gray-600 font-medium">
                             <RefreshCw size={14} />
-                            <span>Recirculation</span>
+                            <span>{tPages('chimera_config.recirculation')}</span>
                         </div>
                         <div className="flex bg-white rounded border border-gray-200 p-0.5">
                             {[
-                                { id: 'off', label: 'Off' },
-                                { id: 'volume', label: 'Volume', disabled: !hasBlackBoxSelected },
-                                { id: 'periodic', label: 'Periodic' }
+                                { id: 'off', label: tPages('chimera_config.off') },
+                                { id: 'volume', label: tPages('chimera_config.volume'), disabled: !hasBlackBoxSelected },
+                                { id: 'periodic', label: tPages('chimera_config.periodic') }
                             ].map(mode => (
                                 <button
                                     key={mode.id}
@@ -109,7 +111,7 @@ function ChimeraTestConfig({
                     {recirculationMode === 'periodic' && (
                         <div className="flex items-center gap-4 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 animate-fadeIn">
                             <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-blue-800">Every</span>
+                                <span className="text-xs font-medium text-blue-800">{tPages('chimera_config.every')}</span>
                                 <input
                                     type="number"
                                     min="0"
@@ -121,7 +123,7 @@ function ChimeraTestConfig({
                                     }}
                                     className="w-12 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                                <span className="text-xs text-blue-800">hrs</span>
+                                <span className="text-xs text-blue-800">{tPages('chimera_config.hrs')}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input
@@ -136,7 +138,7 @@ function ChimeraTestConfig({
                                     }}
                                     className="w-12 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                                <span className="text-xs text-blue-800">mins</span>
+                                <span className="text-xs text-blue-800">{tPages('chimera_config.mins')}</span>
                             </div>
                         </div>
                     )}
@@ -145,11 +147,11 @@ function ChimeraTestConfig({
                 {/* Channels Grid */}
                 <div className="border rounded-lg border-gray-200 overflow-hidden">
                     <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel Configuration</h3>
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('chimera_config.channels')}</h3>
 
                         {/* Bulk Apply */}
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 hidden sm:inline">Set all open times:</span>
+                            <span className="text-xs text-gray-500 hidden sm:inline">{tPages('chimera_config.set_all_open_times')}</span>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="number"
@@ -158,14 +160,14 @@ function ChimeraTestConfig({
                                     value={applyAllOpenTimeValue}
                                     onChange={(e) => setApplyAllOpenTimeValue(e.target.value === '' ? '' : parseInt(e.target.value))}
                                     className="w-14 px-1.5 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    placeholder="sec"
+                                    placeholder={tPages('chimera_config.sec')}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => applyAllOpenTime(applyAllOpenTimeValue)}
                                     className="px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
                                 >
-                                    Apply All
+                                    {tPages('chimera_config.apply_all')}
                                 </button>
                             </div>
                         </div>
@@ -204,7 +206,7 @@ function ChimeraTestConfig({
                                         </div>
 
                                         <div className="flex items-center gap-1">
-                                            <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">Open</span>
+                                            <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.open')}</span>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -225,7 +227,7 @@ function ChimeraTestConfig({
 
                                         {recirculationMode === 'volume' && (
                                             <div className="flex items-center gap-1">
-                                                <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">Vol</span>
+                                                <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.vol')}</span>
                                                 <input
                                                     type="number"
                                                     min="1"

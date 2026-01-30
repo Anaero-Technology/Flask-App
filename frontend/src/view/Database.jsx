@@ -8,9 +8,11 @@ import {
     flexRender,
 } from '@tanstack/react-table';
 import { useAuth } from '../components/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const Database = ({ onViewPlot }) => {
     const { authFetch, canPerform } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const [activeTable, setActiveTable] = useState('tests');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -43,63 +45,65 @@ const Database = ({ onViewPlot }) => {
 
     // Define columns for each table type
     const samplesColumns = useMemo(() => [
-        { accessorKey: 'sample_name', header: 'Sample Name', size: 150 },
-        { accessorKey: 'substrate_source', header: 'Substrate Source', size: 150 },
-        { accessorKey: 'description', header: 'Description', size: 200 },
-        { accessorKey: 'substrate_type', header: 'Type', size: 120 },
-        { accessorKey: 'reactor', header: 'Reactor', size: 100 },
-        { accessorKey: 'temperature', header: 'Temperature', size: 100 },
-    ], []);
+        { accessorKey: 'sample_name', header: tPages('database.sample_name'), size: 150 },
+        { accessorKey: 'substrate_source', header: tPages('database.substrate_source'), size: 150 },
+        { accessorKey: 'description', header: tPages('database.description'), size: 200 },
+        { accessorKey: 'substrate_type', header: tPages('database.type'), size: 120 },
+        { accessorKey: 'reactor', header: tPages('database.reactor'), size: 100 },
+        { accessorKey: 'temperature', header: tPages('database.temperature'), size: 100 },
+    ], [tPages]);
 
     const inoculumsColumns = useMemo(() => [
 
-        { accessorKey: 'sample_name', header: 'Name', size: 150 },
-        { accessorKey: 'inoculum_source', header: 'Source', size: 200 },
-        { accessorKey: 'inoculum_percent_ts', header: '%TS', size: 80 },
-        { accessorKey: 'inoculum_percent_vs', header: '%VS', size: 80 },
+        { accessorKey: 'sample_name', header: tPages('database.inoculum_name'), size: 150 },
+        { accessorKey: 'inoculum_source', header: tPages('database.inoculum_source'), size: 200 },
+        { accessorKey: 'inoculum_percent_ts', header: tPages('database.percent_ts'), size: 80 },
+        { accessorKey: 'inoculum_percent_vs', header: tPages('database.percent_vs'), size: 80 },
         {
             accessorKey: 'date_created',
-            header: 'Date Created',
+            header: tPages('database.date_created'),
             size: 120,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
-    ], []);
+    ], [tPages]);
 
     const testsColumns = useMemo(() => [
-        { accessorKey: 'name', header: 'Name', size: 150 },
-        { accessorKey: 'description', header: 'Description', size: 200 },
+        { accessorKey: 'name', header: tPages('database.test_name'), size: 150 },
+        { accessorKey: 'description', header: tPages('database.description'), size: 200 },
         {
             accessorKey: 'status',
-            header: 'Status',
+            header: tPages('database.status'),
             size: 100,
             cell: info => {
                 const status = info.getValue();
                 const colorClass = status === 'running' ? 'bg-green-100 text-green-800' :
                     status === 'completed' ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-800';
+                const statusLabel = status === 'running' ? tPages('database.running') :
+                    status === 'completed' ? tPages('database.completed') : status;
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colorClass}`}>
-                        {status}
+                        {statusLabel}
                     </span>
                 );
             }
         },
         {
             accessorKey: 'date_started',
-            header: 'Started',
+            header: tPages('database.started'),
             size: 100,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
         {
             accessorKey: 'date_ended',
-            header: 'Ended',
+            header: tPages('database.ended'),
             size: 100,
             cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
         },
-        { accessorKey: 'created_by', header: 'Created By', size: 120 },
+        { accessorKey: 'created_by', header: tPages('database.created_by'), size: 120 },
         {
             id: 'actions',
-            header: 'Actions',
+            header: tPages('database.actions'),
             size: 280,
             cell: info => {
                 const test = info.row.original;
@@ -112,7 +116,7 @@ const Database = ({ onViewPlot }) => {
                             disabled={!hasDevices}
                             className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                            View Plot
+                            {tPages('database.view_plot')}
                         </button>
                         {canPerform('delete_test') && (
                             <button
@@ -130,23 +134,23 @@ const Database = ({ onViewPlot }) => {
                                             window.URL.revokeObjectURL(url);
                                             a.remove();
                                         } else {
-                                            alert('Download failed');
+                                            alert(tPages('database.download_failed'));
                                         }
                                     } catch (error) {
                                         console.error('Download error:', error);
-                                        alert('Download failed');
+                                        alert(tPages('database.download_failed'));
                                     }
                                 }}
                                 className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                             >
-                                Download
+                                {tPages('database.download')}
                             </button>
                         )}
                         {test.status === 'running' ? (
                             canPerform('stop_test') && (
                                 <button
                                     onClick={async () => {
-                                        if (window.confirm('Are you sure you want to stop this test?')) {
+                                        if (window.confirm(tPages('database.stop_confirmation'))) {
                                             try {
                                                 const response = await authFetch(`/api/v1/tests/${test.id}/stop`, {
                                                     method: 'POST'
@@ -155,24 +159,24 @@ const Database = ({ onViewPlot }) => {
                                                     fetchData(); // Refresh list
                                                 } else {
                                                     const err = await response.json();
-                                                    alert('Failed to stop test: ' + (err.error || 'Unknown error'));
+                                                    alert(tPages('database.stop_failed') + (err.error || 'Unknown error'));
                                                 }
                                             } catch (error) {
                                                 console.error('Error stopping test:', error);
-                                                alert('Error stopping test');
+                                                alert(tPages('database.stop_error'));
                                             }
                                         }
                                     }}
                                     className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
                                 >
-                                    Stop
+                                    {tPages('database.stop')}
                                 </button>
                             )
                         ) : (
                             canPerform('delete_test') && (
                                 <button
                                     onClick={async () => {
-                                        if (window.confirm('Are you sure you want to delete this test? This action cannot be undone.')) {
+                                        if (window.confirm(tPages('database.delete_confirmation'))) {
                                             try {
                                                 const response = await authFetch(`/api/v1/tests/${test.id}`, {
                                                     method: 'DELETE'
@@ -181,17 +185,17 @@ const Database = ({ onViewPlot }) => {
                                                     fetchData(); // Refresh list
                                                 } else {
                                                     const err = await response.json();
-                                                    alert('Failed to delete test: ' + err.error);
+                                                    alert(tPages('database.delete_failed') + err.error);
                                                 }
                                             } catch (error) {
                                                 console.error('Error deleting test:', error);
-                                                alert('Error deleting test');
+                                                alert(tPages('database.delete_error'));
                                             }
                                         }
                                     }}
                                     className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                                 >
-                                    Delete
+                                    {tPages('database.delete')}
                                 </button>
                             )
                         )}
@@ -199,7 +203,7 @@ const Database = ({ onViewPlot }) => {
                 );
             }
         }
-    ], [onViewPlot, fetchData, canPerform]);
+    ], [onViewPlot, fetchData, canPerform, tPages]);
 
     const columns = useMemo(() => {
         if (activeTable === 'samples') return samplesColumns;
@@ -230,7 +234,7 @@ const Database = ({ onViewPlot }) => {
 
     return (
         <div className="space-y-4">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Database</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('database.title')}</h1>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
                 {/* Table Selection */}
@@ -243,7 +247,7 @@ const Database = ({ onViewPlot }) => {
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
                         >
-                            Samples
+                            {tPages('database.samples')}
                         </button>
                         <button
                             onClick={() => setActiveTable('inoculums')}
@@ -252,7 +256,7 @@ const Database = ({ onViewPlot }) => {
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
                         >
-                            Inoculum
+                            {tPages('database.inoculum')}
                         </button>
                         <button
                             onClick={() => setActiveTable('tests')}
@@ -261,7 +265,7 @@ const Database = ({ onViewPlot }) => {
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
                         >
-                            Tests
+                            {tPages('database.tests')}
                         </button>
                     </div>
 
@@ -269,7 +273,7 @@ const Database = ({ onViewPlot }) => {
                     <div className="flex items-center space-x-4">
                         <input
                             type="text"
-                            placeholder="Search all columns..."
+                            placeholder={tPages('database.search_placeholder')}
                             value={globalFilter ?? ''}
                             onChange={e => setGlobalFilter(e.target.value)}
                             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -278,7 +282,7 @@ const Database = ({ onViewPlot }) => {
                             onClick={fetchData}
                             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                         >
-                            Refresh
+                            {tPages('database.refresh')}
                         </button>
                     </div>
                 </div>
@@ -341,12 +345,12 @@ const Database = ({ onViewPlot }) => {
                         <div className="flex items-center justify-between mt-4">
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-gray-700">
-                                    Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+                                    {tPages('database.showing')} {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} {tPages('database.to')}{' '}
                                     {Math.min(
                                         (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
                                         table.getFilteredRowModel().rows.length
                                     )}{' '}
-                                    of {table.getFilteredRowModel().rows.length} entries
+                                    {tPages('database.of')} {table.getFilteredRowModel().rows.length} {tPages('database.entries')}
                                 </span>
                             </div>
 
@@ -366,7 +370,7 @@ const Database = ({ onViewPlot }) => {
                                     {'<'}
                                 </button>
                                 <span className="text-sm text-gray-700">
-                                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                                    {tPages('database.page')} {table.getState().pagination.pageIndex + 1} {tPages('database.of')} {table.getPageCount()}
                                 </span>
                                 <button
                                     onClick={() => table.nextPage()}
@@ -389,7 +393,7 @@ const Database = ({ onViewPlot }) => {
                                 >
                                     {[10, 20, 50, 100].map(pageSize => (
                                         <option key={pageSize} value={pageSize}>
-                                            Show {pageSize}
+                                            {tPages('database.show')} {pageSize}
                                         </option>
                                     ))}
                                 </select>
@@ -399,7 +403,7 @@ const Database = ({ onViewPlot }) => {
                         {/* Empty State */}
                         {table.getFilteredRowModel().rows.length === 0 && (
                             <div className="text-center py-8 text-gray-500">
-                                No {activeTable} found
+                                {tPages('database.no_data_found', { table: activeTable })}
                             </div>
                         )}
                     </>

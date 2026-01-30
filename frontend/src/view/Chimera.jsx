@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from 'react-i18next';
 import DeviceCard from '../components/deviceCard';
 import ChimeraConfig from '../components/ChimeraConfig';
 import ChimeraImage from '../assets/chimera.jpg';
 import refreshIcon from '../assets/refresh.svg';
 import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/Toast';
 
 function Chimera() {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
+    const toast = useToast();
     const [chimeras, setChimeras] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedDevice, setSelectedDevice] = useState(null);
@@ -57,11 +61,11 @@ function Chimera() {
                 setFiles(data.files || []);
                 setMemoryInfo(data.memory || null);
             } else {
-                alert('Failed to fetch files');
+                toast.error(tPages('chimera.failed_fetch_files'));
             }
         } catch (error) {
             console.error('Error fetching files:', error);
-            alert('Error fetching files');
+            toast.error(tPages('chimera.error_fetch_files'));
         } finally {
             setLoadingFiles(false);
         }
@@ -112,17 +116,17 @@ function Chimera() {
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
                 } else {
-                    alert(`Failed to download: ${data.error}`);
+                    toast.error(tPages('chimera.failed_download', { error: data.error }));
                 }
             }
         } catch (error) {
             console.error('Download error:', error);
-            alert('Download failed');
+            toast.error(tPages('chimera.download_failed'));
         }
     };
 
     const deleteFile = async (filename) => {
-        if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+        if (!confirm(tPages('chimera.delete_confirmation', { filename }))) {
             return;
         }
 
@@ -135,20 +139,20 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('File deleted successfully');
+                    toast.success(tPages('chimera.file_deleted_success'));
                     fetchFiles(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to delete: ${data.message}`);
+                    toast.error(tPages('chimera.failed_delete', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Delete error:', error);
-            alert('Delete failed');
+            toast.error(tPages('chimera.delete_failed'));
         }
     };
 
     const stopTest = async (testId) => {
-        if (!confirm('Are you sure you want to stop this test? This will stop logging on all devices in the test.')) {
+        if (!confirm(tPages('chimera.stop_test_confirmation'))) {
             return;
         }
 
@@ -159,15 +163,15 @@ function Chimera() {
 
             if (response.ok) {
                 const data = await response.json();
-                alert(data.message || 'Test stopped successfully');
+                toast.success(data.message || tPages('chimera.test_stopped_success'));
                 fetchChimeras(); // Refresh to update device states
             } else {
                 const errorData = await response.json();
-                alert(errorData.error || 'Failed to stop test');
+                toast.error(errorData.error || tPages('chimera.failed_stop_test'));
             }
         } catch (error) {
             console.error('Stop test error:', error);
-            alert('Failed to stop test');
+            toast.error(tPages('chimera.failed_stop_test'));
         }
     };
 
@@ -183,15 +187,15 @@ function Chimera() {
                 });
             } else {
                 // Start logging - prompt for test name and filename
-                const testName = prompt('Enter test name:');
+                const testName = prompt(tPages('chimera.enter_test_name'));
                 if (!testName) return;
 
-                let filename = prompt('Enter filename for logging (max 20 characters):');
+                let filename = prompt(tPages('chimera.enter_filename'));
                 if (!filename) return;
 
                 // Validate filename length (device firmware has limited buffer)
                 if (filename.length > 20) {
-                    alert('Filename too long! Maximum 20 characters. Please use a shorter name.');
+                    toast.error(tPages('chimera.filename_too_long'));
                     return;
                 }
 
@@ -212,19 +216,19 @@ function Chimera() {
                         ...prev,
                         [deviceId]: !isLogging
                     }));
-                    alert(data.message || (isLogging ? 'Logging stopped' : 'Logging started'));
+                    toast.success(data.message || (isLogging ? tPages('chimera.logging_stopped') : tPages('chimera.logging_started')));
                     fetchChimeras(); // Refresh to update active_test_id
                 } else {
-                    alert(data.message || 'Operation failed');
+                    toast.error(data.message || tPages('chimera.operation_failed'));
                 }
             } else {
                 // Handle error responses (like 400 for active test conflict)
                 const errorData = await response.json();
-                alert(errorData.error || 'Operation failed');
+                toast.error(errorData.error || tPages('chimera.operation_failed'));
             }
         } catch (error) {
             console.error('Logging toggle error:', error);
-            alert('Operation failed');
+            toast.error(tPages('chimera.operation_failed'));
         }
     };
 
@@ -238,15 +242,15 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('Timing updated successfully');
+                    toast.success(tPages('chimera.timing_updated_success'));
                     fetchDeviceConfig(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to update timing: ${data.message}`);
+                    toast.error(tPages('chimera.failed_update_timing', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Update timing error:', error);
-            alert('Failed to update timing');
+            toast.error(tPages('chimera.failed_update_timing_error'));
         }
     };
 
@@ -260,14 +264,14 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('Sensor calibrated successfully');
+                    toast.success(tPages('chimera.sensor_calibrated_success'));
                 } else {
-                    alert(`Failed to calibrate sensor: ${data.message}`);
+                    toast.error(tPages('chimera.failed_calibrate_sensor', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Calibration error:', error);
-            alert('Failed to calibrate sensor');
+            toast.error(tPages('chimera.failed_calibrate_error'));
         }
     };
 
@@ -281,15 +285,15 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert(`Recirculation ${enable ? 'enabled' : 'disabled'} successfully`);
+                    toast.success(tPages('chimera.recirculation_updated_success'));
                     fetchDeviceConfig(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to ${enable ? 'enable' : 'disable'} recirculation: ${data.message}`);
+                    toast.error(tPages('chimera.failed_update_recirculation', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Recirculation error:', error);
-            alert('Failed to update recirculation');
+            toast.error(tPages('chimera.failed_update_recirculation_error'));
         }
     };
 
@@ -303,15 +307,15 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('Recirculation days updated successfully');
+                    toast.success(tPages('chimera.recirculation_days_updated_success'));
                     fetchDeviceConfig(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to update recirculation days: ${data.message}`);
+                    toast.error(tPages('chimera.failed_update_recirculation_days', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Recirculation days error:', error);
-            alert('Failed to update recirculation days');
+            toast.error(tPages('chimera.failed_update_recirculation_days_error'));
         }
     };
 
@@ -325,15 +329,15 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('Recirculation time updated successfully');
+                    toast.success(tPages('chimera.recirculation_time_updated_success'));
                     fetchDeviceConfig(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to update recirculation time: ${data.message}`);
+                    toast.error(tPages('chimera.failed_update_recirculation_time', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Recirculation time error:', error);
-            alert('Failed to update recirculation time');
+            toast.error(tPages('chimera.failed_update_recirculation_time_error'));
         }
     };
 
@@ -347,15 +351,15 @@ function Chimera() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    alert('Service configuration updated successfully');
+                    toast.success(tPages('chimera.service_config_updated_success'));
                     fetchDeviceConfig(selectedDevice.device_id);
                 } else {
-                    alert(`Failed to update service configuration: ${data.message}`);
+                    toast.error(tPages('chimera.failed_update_service_config', { message: data.message }));
                 }
             }
         } catch (error) {
             console.error('Service configuration error:', error);
-            alert('Failed to update service configuration');
+            toast.error(tPages('chimera.failed_update_service_config_error'));
         }
     };
 
@@ -365,11 +369,11 @@ function Chimera() {
 
     return (
         <div>
-            <h1 className="text-4xl font-bold text-black pl-6 m-6">Chimera Devices</h1>
+            <h1 className="text-4xl font-bold text-black pl-6 m-6">{tPages('chimera.title')}</h1>
             <div className="p-6 pt-6">
                 {chimeras.length === 0 && !loading && (
                     <div className="text-center text-gray-500 py-8">
-                        No connected Chimera devices found
+                        {tPages('chimera.no_devices')}
                     </div>
                 )}
 
@@ -378,7 +382,7 @@ function Chimera() {
                         <DeviceCard
                             deviceId={device.device_id}
                             deviceType="chimera"
-                            title="Chimera"
+                            title={tPages('chimera.device_type')}
                             name={device.name}
                             logging={loggingStates[device.device_id]}
                             port={device.port}
@@ -390,7 +394,7 @@ function Chimera() {
                         <div className="bg-gray-50 rounded-lg p-4 mt-4">
                             {device.active_test_id && (
                                 <div className="mb-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-sm">
-                                    <span className="font-semibold">⚠️ Device is part of active test: "{device.active_test_name || 'Unknown'}"</span>
+                                    <span className="font-semibold">⚠️ {tPages('chimera.active_test_warning', { test_name: device.active_test_name || 'Unknown' })}</span>
                                 </div>
                             )}
                             <div className="flex gap-4 flex-wrap">
@@ -398,14 +402,14 @@ function Chimera() {
                                     onClick={() => handleFileView(device)}
                                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
                                 >
-                                    File View
+                                    {tPages('chimera.file_view_button')}
                                 </button>
 
                                 <button
                                     onClick={() => handleConfigView(device)}
                                     className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
                                 >
-                                    Configure
+                                    {tPages('chimera.configure_button')}
                                 </button>
 
                                 {device.active_test_id ? (
@@ -413,7 +417,7 @@ function Chimera() {
                                         onClick={() => stopTest(device.active_test_id)}
                                         className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-medium"
                                     >
-                                        Stop Test
+                                        {tPages('chimera.stop_test_button')}
                                     </button>
                                 ) : (
                                     <button
@@ -423,7 +427,7 @@ function Chimera() {
                                                 : 'bg-green-600 text-white hover:bg-green-700'
                                             }`}
                                     >
-                                        {loggingStates[device.device_id] ? 'Stop Logging' : 'Start Logging'}
+                                        {loggingStates[device.device_id] ? tPages('chimera.stop_logging_button') : tPages('chimera.start_logging_button')}
                                     </button>
                                 )}
                             </div>
@@ -448,7 +452,7 @@ function Chimera() {
                     <div className="bg-white rounded-lg p-6 max-h-[80vh] overflow-y-auto shadow-2xl border">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-2xl font-bold">
-                                Files on {selectedDevice?.name}
+                                {tPages('chimera.files_modal_title', { device_name: selectedDevice?.name })}
                             </h2>
                             <button
                                 onClick={() => setShowFileManager(false)}
@@ -459,18 +463,18 @@ function Chimera() {
                         </div>
 
                         {loadingFiles ? (
-                            <div className="text-center py-8">Loading files...</div>
+                            <div className="text-center py-8">{tPages('chimera.loading_files')}</div>
                         ) : (
                             <div>
                                 {/* SD Card Memory Info */}
                                 {memoryInfo && (
                                     <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">SD Card Storage</span>
+                                            <span className="text-gray-600">{tPages('chimera.sd_card_storage')}</span>
                                             <span className="font-medium">
-                                                {((memoryInfo.total - memoryInfo.used) / (1024 * 1024)).toFixed(1)} MB free
+                                                {((memoryInfo.total - memoryInfo.used) / (1024 * 1024)).toFixed(1)} {tPages('chimera.memory_free')}
                                                 <span className="text-gray-500 ml-1">
-                                                    of {(memoryInfo.total / (1024 * 1024)).toFixed(1)} MB
+                                                    {tPages('chimera.memory_of')} {(memoryInfo.total / (1024 * 1024)).toFixed(1)} {tPages('chimera.memory_total')}
                                                 </span>
                                             </span>
                                         </div>
@@ -485,7 +489,7 @@ function Chimera() {
 
                                 {files.length === 0 ? (
                                     <div className="text-center text-gray-500 py-8">
-                                        No files found
+                                        {tPages('chimera.no_files')}
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
@@ -507,13 +511,13 @@ function Chimera() {
                                                         onClick={() => downloadFile(file.name)}
                                                         className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 font-medium"
                                                     >
-                                                        Download
+                                                        {tPages('chimera.download_button')}
                                                     </button>
                                                     <button
                                                         onClick={() => deleteFile(file.name)}
                                                         className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 font-medium"
                                                     >
-                                                        Delete
+                                                        {tPages('chimera.delete_button')}
                                                     </button>
                                                 </div>
                                             </div>
@@ -526,7 +530,7 @@ function Chimera() {
                                         onClick={() => fetchFiles(selectedDevice.device_id)}
                                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
                                     >
-                                        Refresh Files
+                                        {tPages('chimera.refresh_files_button')}
                                     </button>
                                 </div>
                             </div>
@@ -541,7 +545,7 @@ function Chimera() {
                     <div className="bg-white rounded-lg p-6 max-h-[80vh] overflow-y-auto shadow-2xl border">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-2xl font-bold">
-                                Configure {selectedDevice?.name}
+                                {tPages('chimera.configure_modal_title', { device_name: selectedDevice?.name })}
                             </h2>
                             <button
                                 onClick={() => setShowConfig(false)}

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../components/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { LogIn, AlertCircle, Loader2 } from 'lucide-react';
 import logo from '../assets/logo.png';
 
 function Login() {
     const { login, error, clearError } = useAuth();
+    const { t: tCommon } = useTranslation('common');
+    const { t: tPages } = useTranslation('pages');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +42,7 @@ function Login() {
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
                         <img src={logo} className="h-10 w-10 object-contain" alt="Logo" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900">Anaero Technology</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">{tCommon('app_name')}</h1>
                     <p className="text-gray-500 mt-1">Sign in to your account</p>
                 </div>
 
@@ -57,7 +60,7 @@ function Login() {
                         {/* Username Field */}
                         <div>
                             <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                                Username or Email
+                                {tPages('login.username')}
                             </label>
                             <input
                                 id="username"
@@ -74,7 +77,7 @@ function Login() {
                         {/* Password Field */}
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                                Password
+                                {tPages('login.password')}
                             </label>
                             <input
                                 id="password"
@@ -96,12 +99,12 @@ function Login() {
                             {isLoading ? (
                                 <>
                                     <Loader2 size={20} className="animate-spin" />
-                                    Signing in...
+                                    {tPages('login.login_button')}
                                 </>
                             ) : (
                                 <>
                                     <LogIn size={20} />
-                                    Sign In
+                                    {tPages('login.login_button')}
                                 </>
                             )}
                         </button>

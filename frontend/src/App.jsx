@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import { I18nextProvider } from 'react-i18next'
+import i18n from './i18n'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { ChimeraProvider } from './components/ChimeraContext'
 import { AuthProvider, useAuth } from './components/AuthContext'
+import { I18nProvider } from './components/i18nContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -94,11 +97,15 @@ function AppContent() {
 
 function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ToastProvider>
+    <I18nextProvider i18n={i18n}>
+      <ToastProvider>
+        <AuthProvider>
+          <I18nProvider>
+            <AppContent />
+          </I18nProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </I18nextProvider>
   )
 }
 

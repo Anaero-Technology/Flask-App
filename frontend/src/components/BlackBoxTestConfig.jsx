@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Upload, Info, Check, AlertCircle, Beaker } from 'lucide-react';
 import { useAuth } from './AuthContext';
 
 // Channel Configuration Form Component
 function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, inoculums, onSave, onClear, showChimeraChannel, chimeraChannelError, setChimeraChannelError }) {
+    const { t: tPages } = useTranslation('pages');
     const [config, setConfig] = useState(currentConfig || {
         inoculum_sample_id: '',
         inoculum_weight_grams: '',
@@ -30,29 +32,29 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
     const handleConfirm = () => {
         // Validate required fields
         if (!config.inoculum_sample_id) {
-            alert('Please select an inoculum sample');
+            alert(tPages('test_config.error_select_inoculum'));
             return;
         }
 
         if (!config.inoculum_weight_grams || parseFloat(config.inoculum_weight_grams) <= 0) {
-            alert('Please enter a valid inoculum weight (must be greater than 0)');
+            alert(tPages('test_config.error_inoculum_weight'));
             return;
         }
 
         if (!config.tumbler_volume || parseFloat(config.tumbler_volume) <= 0) {
-            alert('Please enter a valid tumbler volume (must be greater than 0)');
+            alert(tPages('test_config.error_tumbler_volume'));
             return;
         }
 
         // Validate chimera channel if chimera device is selected
         if (showChimeraChannel) {
             if (!config.chimera_channel || config.chimera_channel === '') {
-                if (setChimeraChannelError) setChimeraChannelError('Chimera channel is required when Chimera device is selected');
+                if (setChimeraChannelError) setChimeraChannelError(tPages('test_config.error_chimera_required'));
                 return;
             }
             const channelNum = parseInt(config.chimera_channel);
             if (isNaN(channelNum) || channelNum < 1 || channelNum > 15) {
-                if (setChimeraChannelError) setChimeraChannelError('Chimera channel must be between 1 and 15');
+                if (setChimeraChannelError) setChimeraChannelError(tPages('test_config.error_chimera_range'));
                 return;
             }
         }
@@ -80,14 +82,14 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Inoculum Selection */}
                 <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Inoculum Sample <span className="text-red-500">*</span>
+                        {tPages('test_config.inoculum_sample')} <span className="text-red-500">{tPages('test_config.required')}</span>
                     </label>
                     <select
                         value={config.inoculum_sample_id}
                         onChange={(e) => setConfig(prev => ({ ...prev, inoculum_sample_id: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                     >
-                        <option value="">Select inoculum...</option>
+                        <option value="">{tPages('test_config.select_inoculum')}</option>
                         {inoculums.map(inoculum => (
                             <option key={inoculum.id} value={inoculum.id}>
                                 {inoculum.sample_name}
@@ -99,7 +101,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Inoculum Weight */}
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Inoculum Weight (g) <span className="text-red-500">*</span>
+                        {tPages('test_config.inoculum_weight')} <span className="text-red-500">{tPages('test_config.required')}</span>
                     </label>
                     <input
                         type="number"
@@ -114,7 +116,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Tumbler Volume */}
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Tumbler Volume (mL) <span className="text-red-500">*</span>
+                        {tPages('test_config.tumbler_volume')} <span className="text-red-500">{tPages('test_config.required')}</span>
                     </label>
                     <input
                         type="number"
@@ -129,7 +131,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Substrate Selection */}
                 <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Substrate Sample <span className="text-gray-400 font-normal normal-case">(Optional)</span>
+                        {tPages('test_config.substrate_sample')} <span className="text-gray-400 font-normal normal-case">{tPages('test_config.optional')}</span>
                     </label>
                     <select
                         value={config.substrate_sample_id || ''}
@@ -144,7 +146,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                     >
-                        <option value="">Inoculum Only (Control)</option>
+                        <option value="">{tPages('test_config.inoculum_only_control')}</option>
                         {samples.map(sample => (
                             <option key={sample.id} value={sample.id}>
                                 {sample.sample_name}
@@ -156,7 +158,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Substrate Weight */}
                 <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Substrate Weight (g)
+                        {tPages('test_config.substrate_weight')}
                     </label>
                     <input
                         type="number"
@@ -165,7 +167,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                         onChange={(e) => setConfig(prev => ({ ...prev, substrate_weight_grams: e.target.value }))}
                         disabled={!config.substrate_sample_id}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                        placeholder={config.substrate_sample_id ? "0.0" : "No substrate selected"}
+                        placeholder={config.substrate_sample_id ? "0.0" : tPages('test_config.no_substrate_selected')}
                     />
                 </div>
 
@@ -173,7 +175,7 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {showChimeraChannel && (
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                            Chimera Channel <span className="text-red-500">*</span>
+                            {tPages('test_config.chimera_channel')} <span className="text-red-500">{tPages('test_config.required')}</span>
                         </label>
                         <input
                             type="number"
@@ -200,14 +202,14 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                 {/* Notes */}
                 <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Notes
+                        {tPages('test_config.notes')}
                     </label>
                     <textarea
                         value={config.notes}
                         onChange={(e) => setConfig(prev => ({ ...prev, notes: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                         rows="2"
-                        placeholder="Optional notes..."
+                        placeholder={tPages('test_config.notes_placeholder')}
                     />
                 </div>
             </div>
@@ -218,14 +220,14 @@ function ChannelConfigForm({ deviceId, channelNumber, currentConfig, samples, in
                     onClick={handleConfirm}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                 >
-                    Save Configuration
+                    {tPages('test_config.save_configuration')}
                 </button>
                 {onClear && (
                     <button
                         onClick={onClear}
                         className="px-4 py-2 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors border border-transparent hover:border-red-100"
                     >
-                        Clear
+                        {tPages('test_config.clear')}
                     </button>
                 )}
             </div>
@@ -249,6 +251,7 @@ function BlackBoxTestConfig({
     setChimeraChannelError
 }) {
     const { authFetch } = useAuth();
+    const { t: tPages } = useTranslation('pages');
     const [uploadingCsv, setUploadingCsv] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -305,11 +308,11 @@ function BlackBoxTestConfig({
             // Update parent configurations
             onConfigurationChange(newConfigurations);
 
-            alert(`CSV uploaded successfully! Applied ${appliedCount} channel configurations to ${device.name}.\n\nNote: You still need to select the actual Inoculum and Substrate samples for each channel.`);
+            alert(tPages('test_config.csv_uploaded', { count: appliedCount, device: device.name }));
 
         } catch (error) {
             console.error('Error uploading CSV:', error);
-            alert(`Failed to upload CSV: ${error.message}`);
+            alert(tPages('test_config.csv_upload_failed', { error: error.message }));
         } finally {
             setUploadingCsv(false);
             // Reset file input
@@ -371,7 +374,7 @@ function BlackBoxTestConfig({
                     </div>
                     <div>
                         <h3 className="font-semibold text-gray-900">{device.name}</h3>
-                        <p className="text-xs text-gray-500">Gas-flow meter</p>
+                        <p className="text-xs text-gray-500">{tPages('test_config.gas_flow_meter')}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -397,24 +400,24 @@ function BlackBoxTestConfig({
                             {/* Legend and Actions - Moved below grid to balance height */}
                             <div className="flex flex-col gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status Legend</h4>
+                                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('test_config.status_legend')}</h4>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 text-xs font-medium text-gray-600">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                                        <span>Selected</span>
+                                        <span>{tPages('test_config.status_selected')}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-                                        <span>Configured</span>
+                                        <span>{tPages('test_config.status_configured')}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
-                                        <span>Control</span>
+                                        <span>{tPages('test_config.status_control')}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full border border-gray-300 bg-white"></div>
-                                        <span>Not in service</span>
+                                        <span>{tPages('test_config.status_not_in_service')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -427,12 +430,12 @@ function BlackBoxTestConfig({
                                             <Upload size={18} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-gray-700  tracking-wide">Bulk Config</span>
-                                            <span className="text-xs text-gray-400 font-medium">Upload CSV File</span>
+                                            <span className="text-xs font-bold text-gray-700  tracking-wide">{tPages('test_config.bulk_config')}</span>
+                                            <span className="text-xs text-gray-400 font-medium">{tPages('test_config.upload_csv_file')}</span>
                                         </div>
                                     </div>
                                     <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${uploadingCsv ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
-                                        {uploadingCsv ? 'Uploading...' : 'Select File'}
+                                        {uploadingCsv ? tPages('test_config.uploading') : tPages('test_config.select_file')}
                                     </div>
                                     <input
                                         type="file"
@@ -454,7 +457,7 @@ function BlackBoxTestConfig({
                                             {selectedChannel.channelNumber}
                                         </div>
                                         <h3 className="font-semibold text-gray-900">
-                                            Configure Channel
+                                            {tPages('test_config.configure_channel')}
                                         </h3>
                                     </div>
                                     <ChannelConfigForm

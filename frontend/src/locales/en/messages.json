@@ -1,0 +1,17 @@
+{
+  "errors": {
+    "network_scan_failed": "Failed to scan networks",
+    "network_scan_error": "Error scanning networks: {{error}}",
+    "save_preference_failed": "Failed to save preference",
+    "save_preference_error": "Error saving preference: {{error}}",
+    "load_preferences_error": "Error loading user preferences",
+    "no_data_provided": "No data provided",
+    "invalid_delimiter": "Invalid delimiter. Must be ',', ';', or tab",
+    "invalid_language": "Invalid language selection"
+  },
+  "success": {
+    "networks_scanned": "Networks scanned successfully",
+    "preference_saved": "Preference saved successfully",
+    "connected_to_network": "Successfully connected to {{ssid}}"
+  }
+}

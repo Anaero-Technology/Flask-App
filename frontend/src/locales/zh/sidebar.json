@@ -1,0 +1,18 @@
+{
+  "main": "主页",
+  "tools": "工具",
+  "admin": "管理",
+  "dashboard": "仪表板",
+  "start_test": "开始测试",
+  "database": "数据库",
+  "plot": "图表",
+  "upload_data": "上传数据",
+  "blackbox": "BlackBox",
+  "chimera": "Chimera",
+  "plc": "PLC",
+  "monitor": "监测",
+  "settings": "设置",
+  "user_management": "用户管理",
+  "create_sample": "创建样本",
+  "logout": "登出"
+}
