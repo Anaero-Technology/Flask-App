@@ -31,6 +31,7 @@ function TestForm() {
     const [showChannelConfig, setShowChannelConfig] = useState(false);
     const [selectedDevices, setSelectedDevices] = useState([]);
     const [chimeraChannelError, setChimeraChannelError] = useState('');
+    const [globalDeviceModel, setGlobalDeviceModel] = useState(null); // 'chimera' or 'chimera-max'
 
     // Global Chimera recirculation settings (applies to all chimera channels)
     const [recirculationMode, setRecirculationMode] = useState('off'); // 'off', 'volume', or 'periodic'
@@ -63,18 +64,36 @@ function TestForm() {
         fetchDevices();
         fetchSamples();
         fetchInoculums();
+        fetchGlobalDeviceModel();
     }, []);
 
-    // Auto-switch to off if volume mode is selected but no BlackBox is available
-    useEffect(() => {
-        if (recirculationMode === 'volume') {
-            const selected = devices.filter(d => selectedDevices.includes(d.id));
-            const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
-            if (!hasBlackBox) {
-                setRecirculationMode('off');
+    const fetchGlobalDeviceModel = async () => {
+        try {
+            const response = await authFetch('/api/v1/chimera/config/model');
+            if (response.ok) {
+                const data = await response.json();
+                setGlobalDeviceModel(data.device_model);
             }
+        } catch (error) {
+            console.error('Error fetching global device model:', error);
         }
-    }, [selectedDevices, devices, recirculationMode]);
+    };
+
+    // Auto-switch to off if volume mode is selected but no BlackBox is available
+    // Also auto-switch to off if global device model doesn't support recirculation
+    useEffect(() => {
+        const selected = devices.filter(d => selectedDevices.includes(d.id));
+        const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+        const hasChimera = selected.some(d => ['chimera', 'chimera-max'].includes(d.device_type));
+
+        if (hasChimera && globalDeviceModel !== 'chimera-max' && recirculationMode !== 'off') {
+            // Global device model doesn't support recirculation, force to off
+            setRecirculationMode('off');
+        } else if (recirculationMode === 'volume' && !hasBlackBox) {
+            // Volume mode requires BlackBox
+            setRecirculationMode('off');
+        }
+    }, [selectedDevices, devices, recirculationMode, globalDeviceModel]);
 
     const fetchDevices = async () => {
         try {
@@ -205,6 +224,13 @@ function TestForm() {
     // Helper to check if Chimera channel field should be shown in BlackBox config (needs both)
     const shouldShowChimeraChannel = () => {
         return hasChimeraSelected() && hasBlackBoxSelected();
+    };
+
+    // Helper to check if recirculation is supported (checks global device model)
+    const hasRecirculationSupported = () => {
+        // If global device model hasn't loaded yet, assume no support to be safe
+        if (globalDeviceModel === null) return false;
+        return globalDeviceModel === 'chimera-max';
     };
 
     // Apply open time to all enabled channels
@@ -536,6 +562,7 @@ function TestForm() {
                         applyAllOpenTimeValue={applyAllOpenTimeValue}
                         setApplyAllOpenTimeValue={setApplyAllOpenTimeValue}
                         hasBlackBoxSelected={hasBlackBoxSelected()}
+                        hasRecirculationSupport={hasRecirculationSupported()}
                     />
                 )}
 

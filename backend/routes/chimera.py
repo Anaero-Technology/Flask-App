@@ -1,13 +1,126 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_sse import sse
 from flask_jwt_extended import jwt_required
 from datetime import datetime, timezone
 from device_manager import DeviceManager
 from database.models import *
 from utils.auth import require_role
+import os
+import re
 
 chimera_bp = Blueprint('chimera', __name__)
 device_manager = DeviceManager()
+
+
+@chimera_bp.route('/api/v1/chimera/config/model', methods=['GET'])
+@jwt_required()
+def get_global_device_model():
+    """Get global device model setting (chimera or chimera-max)"""
+    try:
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        has_pump = device_model == 'chimera-max'
+
+        return jsonify({
+            "device_model": device_model,
+            "has_pump": has_pump,
+            "has_recirculation": has_pump
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/config', methods=['GET'])
+@jwt_required()
+def get_device_config(device_id):
+    """Get device configuration including device model (chimera or chimera-max)"""
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        if device.device_type not in ['chimera', 'chimera-max']:
+            return jsonify({"error": "Device is not a chimera"}), 400
+
+        # Get device model from config
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        has_pump = device_model == 'chimera-max'
+        calibration_mode = 'pump' if has_pump else 'manual'
+
+        return jsonify({
+            "device_id": device_id,
+            "device_name": device.name,
+            "device_type": device.device_type,
+            "device_model": device_model,
+            "has_pump": has_pump,
+            "calibration_mode": calibration_mode,
+            "connected": device.connected
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/config/model', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def set_device_model(device_id):
+    """Set device model (chimera or chimera-max) - Admin only. Requires API call, not available in UI."""
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        if device.device_type not in ['chimera', 'chimera-max']:
+            return jsonify({"error": "Device is not a chimera"}), 400
+
+        data = request.get_json()
+        device_model = data.get('device_model')
+
+        if not device_model or device_model not in ['chimera', 'chimera-max']:
+            return jsonify({"error": "device_model must be 'chimera' or 'chimera-max'"}), 400
+
+        # Update the environment variable (this affects current_app.config)
+        os.environ['CHIMERA_DEVICE_MODEL'] = device_model
+        current_app.config['CHIMERA_DEVICE_MODEL'] = device_model
+
+        # Also update the .env file for persistence
+        env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+        try:
+            with open(env_file, 'r') as f:
+                env_contents = f.read()
+
+            # Replace or add the CHIMERA_DEVICE_MODEL line
+            if re.search(r'^CHIMERA_DEVICE_MODEL=', env_contents, re.MULTILINE):
+                env_contents = re.sub(r'^CHIMERA_DEVICE_MODEL=.*$', f'CHIMERA_DEVICE_MODEL={device_model}', env_contents, flags=re.MULTILINE)
+            else:
+                env_contents += f'\nCHIMERA_DEVICE_MODEL={device_model}'
+
+            with open(env_file, 'w') as f:
+                f.write(env_contents)
+        except Exception as e:
+            return jsonify({"error": f"Failed to update .env file: {str(e)}"}), 500
+
+        has_pump = device_model == 'chimera-max'
+        calibration_mode = 'pump' if has_pump else 'manual'
+
+        return jsonify({
+            "success": True,
+            "device_id": device_id,
+            "device_model": device_model,
+            "has_pump": has_pump,
+            "calibration_mode": calibration_mode,
+            "message": f"Device model updated to {device_model}"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
 
 
 @chimera_bp.route('/api/v1/chimera/connected', methods=['GET'])
@@ -439,26 +552,36 @@ def calibrate(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         data = request.get_json()
         sensor_number = data.get('sensor_number')
         gas_percentage = data.get('gas_percentage')
-        
+
         if sensor_number is None or gas_percentage is None:
             return jsonify({"error": "sensor_number and gas_percentage are required"}), 400
-        
-        success, message = handler.calibrate(sensor_number, gas_percentage)
-        
+
+        # Get device model from config to determine calibration method
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+
+        # Use pump-based calibration for chimera-max, manual for standard chimera
+        if device_model == 'chimera-max':
+            success, message = handler.calibrate_pump(sensor_number, gas_percentage)
+            calibration_type = "pump"
+        else:
+            success, message = handler.calibrate(sensor_number, gas_percentage)
+            calibration_type = "manual"
+
         return jsonify({
             "success": success,
-            "message": message
+            "message": message,
+            "calibration_type": calibration_type
         })
-        
+
     finally:
         db.session.close()
 
@@ -641,12 +764,17 @@ def enable_recirculation(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         success, message = handler.enable_recirculation()
         
         return jsonify({
@@ -667,12 +795,17 @@ def disable_recirculation(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
-        
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
-        
+
         success, message = handler.disable_recirculation()
         
         return jsonify({
@@ -694,6 +827,11 @@ def set_recirculation_delay(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
 
         # Get handler
         handler = device_manager.get_chimera(device_id)
@@ -727,6 +865,11 @@ def set_recirculation_mode(device_id):
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
 
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
+
         # Get handler
         handler = device_manager.get_chimera(device_id)
         if not handler:
@@ -758,6 +901,11 @@ def recirculation_flag(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
 
         # Get handler
         handler = device_manager.get_chimera(device_id)
@@ -791,6 +939,11 @@ def get_recirculation_info(device_id):
         device = Device.query.get(device_id)
         if not device or not device.connected:
             return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
 
         # Get handler
         handler = device_manager.get_chimera(device_id)

@@ -41,6 +41,7 @@ class ChimeraHandler(SerialHandler):
         self.register_automatic_handler("connect", self._handle_wifi_connect)
         self.register_automatic_handler("calibration", self._handle_calibration)
         self.register_automatic_handler("valve", self._handle_valve)
+        self.register_automatic_handler("done calibrate", self._handle_calibration_done)
         
     def connect(self) -> bool:
         """Connect to device and get info. Returns True on success."""
@@ -290,6 +291,14 @@ class ChimeraHandler(SerialHandler):
         except (ValueError, IndexError) as e:
             print(f"Failed to parse calibration message: {e}")
             pass
+
+    def _handle_calibration_done(self, line: str):
+        """Process calibration completion message (done calibrate)
+
+        This just logs/confirms the calibration finished. The frontend
+        already knows calibration is complete when progress stops flowing.
+        """
+        print(f"[CHIMERA CALIBRATION] Calibration completed: {line}")
 
     def _handle_valve(self, line: str):
         """Process valve status messages to track flushing/reading state
@@ -573,20 +582,33 @@ class ChimeraHandler(SerialHandler):
             return False, f"Unexpected response: {response}"
     
     def calibrate(self, sensor_number: int, gas_percentage: float) -> Tuple[bool, str]:
-        """Calibrate a specific sensor"""
-        response = self.send_command(f"calibrate {sensor_number} {gas_percentage}")
-        
-        if response == "done calibration":
-            return True, "Calibration completed successfully"
-        elif response == "failed calibrate logging":
-            return False, "Cannot calibrate while logging"
-        elif response == "failed calibrate invalidpercent":
-            return False, "Invalid gas percentage"
-        elif response == "failed calibrate invalidsensor":
-            return False, "Invalid sensor number"
-        else:
-            return False, f"Unexpected response: {response}"
-    
+        """Calibrate a specific sensor using manual calibration
+
+        Uses event-driven architecture:
+        - Sends command and returns immediately (non-blocking)
+        - Calibration progress is sent to frontend via SSE updates
+        - Frontend detects completion when progress events stop
+        """
+        try:
+            self.send_command_no_wait(f"calibrate {sensor_number} {gas_percentage}")
+            return True, "Calibration started successfully"
+        except Exception as e:
+            return False, f"Failed to send calibration command: {str(e)}"
+
+    def calibrate_pump(self, sensor_number: int, gas_percentage: float) -> Tuple[bool, str]:
+        """Calibrate a specific sensor using pump-based calibration (chimera-max only)
+
+        Uses event-driven architecture:
+        - Sends command and returns immediately (non-blocking)
+        - Calibration progress is sent to frontend via SSE updates
+        - Frontend detects completion when progress events stop
+        """
+        try:
+            self.send_command_no_wait(f"calibratepump {sensor_number} {gas_percentage}")
+            return True, "Pump calibration started successfully"
+        except Exception as e:
+            return False, f"Failed to send calibration command: {str(e)}"
+
     def get_timing(self) -> Tuple[bool, Dict, str]:
         """Get open and flush timing for all channels
 

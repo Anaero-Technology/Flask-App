@@ -18,6 +18,7 @@ function Dashboard({ onViewPlot }) {
   const [activeTests, setActiveTests] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
   const [loading, setLoading] = useState(false)
+  const [globalDeviceModel, setGlobalDeviceModel] = useState(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -107,6 +108,18 @@ function Dashboard({ onViewPlot }) {
     )
   }
 
+  const fetchGlobalDeviceModel = async () => {
+    try {
+      const response = await authFetch('/api/v1/chimera/config/model');
+      if (response.ok) {
+        const data = await response.json();
+        setGlobalDeviceModel(data.device_model);
+      }
+    } catch (error) {
+      console.error('Failed to fetch global device model:', error);
+    }
+  };
+
   const handleCalibrateAction = async (deviceId, sensorNumber, gasPercentage) => {
     try {
       const response = await authFetch(`/api/v1/chimera/${deviceId}/calibrate`, {
@@ -131,6 +144,8 @@ function Dashboard({ onViewPlot }) {
   };
 
   useEffect(() => {
+    fetchGlobalDeviceModel();
+
     const hasDiscovered = sessionStorage.getItem('discoveryCompleted')
     if (hasDiscovered) {
       loadData()
@@ -267,6 +282,8 @@ function Dashboard({ onViewPlot }) {
                       testStartTime={device.test_start_time}
                       onNameUpdate={handleNameUpdate}
                       onViewPlot={onViewPlot}
+                      globalDeviceModel={globalDeviceModel}
+                      onCalibrateAction={handleCalibrateAction}
                     />
                   ))}
               </div>
@@ -293,6 +310,7 @@ function Dashboard({ onViewPlot }) {
                     onNameUpdate={handleNameUpdate}
                     onViewPlot={onViewPlot}
                     onCalibrateAction={handleCalibrateAction}
+                    globalDeviceModel={globalDeviceModel}
                   />
                 ))}
               </div>

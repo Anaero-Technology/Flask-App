@@ -16,7 +16,8 @@ function ChimeraTestConfig({
     applyAllOpenTime,
     applyAllOpenTimeValue,
     setApplyAllOpenTimeValue,
-    hasBlackBoxSelected
+    hasBlackBoxSelected,
+    hasRecirculationSupport = true
 }) {
     const { t: tPages } = useTranslation('pages');
 
@@ -79,8 +80,8 @@ function ChimeraTestConfig({
                         <div className="flex bg-white rounded border border-gray-200 p-0.5">
                             {[
                                 { id: 'off', label: tPages('chimera_config.off') },
-                                { id: 'volume', label: tPages('chimera_config.volume'), disabled: !hasBlackBoxSelected },
-                                { id: 'periodic', label: tPages('chimera_config.periodic') }
+                                { id: 'volume', label: tPages('chimera_config.volume'), disabled: !hasBlackBoxSelected || !hasRecirculationSupport },
+                                { id: 'periodic', label: tPages('chimera_config.periodic'), disabled: !hasRecirculationSupport }
                             ].map(mode => (
                                 <button
                                     key={mode.id}
@@ -95,13 +96,19 @@ function ChimeraTestConfig({
                                                 : 'text-gray-600 hover:bg-gray-100'
                                         }
                                     `}
+                                    title={!hasRecirculationSupport && mode.id !== 'off' ? 'Recirculation only available for chimera-max devices' : undefined}
                                 >
                                     {mode.label}
                                 </button>
                             ))}
                         </div>
-                        {recirculationMode === 'volume' && !hasBlackBoxSelected && (
+                        {(recirculationMode === 'volume' && !hasBlackBoxSelected) && (
                             <span className="text-xs text-amber-600 flex items-center gap-1" title="Requires BlackBox device">
+                                <AlertCircle size={12} />
+                            </span>
+                        )}
+                        {(recirculationMode !== 'off' && !hasRecirculationSupport) && (
+                            <span className="text-xs text-amber-600 flex items-center gap-1" title="Recirculation only available for chimera-max devices">
                                 <AlertCircle size={12} />
                             </span>
                         )}

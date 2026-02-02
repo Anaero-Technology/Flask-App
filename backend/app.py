@@ -16,6 +16,7 @@ app.config["REDIS_URL"] = Config.REDIS_URL
 app.config["JWT_SECRET_KEY"] = Config.JWT_SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = Config.JWT_ACCESS_TOKEN_EXPIRES
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = Config.JWT_REFRESH_TOKEN_EXPIRES
+app.config["CHIMERA_DEVICE_MODEL"] = Config.CHIMERA_DEVICE_MODEL
 CORS(app, supports_credentials=True)  # Enable CORS for all routes
 db.init_app(app)
 jwt = JWTManager(app)
@@ -966,16 +967,24 @@ def start_test(test_id):
                         channel_cfg.open_time_seconds
                     )
 
-                # 4. Set recirculation mode 
-                # Map mode: 'volume' -> 2, 'periodic' -> 1, 'off' -> 0
+                # 4. Set recirculation mode
+                # Recirculation is only available for chimera-max devices (check global config)
+                # Standard chimera devices must have recirculation disabled
                 mode_map = {'off': 0, 'periodic': 1, 'volume': 2}
-                chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
-                chimera_handler.set_recirculate(chimera_mode)
+                device_model = app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
 
-                # If periodic mode, also set the delay
-                if chimera_config.recirculation_mode == 'periodic':
-                    if chimera_config.recirculation_delay_seconds:
-                        chimera_handler.set_recirculation_delay(chimera_config.recirculation_delay_seconds)
+                if device_model == 'chimera-max':
+                    # chimera-max can use configured recirculation settings
+                    chimera_mode = mode_map.get(chimera_config.recirculation_mode, 0)
+                    chimera_handler.set_recirculate(chimera_mode)
+
+                    # If periodic mode, also set the delay
+                    if chimera_config.recirculation_mode == 'periodic':
+                        if chimera_config.recirculation_delay_seconds:
+                            chimera_handler.set_recirculation_delay(chimera_config.recirculation_delay_seconds)
+                else:
+                    # Standard chimera devices must have recirculation disabled
+                    chimera_handler.set_recirculate(0)
 
         # Use exactly the device_ids that were explicitly selected by the user
         all_device_ids = device_ids

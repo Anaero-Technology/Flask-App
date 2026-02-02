@@ -61,6 +61,7 @@ function ChimeraConfig({ device }) {
     const [serviceSequence, setServiceSequence] = useState('111111111111111');
     // Per-channel settings: { 1: { openTime: 1 }, 2: {...}, ... }
     const [channelSettings, setChannelSettings] = useState({});
+    const [calibrationMode, setCalibrationMode] = useState('manual');
 
     // Use global calibration context for SSE updates
     const { subscribeToDevice, calibrationStates } = useCalibration();
@@ -121,6 +122,16 @@ function ChimeraConfig({ device }) {
         setLoading(true);
         try {
             const config = {};
+
+            // Fetch device model configuration
+            const deviceConfigResponse = await authFetch(`/api/v1/chimera/${device.id}/config`);
+            if (deviceConfigResponse.ok) {
+                const deviceConfigData = await deviceConfigResponse.json();
+                console.log('Device config fetched:', deviceConfigData);
+                setCalibrationMode(deviceConfigData.calibration_mode);
+            } else {
+                console.error('Failed to fetch device config:', deviceConfigResponse.status);
+            }
 
             // Fetch current service sequence from device
             const serviceResponse = await authFetch(`/api/v1/chimera/${device.id}/service`);
@@ -203,6 +214,14 @@ function ChimeraConfig({ device }) {
 
     const calibrateSensor = async (sensorNumber, gasPercentage) => {
         try {
+            // Show instruction for manual mode
+            if (calibrationMode !== 'pump') {
+                const proceed = window.confirm(
+                    `Opening sensor for gas accumulation.\n\nPlease push gas into channel 1 when prompted.\n\nProceed with calibration?`
+                );
+                if (!proceed) return;
+            }
+
             const response = await authFetch(`/api/v1/chimera/${device.id}/calibrate`, {
                 method: 'POST',
                 body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
@@ -427,7 +446,8 @@ function ChimeraConfig({ device }) {
                             )}
                         </div>
 
-                        {/* Chimera Recirculation Settings */}
+                        {/* Chimera Recirculation Settings - Only for chimera-max */}
+                        {calibrationMode === 'pump' && (
                         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
                             <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                                 <div className="flex items-center gap-2">
@@ -551,6 +571,7 @@ function ChimeraConfig({ device }) {
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
                 </div>
             )}

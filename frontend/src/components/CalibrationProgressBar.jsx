@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, CheckCircle } from 'lucide-react';
 
 // Calibration Progress Bar Component
-function CalibrationProgressBar({ progress }) {
+function CalibrationProgressBar({ progress, instructionMessage }) {
     const [currentProgress, setCurrentProgress] = useState(0);
 
     const isComplete = progress.stage === 'complete';
@@ -52,7 +52,7 @@ function CalibrationProgressBar({ progress }) {
             <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-medium text-orange-800 flex items-center gap-2">
                     <Activity size={16} className="animate-pulse" />
-                    {progress.message}
+                    {instructionMessage || progress.message}
                 </div>
                 <div className="text-xs font-bold text-orange-600">
                     {currentProgress.toFixed(0)}%

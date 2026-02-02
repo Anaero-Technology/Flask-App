@@ -17,8 +17,8 @@ function DeviceCard(props) {
     const [calibrationSensor, setCalibrationSensor] = useState("");
     const [calibrationGasPct, setCalibrationGasPct] = useState("");
     const [availableSensors, setAvailableSensors] = useState([]);
-    const [duration, setDuration] = useState("0h 0m 0s");
     const [borderProgress, setBorderProgress] = useState(0);
+    const [duration, setDuration] = useState("0h 0m 0s");
 
     // Use global calibration context for persistent state across page navigation
     const { subscribeToDevice, calibrationStates, chimeraStates } = useCalibration();
@@ -103,6 +103,20 @@ function DeviceCard(props) {
 
     // Track if calibration was ever in progress (to detect completion)
     const [hadCalibrationProgress, setHadCalibrationProgress] = useState(false);
+
+    // Compute calibration instruction message based on device model and progress stage
+    const getCalibrationMessage = () => {
+        if (!calibrationProgress || calibrationProgress.stage !== 'opening') return '';
+
+        const calibrationMode = props.globalDeviceModel === 'chimera-max' ? 'pump' : 'manual';
+
+        if (calibrationMode === 'manual') {
+            return 'Opening sensor for gas accumulation: Please push gas into channel 1';
+        } else if (calibrationMode === 'pump') {
+            return 'Auto pumping gas into channel 1';
+        }
+        return '';
+    };
 
     // Update isCalibrating based on context state
     useEffect(() => {
@@ -325,10 +339,10 @@ function DeviceCard(props) {
 
                         {!isCompact && !props.activeTestId && (props.deviceType === 'chimera' || props.deviceType === 'chimera-max') && props.onCalibrateAction && (
                             isCalibrating ? (
-                                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                                <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-2 duration-200">
                                     {calibrationProgress ? (
-                                        <div className="w-88 absolute bottom-0 right-0">
-                                            <CalibrationProgressBar progress={calibrationProgress} />
+                                        <div className="w-88">
+                                            <CalibrationProgressBar progress={calibrationProgress} instructionMessage={getCalibrationMessage()} />
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2">

@@ -28,3 +28,8 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev-jwt-secret-change-in-production')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+
+    # Device Configuration
+    # Device model: 'chimera' or 'chimera-max'
+    # Only set for chimera devices
+    CHIMERA_DEVICE_MODEL = os.getenv('CHIMERA_DEVICE_MODEL', 'chimera')  # 'chimera' or 'chimera-max'
