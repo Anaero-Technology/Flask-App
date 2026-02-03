@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import CalibrationProgressBar from './CalibrationProgressBar';
@@ -6,10 +6,15 @@ import ChimeraConfigTooltip from './ChimeraConfigTooltip';
 import BlackBoxConfigTooltip from './BlackBoxConfigTooltip';
 import { useCalibration } from './ChimeraContext';
 import { useAuth } from './AuthContext';
+import { useTheme } from './ThemeContext';
 
 function DeviceCard(props) {
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
+    const cardRef = useRef(null);
+    const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -258,28 +263,70 @@ function DeviceCard(props) {
 
     // Calculate border gradient based on progress (fills clockwise from top)
     // Green for reading, orange for flushing
-    const borderAngle = (borderProgress / 100) * 360;
     const activeColor = isFlushing ? '#f97316' : '#22c55e'; // orange-500 or green-500
-    const borderGradient = showStatusBorder
-        ? `conic-gradient(from 0deg, ${activeColor} 0deg, ${activeColor} ${borderAngle}deg, #e5e7eb ${borderAngle}deg, #e5e7eb 360deg)`
-        : undefined;
+    const baseBorderColor = isDark ? '#1f2937' : '#e5e7eb';
+    const borderRadius = 12;
+    const borderWidth = 3;
+
+    useEffect(() => {
+        const element = cardRef.current;
+        if (!element || typeof ResizeObserver === 'undefined') return;
+
+        const updateSize = () => {
+            setCardSize({
+                width: element.offsetWidth,
+                height: element.offsetHeight,
+            });
+        };
+
+        updateSize();
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setCardSize({ width, height });
+            }
+        });
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, []);
 
     return (
         <div className="relative">
             {/* Animated border overlay */}
             {showStatusBorder && (
-                <div
-                    className="absolute inset-0 rounded-xl pointer-events-none z-10"
-                    style={{
-                        background: borderGradient,
-                        padding: '3px',
-                        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                        maskComposite: 'exclude',
-                        WebkitMaskComposite: 'xor',
-                    }}
-                />
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" aria-hidden="true">
+                    <rect
+                        x={borderWidth / 2}
+                        y={borderWidth / 2}
+                        width={Math.max(cardSize.width - borderWidth, 0)}
+                        height={Math.max(cardSize.height - borderWidth, 0)}
+                        rx={borderRadius}
+                        ry={borderRadius}
+                        fill="none"
+                        stroke={baseBorderColor}
+                        strokeWidth={borderWidth}
+                    />
+                    <rect
+                        x={borderWidth / 2}
+                        y={borderWidth / 2}
+                        width={Math.max(cardSize.width - borderWidth, 0)}
+                        height={Math.max(cardSize.height - borderWidth, 0)}
+                        rx={borderRadius}
+                        ry={borderRadius}
+                        fill="none"
+                        stroke={activeColor}
+                        strokeWidth={borderWidth}
+                        strokeLinecap="round"
+                        pathLength="100"
+                        strokeDasharray={`${borderProgress} 100`}
+                    />
+                </svg>
             )}
-            <div className={`relative bg-white rounded-xl shadow-sm border transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'} ${showStatusBorder ? 'border-transparent' : 'border-gray-200'}`}>
+            <div
+                ref={cardRef}
+                className={`relative bg-white rounded-xl shadow-sm border transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'} ${showStatusBorder ? 'border-transparent' : 'border-gray-200'}`}
+            >
                 <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
                 {/* Image Container */}
                 <div className={`${isCompact ? 'w-16 h-16' : 'w-full sm:w-32 h-32'} bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0 device-card-image-wrap`}>
