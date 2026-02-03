@@ -36,23 +36,23 @@ function Login() {
     const displayError = localError || error;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 {/* Logo and Title */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-lg mb-4">
                         <img src={logoUrl || logo} className="h-10 w-10 object-contain" alt="Logo" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900">{companyName}</h1>
-                    <p className="text-gray-500 mt-1">Sign in to your account</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">{companyName}</h1>
+                    <p className="text-gray-500 dark:text-slate-400 mt-1">Sign in to your account</p>
                 </div>
 
                 {/* Login Form */}
-                <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Error Message */}
                         {displayError && (
-                            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                            <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
                                 <AlertCircle size={20} className="flex-shrink-0" />
                                 <span className="text-sm">{displayError}</span>
                             </div>
@@ -60,7 +60,7 @@ function Login() {
 
                         {/* Username Field */}
                         <div>
-                            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                                 {tPages('login.username')}
                             </label>
                             <input
@@ -68,7 +68,7 @@ function Login() {
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-gray-500 dark:placeholder-slate-400"
                                 placeholder="Enter your username"
                                 autoComplete="username"
                                 autoFocus
@@ -77,7 +77,7 @@ function Login() {
 
                         {/* Password Field */}
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                                 {tPages('login.password')}
                             </label>
                             <input
@@ -85,7 +85,7 @@ function Login() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-gray-500 dark:placeholder-slate-400"
                                 placeholder="Enter your password"
                                 autoComplete="current-password"
                             />
@@ -95,7 +95,7 @@ function Login() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 dark:bg-blue-700 dark:hover:bg-blue-600 dark:disabled:bg-blue-900 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
                         >
                             {isLoading ? (
                                 <>
@@ -113,7 +113,7 @@ function Login() {
                 </div>
 
                 {/* Footer */}
-                <p className="text-center text-sm text-gray-500 mt-6">
+                <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">
                     Contact your administrator if you need access.
                 </p>
             </div>
