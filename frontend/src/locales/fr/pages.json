@@ -285,7 +285,11 @@
     "role_admin_desc": "Accès complet",
     "role_operator_desc": "Gérer les tests et les appareils",
     "role_technician_desc": "Exécuter les tests",
-    "role_viewer_desc": "Affichage uniquement"
+    "role_viewer_desc": "Affichage uniquement",
+    "download_audit_log": "Télécharger le Journal d'Audit",
+    "download_audit_log_tooltip": "Télécharger le journal d'audit en CSV",
+    "audit_log_downloaded": "Journal d'audit téléchargé avec succès",
+    "failed_download_audit_log": "Impossible de télécharger le journal d'audit"
   },
   "sample_form": {
     "title": "Créer un Échantillon",

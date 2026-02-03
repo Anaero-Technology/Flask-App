@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_sse import sse
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
@@ -9,6 +9,9 @@ from device_manager import DeviceManager
 from config import Config
 import atexit
 import threading
+import os
+import re
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
@@ -1783,6 +1786,158 @@ def git_pull():
 
     except subprocess.TimeoutExpired:
         return jsonify({"error": "Git pull timed out"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/audit-logs", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def get_audit_logs():
+    """
+    Get audit logs (admin only).
+
+    Query parameters:
+        - limit: Max number of logs to return (default: 100)
+        - offset: Number of logs to skip (default: 0)
+
+    Returns:
+        {
+            "total": int,
+            "logs": [
+                {
+                    "id": int,
+                    "user_id": int,
+                    "username": string,
+                    "action": string,
+                    "target_type": string,
+                    "target_id": int,
+                    "details": string,
+                    "timestamp": ISO datetime string
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        # Validate pagination parameters
+        limit = max(1, min(limit, 1000))  # Cap at 1000
+        offset = max(0, offset)
+
+        # Get total count
+        total = AuditLog.query.count()
+
+        # Get paginated logs with user info
+        logs = db.session.query(AuditLog, User.username).outerjoin(
+            User, AuditLog.user_id == User.id
+        ).order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset).all()
+
+        logs_data = []
+        for log, username in logs:
+            logs_data.append({
+                'id': log.id,
+                'user_id': log.user_id,
+                'username': username,
+                'action': log.action,
+                'target_type': log.target_type,
+                'target_id': log.target_id,
+                'details': log.details,
+                'timestamp': log.timestamp.isoformat() if log.timestamp else None
+            })
+
+        return jsonify({
+            'total': total,
+            'logs': logs_data
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/audit-logs/download", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def download_audit_logs():
+    """
+    Download audit logs as CSV (admin only).
+
+    Query parameters:
+        - action: Filter by action type (optional)
+        - target_type: Filter by target type (optional)
+        - user_id: Filter by user ID (optional)
+
+    Returns: CSV file
+    """
+    try:
+        import io
+        import csv
+        from datetime import datetime
+        from flask import send_file
+
+        # Get filters from query parameters
+        action_filter = request.args.get('action', None)
+        target_type_filter = request.args.get('target_type', None)
+        user_id_filter = request.args.get('user_id', None, type=int)
+
+        # Build query
+        query = db.session.query(AuditLog, User.username).outerjoin(
+            User, AuditLog.user_id == User.id
+        )
+
+        # Apply filters
+        if action_filter:
+            query = query.filter(AuditLog.action == action_filter)
+        if target_type_filter:
+            query = query.filter(AuditLog.target_type == target_type_filter)
+        if user_id_filter:
+            query = query.filter(AuditLog.user_id == user_id_filter)
+
+        # Order by timestamp descending
+        logs = query.order_by(AuditLog.timestamp.desc()).all()
+
+        if not logs:
+            return jsonify({"error": "No audit logs found"}), 404
+
+        # Get current user's CSV delimiter preference
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        csv_delimiter = user.csv_delimiter if user else ','
+
+        # Create CSV
+        csv_headers = [
+            'Timestamp', 'User ID', 'Username', 'Action', 'Target Type',
+            'Target ID', 'Details'
+        ]
+
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=csv_delimiter)
+        writer.writerow(csv_headers)
+
+        for log, username in logs:
+            writer.writerow([
+                log.timestamp.isoformat() if log.timestamp else '',
+                log.user_id or '',
+                username or 'Unknown',
+                log.action or '',
+                log.target_type or '',
+                log.target_id or '',
+                log.details or ''
+            ])
+
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"audit_logs_{timestamp}.csv"
+
+        return send_file(
+            io.BytesIO(output.getvalue().encode()),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

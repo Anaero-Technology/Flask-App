@@ -33,3 +33,7 @@ class Config:
     # Device model: 'chimera' or 'chimera-max'
     # Only set for chimera devices
     CHIMERA_DEVICE_MODEL = os.getenv('CHIMERA_DEVICE_MODEL', 'chimera')  # 'chimera' or 'chimera-max'
+
+    # App Branding
+    COMPANY_NAME = os.getenv('COMPANY_NAME', 'Anaero Technology')
+    LOGO_FILENAME = os.getenv('LOGO_FILENAME', '')  # empty = no custom logo

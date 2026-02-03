@@ -14,7 +14,8 @@ import {
     ShieldCheck,
     ShieldAlert,
     Eye,
-    Loader2
+    Loader2,
+    Download
 } from 'lucide-react';
 
 function UserManagement() {
@@ -37,6 +38,7 @@ function UserManagement() {
     const [formData, setFormData] = useState({ username: '', email: '', password: '', role: 'viewer' });
     const [newPassword, setNewPassword] = useState('');
     const [saving, setSaving] = useState(false);
+    const [downloadingAuditLog, setDownloadingAuditLog] = useState(false);
 
     const fetchUsers = async () => {
         try {
@@ -185,6 +187,41 @@ function UserManagement() {
 
     const getRoleInfo = (roleId) => ROLES.find(r => r.id === roleId) || ROLES[3];
 
+    const handleDownloadAuditLog = async () => {
+        setDownloadingAuditLog(true);
+        try {
+            const response = await authFetch('/api/v1/audit-logs/download');
+            if (response.ok) {
+                // Get the filename from the Content-Disposition header
+                const contentDisposition = response.headers.get('content-disposition');
+                let filename = 'audit_logs.csv';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (filenameMatch) filename = filenameMatch[1];
+                }
+
+                // Get the blob and download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                toast.success(tPages('user_management.audit_log_downloaded'));
+            } else {
+                toast.error(tPages('user_management.failed_download_audit_log'));
+            }
+        } catch (err) {
+            toast.error(tPages('user_management.failed_download_audit_log'));
+        } finally {
+            setDownloadingAuditLog(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -206,16 +243,31 @@ function UserManagement() {
                         <p className="text-gray-500 text-sm">{users.length} {tPages('user_management.users_total')}</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => {
-                        setFormData({ username: '', email: '', password: '', role: 'viewer' });
-                        setShowCreateModal(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                    <UserPlus size={20} />
-                    {tPages('user_management.add_user')}
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleDownloadAuditLog}
+                        disabled={downloadingAuditLog}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors"
+                        title={tPages('user_management.download_audit_log_tooltip')}
+                    >
+                        {downloadingAuditLog ? (
+                            <Loader2 size={20} className="animate-spin" />
+                        ) : (
+                            <Download size={20} />
+                        )}
+                        {tPages('user_management.download_audit_log')}
+                    </button>
+                    <button
+                        onClick={() => {
+                            setFormData({ username: '', email: '', password: '', role: 'viewer' });
+                            setShowCreateModal(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        <UserPlus size={20} />
+                        {tPages('user_management.add_user')}
+                    </button>
+                </div>
             </div>
 
             {/* Users Table */}

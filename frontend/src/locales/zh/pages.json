@@ -285,7 +285,11 @@
     "role_admin_desc": "完全访问",
     "role_operator_desc": "管理测试和设备",
     "role_technician_desc": "运行测试",
-    "role_viewer_desc": "仅查看"
+    "role_viewer_desc": "仅查看",
+    "download_audit_log": "下载审计日志",
+    "download_audit_log_tooltip": "将审计日志下载为 CSV",
+    "audit_log_downloaded": "审计日志下载成功",
+    "failed_download_audit_log": "下载审计日志失败"
   },
   "sample_form": {
     "title": "创建样本",

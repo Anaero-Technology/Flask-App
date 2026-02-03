@@ -337,7 +337,11 @@
     "role_admin_desc": "Full access",
     "role_operator_desc": "Manage tests & devices",
     "role_technician_desc": "Run tests",
-    "role_viewer_desc": "View only"
+    "role_viewer_desc": "View only",
+    "download_audit_log": "Download Audit Log",
+    "download_audit_log_tooltip": "Download audit log as CSV",
+    "audit_log_downloaded": "Audit log downloaded successfully",
+    "failed_download_audit_log": "Failed to download audit log"
   },
   "black_box": {
     "title": "BlackBox Devices",

@@ -285,7 +285,11 @@
     "role_admin_desc": "Acceso completo",
     "role_operator_desc": "Gestionar pruebas y dispositivos",
     "role_technician_desc": "Ejecutar pruebas",
-    "role_viewer_desc": "Solo lectura"
+    "role_viewer_desc": "Solo lectura",
+    "download_audit_log": "Descargar Registro de Auditoría",
+    "download_audit_log_tooltip": "Descargar registro de auditoría como CSV",
+    "audit_log_downloaded": "Registro de auditoría descargado exitosamente",
+    "failed_download_audit_log": "Error al descargar registro de auditoría"
   },
   "sample_form": {
     "title": "Crear Muestra",

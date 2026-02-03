@@ -285,7 +285,11 @@
     "role_admin_desc": "Vollzugriff",
     "role_operator_desc": "Tests & Geräte verwalten",
     "role_technician_desc": "Tests ausführen",
-    "role_viewer_desc": "Nur Anzeige"
+    "role_viewer_desc": "Nur Anzeige",
+    "download_audit_log": "Audit-Protokoll Herunterladen",
+    "download_audit_log_tooltip": "Audit-Protokoll als CSV herunterladen",
+    "audit_log_downloaded": "Audit-Protokoll erfolgreich heruntergeladen",
+    "failed_download_audit_log": "Fehler beim Herunterladen des Audit-Protokolls"
   },
   "sample_form": {
     "title": "Probe Erstellen",
