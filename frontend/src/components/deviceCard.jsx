@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import CalibrationProgressBar from './CalibrationProgressBar';
@@ -13,8 +13,6 @@ function DeviceCard(props) {
     const { t: tPages } = useTranslation('pages');
     const { theme } = useTheme();
     const isDark = theme === 'dark';
-    const cardRef = useRef(null);
-    const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState(props.name);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -268,48 +266,20 @@ function DeviceCard(props) {
     const borderRadius = 12;
     const borderWidth = 3;
 
-    useEffect(() => {
-        const element = cardRef.current;
-        if (!element || typeof ResizeObserver === 'undefined') return;
-
-        const updateSize = () => {
-            setCardSize({
-                width: element.offsetWidth,
-                height: element.offsetHeight,
-            });
-        };
-
-        updateSize();
-        const observer = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const { width, height } = entry.contentRect;
-                setCardSize({ width, height });
-            }
-        });
-        observer.observe(element);
-
-        return () => observer.disconnect();
-    }, []);
-
     return (
         <div className="relative">
             {/* Animated border overlay */}
             {showStatusBorder && (
                 <svg
-                    className="absolute w-full h-full pointer-events-none z-10"
-                    style={{
-                        top: -borderWidth / 2,
-                        left: -borderWidth / 2,
-                        right: -borderWidth / 2,
-                        bottom: -borderWidth / 2,
-                    }}
+                    className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                    style={{ overflow: 'visible' }}
                     aria-hidden="true"
                 >
                     <rect
-                        x={borderWidth / 2}
-                        y={borderWidth / 2}
-                        width={Math.max(cardSize.width, 0)}
-                        height={Math.max(cardSize.height, 0)}
+                        x={0}
+                        y={0}
+                        width="100%"
+                        height="100%"
                         rx={borderRadius}
                         ry={borderRadius}
                         fill="none"
@@ -317,10 +287,10 @@ function DeviceCard(props) {
                         strokeWidth={borderWidth}
                     />
                     <rect
-                        x={borderWidth / 2}
-                        y={borderWidth / 2}
-                        width={Math.max(cardSize.width, 0)}
-                        height={Math.max(cardSize.height, 0)}
+                        x={0}
+                        y={0}
+                        width="100%"
+                        height="100%"
                         rx={borderRadius}
                         ry={borderRadius}
                         fill="none"
@@ -333,7 +303,6 @@ function DeviceCard(props) {
                 </svg>
             )}
             <div
-                ref={cardRef}
                 className={`relative bg-white rounded-xl shadow-sm border transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'} ${showStatusBorder ? 'border-transparent' : 'border-gray-200'}`}
             >
                 <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
