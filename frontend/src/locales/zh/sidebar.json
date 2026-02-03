@@ -14,5 +14,8 @@
   "settings": "设置",
   "user_management": "用户管理",
   "create_sample": "创建样本",
-  "logout": "登出"
+  "logout": "登出",
+  "appearance": "外观",
+  "light_mode": "浅色模式",
+  "dark_mode": "深色模式"
 }

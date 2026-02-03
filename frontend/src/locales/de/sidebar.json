@@ -14,5 +14,8 @@
   "settings": "Einstellungen",
   "user_management": "Benutzerverwaltung",
   "create_sample": "Probe Erstellen",
-  "logout": "Abmelden"
+  "logout": "Abmelden",
+  "appearance": "Erscheinungsbild",
+  "light_mode": "Heller Modus",
+  "dark_mode": "Dunkler Modus"
 }

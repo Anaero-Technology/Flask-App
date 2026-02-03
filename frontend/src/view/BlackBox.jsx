@@ -216,7 +216,7 @@ function BlackBox() {
 
     return (
         <div>
-            <h1 className="text-4xl font-bold text-black pl-6 m-6">{tPages('black_box.title')}</h1>
+            <h1 className="text-4xl font-bold text-black dark:text-slate-100 pl-6 m-6">{tPages('black_box.title')}</h1>
             <div className="p-6 pt-6">
                 {blackBoxes.length === 0 && !loading && (
                     <div className="text-center text-gray-500 py-8">

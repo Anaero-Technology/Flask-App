@@ -12,6 +12,7 @@ import { useToast } from '../components/Toast';
 import { Settings, X, Maximize2, Minimize2, Info } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../components/ThemeContext';
 
 // Format gas names with proper subscripts (for Plotly - uses HTML)
 const formatGasName = (name) => {
@@ -32,6 +33,8 @@ function Plot({ initialParams, onNavigate }) {
     const { authFetch, canPerform } = useAuth();
     const toast = useToast();
     const { t: tPages } = useTranslation('pages');
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [globalFilter, setGlobalFilter] = useState('');
@@ -667,21 +670,40 @@ function Plot({ initialParams, onNavigate }) {
 
     const plotlyLayout = useMemo(() => {
         const device = devices.find(d => d.id === selectedDeviceId);
+        const axisTextColor = isDark ? '#cbd5e1' : '#6b7280';
+        const axisTitleColor = isDark ? '#e2e8f0' : '#374151';
+        const gridColor = isDark ? 'rgba(148, 163, 184, 0.25)' : '#e5e7eb';
+        const zeroLineColor = isDark ? 'rgba(148, 163, 184, 0.35)' : '#e5e7eb';
+        const axisLineColor = isDark ? 'rgba(148, 163, 184, 0.4)' : '#d1d5db';
 
         // Axis title styling
         const axisTitleFont = {
             family: 'Arial, sans-serif',
             size: 14,
-            color: '#374151'
+            color: axisTitleColor
         };
 
         // Base Layout
         const layout = {
             autosize: true,
             margin: { l: 40, r: 15, t: 20, b: 50 },
-            legend: { orientation: 'h', y: -0.15 },
+            legend: {
+                orientation: 'h',
+                y: -0.15,
+                font: { size: 11, color: axisTextColor }
+            },
             hovermode: 'closest',
             dragmode: 'lasso', // Enable lasso selection
+            paper_bgcolor: isDark ? '#0b1220' : '#ffffff',
+            plot_bgcolor: isDark ? '#0b1220' : '#ffffff',
+            font: { color: axisTextColor },
+        };
+
+        const axisTheme = {
+            tickfont: { size: 11, color: axisTextColor },
+            gridcolor: gridColor,
+            zerolinecolor: zeroLineColor,
+            linecolor: axisLineColor,
         };
 
         // Chimera Layout
@@ -698,7 +720,7 @@ function Plot({ initialParams, onNavigate }) {
                     font: axisTitleFont,
                     standoff: 10
                 },
-                tickfont: { size: 11 }
+                ...axisTheme
             };
 
             // Determine unit based on selected gas (if in gas mode) or generally
@@ -729,7 +751,7 @@ function Plot({ initialParams, onNavigate }) {
                     font: axisTitleFont,
                     standoff: 5
                 },
-                tickfont: { size: 11 },
+                ...axisTheme,
                 rangemode: 'nonnegative'
             };
 
@@ -752,7 +774,7 @@ function Plot({ initialParams, onNavigate }) {
                     font: axisTitleFont,
                     standoff: 10
                 },
-                tickfont: { size: 11 }
+                ...axisTheme
             };
             layout.yaxis = {
                 title: {
@@ -760,12 +782,12 @@ function Plot({ initialParams, onNavigate }) {
                     font: axisTitleFont,
                     standoff: 5
                 },
-                tickfont: { size: 11 }
+                ...axisTheme
             };
         }
 
         return layout;
-    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode, tPages]);
+    }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode, tPages, isDark]);
 
     if (showPlotView && selectedTest) {
         const selectedDevice = devices.find(d => d.id === selectedDeviceId);
