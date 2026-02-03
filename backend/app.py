@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, current_app
 from flask_cors import CORS
 from flask_sse import sse
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
@@ -12,6 +12,7 @@ import threading
 import os
 import re
 from werkzeug.utils import secure_filename
+from sqlalchemy.engine import make_url
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
@@ -1753,6 +1754,163 @@ def serial_log_info():
             "enabled": serial_logger.enabled
         }), 200
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def get_sqlite_db_path():
+    uri = current_app.config.get("SQLALCHEMY_DATABASE_URI")
+
+    try:
+        url = make_url(uri) if uri else db.engine.url
+    except Exception:
+        return None, "Invalid database URI"
+
+    if url.get_backend_name() != "sqlite":
+        return None, "Database download/transfer is only supported for SQLite"
+
+    db_path = url.database
+    if not db_path or db_path == ":memory:":
+        return None, "SQLite database file is not available"
+
+    if not os.path.isabs(db_path):
+        # Flask resolves relative SQLite paths against the instance folder
+        db_path = os.path.abspath(os.path.join(current_app.instance_path, db_path))
+
+    return db_path, None
+
+
+@app.route("/api/v1/system/database/download", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def download_database():
+    """Download the SQLite database file (admin only)."""
+    try:
+        db_path, error = get_sqlite_db_path()
+        if error:
+            return jsonify({"error": error}), 400
+        if not os.path.exists(db_path):
+            return jsonify({"error": "Database file not found"}), 404
+
+        return send_file(
+            db_path,
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=os.path.basename(db_path)
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/system/database/transfer", methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def transfer_database():
+    """Replace the SQLite database file with an uploaded one (admin only)."""
+    from datetime import datetime
+    import tempfile
+
+    try:
+        confirm = request.form.get('confirm')
+        if confirm != 'TRANSFER':
+            return jsonify({"error": "Confirmation required"}), 400
+
+        upload = request.files.get('database')
+        if not upload or not upload.filename:
+            return jsonify({"error": "No database file provided"}), 400
+
+        db_path, error = get_sqlite_db_path()
+        if error:
+            return jsonify({"error": error}), 400
+
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.sqlite', dir=os.path.dirname(db_path))
+        with os.fdopen(temp_fd, 'wb') as temp_file:
+            upload.save(temp_file)
+
+        with open(temp_path, 'rb') as temp_file:
+            header = temp_file.read(16)
+            if header != b'SQLite format 3\x00':
+                os.remove(temp_path)
+                return jsonify({"error": "Uploaded file is not a valid SQLite database"}), 400
+
+        db.session.remove()
+        db.engine.dispose()
+
+        backup_path = None
+        if os.path.exists(db_path):
+            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            backup_path = f"{db_path}.bak-{timestamp}"
+            os.replace(db_path, backup_path)
+
+        os.replace(temp_path, db_path)
+
+        return jsonify({
+            "success": True,
+            "message": "Database transferred successfully",
+            "backup_path": backup_path
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/v1/system/database", methods=['DELETE'])
+@jwt_required()
+@require_role(['admin'])
+def delete_database():
+    """Delete all database data but preserve admin users (admin only)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        if data.get('confirm') != 'DELETE':
+            return jsonify({"error": "Confirmation required"}), 400
+
+        admin_users = User.query.filter_by(role='admin').all()
+        admin_ids = {admin.id for admin in admin_users}
+        preserved_admins = []
+
+        for admin in admin_users:
+            preserved_admins.append({
+                "id": admin.id,
+                "username": admin.username,
+                "email": admin.email,
+                "password_hash": admin.password_hash,
+                "role": admin.role,
+                "is_active": admin.is_active,
+                "created_at": admin.created_at,
+                "created_by": admin.created_by if admin.created_by in admin_ids else None,
+                "csv_delimiter": admin.csv_delimiter,
+                "language": admin.language,
+                "profile_picture_filename": admin.profile_picture_filename,
+            })
+
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+
+        for admin_data in preserved_admins:
+            admin = User(
+                username=admin_data["username"],
+                email=admin_data["email"],
+                password_hash=admin_data["password_hash"],
+                role=admin_data["role"],
+                is_active=admin_data["is_active"],
+                created_at=admin_data["created_at"],
+                created_by=admin_data["created_by"],
+                csv_delimiter=admin_data["csv_delimiter"],
+                language=admin_data["language"],
+                profile_picture_filename=admin_data["profile_picture_filename"],
+            )
+            admin.id = admin_data["id"]
+            db.session.add(admin)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"Database cleared. Preserved {len(preserved_admins)} admin user(s)."
+        }), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 

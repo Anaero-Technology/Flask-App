@@ -124,6 +124,39 @@ def get_current_user():
     return jsonify(user.to_dict())
 
 
+@auth_bp.route('/api/v1/auth/verify-password', methods=['POST'])
+@jwt_required()
+def verify_password():
+    """
+    Verify the current user's password (for sensitive actions).
+
+    Request body:
+        {
+            "password": "string"
+        }
+    """
+    user_id = get_jwt_identity()
+    user_id = int(user_id) if user_id is not None else None
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if not user.is_active:
+        return jsonify({"error": "Account is deactivated"}), 403
+
+    data = request.get_json()
+    password = data.get('password', '') if data else ''
+
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+
+    if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+        return jsonify({"error": "Password is incorrect"}), 401
+
+    return jsonify({"valid": True})
+
+
 @auth_bp.route('/api/v1/auth/change-password', methods=['POST'])
 @jwt_required()
 def change_password():

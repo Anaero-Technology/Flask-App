@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../components/AuthContext';
 import { useI18n } from '../components/i18nContext';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +25,19 @@ function Settings() {
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
   const [downloadingLog, setDownloadingLog] = useState(false)
   const [clearingLog, setClearingLog] = useState(false)
+  const [databaseMessage, setDatabaseMessage] = useState({ text: '', type: '' })
+  const [downloadingDb, setDownloadingDb] = useState(false)
+  const [transferringDb, setTransferringDb] = useState(false)
+  const [deletingDb, setDeletingDb] = useState(false)
+  const [databaseFile, setDatabaseFile] = useState(null)
+  const [passwordPrompt, setPasswordPrompt] = useState({
+    open: false,
+    message: '',
+    password: '',
+    error: '',
+    loading: false
+  })
+  const passwordResolveRef = useRef(null)
   const [csvDelimiter, setCsvDelimiter] = useState(',')
   const [savingDelimiter, setSavingDelimiter] = useState(false)
   const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
@@ -224,6 +237,172 @@ function Settings() {
       setSerialLogMessage({ text: 'Error clearing serial log: ' + error.message, type: 'error' })
     } finally {
       setClearingLog(false)
+    }
+  }
+
+  const requestPassword = (message) => {
+    return new Promise((resolve) => {
+      passwordResolveRef.current = resolve
+      setPasswordPrompt({
+        open: true,
+        message,
+        password: '',
+        error: '',
+        loading: false
+      })
+    })
+  }
+
+  const resolvePasswordPrompt = (result) => {
+    if (passwordResolveRef.current) {
+      passwordResolveRef.current(result)
+      passwordResolveRef.current = null
+    }
+    setPasswordPrompt({
+      open: false,
+      message: '',
+      password: '',
+      error: '',
+      loading: false
+    })
+  }
+
+  const verifyPassword = async () => {
+    if (!passwordPrompt.password) {
+      setPasswordPrompt((prev) => ({
+        ...prev,
+        error: tPages('settings.database_password_required')
+      }))
+      return
+    }
+
+    setPasswordPrompt((prev) => ({ ...prev, loading: true, error: '' }))
+
+    try {
+      const response = await authFetch('/api/v1/auth/verify-password', {
+        method: 'POST',
+        body: JSON.stringify({ password: passwordPrompt.password })
+      })
+
+      if (response.ok) {
+        resolvePasswordPrompt(true)
+      } else {
+        const data = await response.json()
+        setPasswordPrompt((prev) => ({
+          ...prev,
+          loading: false,
+          error: data.error || tPages('settings.database_password_incorrect')
+        }))
+      }
+    } catch (error) {
+      setPasswordPrompt((prev) => ({
+        ...prev,
+        loading: false,
+        error: tPages('settings.database_action_failed') + ': ' + error.message
+      }))
+    }
+  }
+
+  const requirePassword = async (message) => {
+    const confirmed = await requestPassword(message)
+    return confirmed
+  }
+
+  const handleDatabaseFileChange = (event) => {
+    const file = event.target.files && event.target.files[0]
+    setDatabaseFile(file || null)
+  }
+
+  const downloadDatabase = async () => {
+    const confirmed = await requirePassword(tPages('settings.database_confirm_download'))
+    if (!confirmed) return
+
+    setDownloadingDb(true)
+    setDatabaseMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/system/database/download')
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'database.sqlite'
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setDatabaseMessage({ text: tPages('settings.database_download_success'), type: 'success' })
+      } else {
+        const data = await response.json()
+        setDatabaseMessage({ text: data.error || tPages('settings.database_action_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setDatabaseMessage({ text: tPages('settings.database_action_failed') + ': ' + error.message, type: 'error' })
+    } finally {
+      setDownloadingDb(false)
+    }
+  }
+
+  const transferDatabase = async () => {
+    if (!databaseFile) {
+      setDatabaseMessage({ text: tPages('settings.database_no_file'), type: 'error' })
+      return
+    }
+
+    const confirmed = await requirePassword(tPages('settings.database_confirm_transfer'))
+    if (!confirmed) return
+
+    setTransferringDb(true)
+    setDatabaseMessage({ text: '', type: '' })
+
+    try {
+      const formData = new FormData()
+      formData.append('database', databaseFile)
+      formData.append('confirm', 'TRANSFER')
+
+      const response = await authFetch('/api/v1/system/database/transfer', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (response.ok) {
+        setDatabaseMessage({ text: tPages('settings.database_transfer_success'), type: 'success' })
+        setDatabaseFile(null)
+      } else {
+        const data = await response.json()
+        setDatabaseMessage({ text: data.error || tPages('settings.database_action_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setDatabaseMessage({ text: tPages('settings.database_action_failed') + ': ' + error.message, type: 'error' })
+    } finally {
+      setTransferringDb(false)
+    }
+  }
+
+  const deleteDatabase = async () => {
+    const confirmed = await requirePassword(tPages('settings.database_confirm_delete'))
+    if (!confirmed) return
+
+    setDeletingDb(true)
+    setDatabaseMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/system/database', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: 'DELETE' })
+      })
+
+      if (response.ok) {
+        setDatabaseMessage({ text: tPages('settings.database_delete_success'), type: 'success' })
+      } else {
+        const data = await response.json()
+        setDatabaseMessage({ text: data.error || tPages('settings.database_action_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setDatabaseMessage({ text: tPages('settings.database_action_failed') + ': ' + error.message, type: 'error' })
+    } finally {
+      setDeletingDb(false)
     }
   }
 
@@ -672,6 +851,80 @@ function Settings() {
           </div>
         </div>
 
+        {canPerform('manage_database') && (
+          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 className="text-xl font-semibold mb-4">{tPages('settings.database_management_title')}</h2>
+
+            {databaseMessage.text && (
+              <div className={`mb-4 p-3 rounded ${
+                databaseMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {databaseMessage.text}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">{tPages('settings.database_download_title')}</h3>
+                  <p className="text-sm text-gray-600">{tPages('settings.database_download_help')}</p>
+                </div>
+                <button
+                  onClick={downloadDatabase}
+                  disabled={downloadingDb}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {downloadingDb ? tPages('settings.database_downloading') : tPages('settings.database_download_button')}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">{tPages('settings.database_transfer_title')}</h3>
+                  <p className="text-sm text-gray-600">
+                    {tPages('settings.database_transfer_help')}
+                    {databaseFile && (
+                      <span className="ml-2 text-gray-500">({databaseFile.name})</span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <label className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 cursor-pointer">
+                    {tPages('settings.database_transfer_choose')}
+                    <input
+                      type="file"
+                      accept=".sqlite,.db"
+                      onChange={handleDatabaseFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={transferDatabase}
+                    disabled={transferringDb || !databaseFile}
+                    className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {transferringDb ? tPages('settings.database_transferring') : tPages('settings.database_transfer_button')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-red-600">{tPages('settings.database_delete_title')}</h3>
+                  <p className="text-sm text-gray-600">{tPages('settings.database_delete_help')}</p>
+                </div>
+                <button
+                  onClick={deleteDatabase}
+                  disabled={deletingDb}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {deletingDb ? tPages('settings.database_deleting') : tPages('settings.database_delete_button')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* App Branding Section - Admin Only */}
         {canPerform('system_settings') && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -766,6 +1019,54 @@ function Settings() {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {passwordPrompt.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {tPages('settings.database_password_title')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-600">
+                {passwordPrompt.message || tPages('settings.database_password_prompt')}
+              </p>
+              <div className="mt-4">
+                <input
+                  type="password"
+                  value={passwordPrompt.password}
+                  onChange={(e) => setPasswordPrompt((prev) => ({ ...prev, password: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      verifyPassword()
+                    }
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={tPages('settings.password')}
+                />
+                {passwordPrompt.error && (
+                  <p className="mt-2 text-sm text-red-600">{passwordPrompt.error}</p>
+                )}
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => resolvePasswordPrompt(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                  disabled={passwordPrompt.loading}
+                >
+                  {tCommon('cancel')}
+                </button>
+                <button
+                  onClick={verifyPassword}
+                  disabled={passwordPrompt.loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {passwordPrompt.loading
+                    ? tPages('settings.database_password_verifying')
+                    : tPages('settings.database_password_confirm')}
+                </button>
               </div>
             </div>
           </div>
