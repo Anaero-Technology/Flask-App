@@ -7,6 +7,7 @@ import { ChimeraProvider } from './components/ChimeraContext'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { I18nProvider } from './components/i18nContext'
 import { ThemeProvider } from './components/ThemeContext'
+import { AppSettingsProvider } from './components/AppSettingsContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -103,7 +104,9 @@ function App() {
         <ToastProvider>
           <AuthProvider>
             <I18nProvider>
-              <AppContent />
+              <AppSettingsProvider>
+                <AppContent />
+              </AppSettingsProvider>
             </I18nProvider>
           </AuthProvider>
         </ToastProvider>

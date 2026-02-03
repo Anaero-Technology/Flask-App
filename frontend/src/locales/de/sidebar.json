@@ -17,5 +17,13 @@
   "logout": "Abmelden",
   "appearance": "Erscheinungsbild",
   "light_mode": "Heller Modus",
-  "dark_mode": "Dunkler Modus"
+  "dark_mode": "Dunkler Modus",
+  "profile_picture": "Profilbild",
+  "upload_profile_picture": "Profilbild Hochladen",
+  "choose_image": "Bild Auswählen",
+  "remove_picture": "Bild Entfernen",
+  "close": "Schließen",
+  "profile_picture_uploaded": "Profilbild hochgeladen",
+  "profile_picture_removed": "Profilbild entfernt",
+  "profile_picture_error": "Fehler beim Hochladen des Profilbilds"
 }

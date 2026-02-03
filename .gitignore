@@ -10,6 +10,7 @@ backend/tests
 backend/known_issues.md
 backend/venv
 backend/logs/
+backend/uploads/
 node_modules
 package-lock.json
 package.json    

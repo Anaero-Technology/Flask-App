@@ -39,7 +39,21 @@
     "clearing": "Wird gelöscht...",
     "download_all_serial": "Laden Sie alle von Geräten empfangenen seriellen Nachrichten herunter",
     "delimiter_saved": "CSV-Trennzeicheneinstellung gespeichert",
-    "language_saved": "Spracheinstellung gespeichert"
+    "language_saved": "Spracheinstellung gespeichert",
+    "branding_title": "App-Branding",
+    "branding_company_name": "Unternehmensname",
+    "branding_company_help": "Dieser Name wird in der Seitenleiste und auf der Anmeldeseite angezeigt",
+    "branding_logo": "Logo",
+    "branding_logo_help": "Laden Sie ein Logobild hoch (PNG, JPG, GIF, WebP — max. 2 MB)",
+    "branding_upload_logo": "Logo Hochladen",
+    "branding_remove_logo": "Logo Entfernen",
+    "branding_save": "Speichern",
+    "branding_saved": "Unternehmensname gespeichert",
+    "branding_logo_uploaded": "Logo erfolgreich hochgeladen",
+    "branding_logo_removed": "Logo entfernt",
+    "branding_save_failed": "Fehler beim Speichern der Branding-Einstellungen",
+    "branding_upload_failed": "Fehler beim Hochladen des Logos",
+    "branding_remove_failed": "Fehler beim Entfernen des Logos"
   },
   "login": {
     "title": "Anmelden",

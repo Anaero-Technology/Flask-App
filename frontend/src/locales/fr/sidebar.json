@@ -17,5 +17,13 @@
   "logout": "Déconnexion",
   "appearance": "Apparence",
   "light_mode": "Mode clair",
-  "dark_mode": "Mode sombre"
+  "dark_mode": "Mode sombre",
+  "profile_picture": "Photo de Profil",
+  "upload_profile_picture": "Télécharger Photo de Profil",
+  "choose_image": "Choisir une Image",
+  "remove_picture": "Supprimer la Photo",
+  "close": "Fermer",
+  "profile_picture_uploaded": "Photo de profil téléchargée",
+  "profile_picture_removed": "Photo de profil supprimée",
+  "profile_picture_error": "Erreur lors du téléchargement de la photo"
 }

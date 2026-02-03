@@ -17,5 +17,13 @@
   "logout": "Cerrar Sesión",
   "appearance": "Apariencia",
   "light_mode": "Modo claro",
-  "dark_mode": "Modo oscuro"
+  "dark_mode": "Modo oscuro",
+  "profile_picture": "Foto de Perfil",
+  "upload_profile_picture": "Cargar Foto de Perfil",
+  "choose_image": "Elegir Imagen",
+  "remove_picture": "Eliminar Foto",
+  "close": "Cerrar",
+  "profile_picture_uploaded": "Foto de perfil cargada",
+  "profile_picture_removed": "Foto de perfil eliminada",
+  "profile_picture_error": "Error al cargar foto de perfil"
 }

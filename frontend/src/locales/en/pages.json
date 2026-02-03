@@ -39,7 +39,21 @@
     "clearing": "Clearing...",
     "download_all_serial": "Download all serial messages received from devices",
     "delimiter_saved": "CSV delimiter preference saved",
-    "language_saved": "Language preference saved"
+    "language_saved": "Language preference saved",
+    "branding_title": "App Branding",
+    "branding_company_name": "Company Name",
+    "branding_company_help": "This name appears in the sidebar and login page",
+    "branding_logo": "Logo",
+    "branding_logo_help": "Upload a logo image (PNG, JPG, GIF, WebP — max 2 MB)",
+    "branding_upload_logo": "Upload Logo",
+    "branding_remove_logo": "Remove Logo",
+    "branding_save": "Save",
+    "branding_saved": "Company name saved",
+    "branding_logo_uploaded": "Logo uploaded successfully",
+    "branding_logo_removed": "Logo removed",
+    "branding_save_failed": "Failed to save branding settings",
+    "branding_upload_failed": "Failed to upload logo",
+    "branding_remove_failed": "Failed to remove logo"
   },
   "login": {
     "title": "Login",

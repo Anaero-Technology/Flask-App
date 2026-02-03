@@ -39,7 +39,21 @@
     "clearing": "Limpiando...",
     "download_all_serial": "Descargar todos los mensajes seriales recibidos de dispositivos",
     "delimiter_saved": "Preferencia de delimitador CSV guardada",
-    "language_saved": "Preferencia de idioma guardada"
+    "language_saved": "Preferencia de idioma guardada",
+    "branding_title": "Marca de Aplicación",
+    "branding_company_name": "Nombre de la Empresa",
+    "branding_company_help": "Este nombre aparece en la barra lateral y en la página de inicio de sesión",
+    "branding_logo": "Logo",
+    "branding_logo_help": "Carga un archivo de imagen (PNG, JPG, GIF, WebP — máximo 2 MB)",
+    "branding_upload_logo": "Cargar Logo",
+    "branding_remove_logo": "Eliminar Logo",
+    "branding_save": "Guardar",
+    "branding_saved": "Nombre de empresa guardado",
+    "branding_logo_uploaded": "Logo cargado exitosamente",
+    "branding_logo_removed": "Logo eliminado",
+    "branding_save_failed": "Error al guardar configuración de marca",
+    "branding_upload_failed": "Error al cargar logo",
+    "branding_remove_failed": "Error al eliminar logo"
   },
   "login": {
     "title": "Iniciar Sesión",

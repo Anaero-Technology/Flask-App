@@ -39,7 +39,21 @@
     "clearing": "清空中...",
     "download_all_serial": "下载从设备收到的所有串行消息",
     "delimiter_saved": "CSV 分隔符偏好设置已保存",
-    "language_saved": "语言偏好设置已保存"
+    "language_saved": "语言偏好设置已保存",
+    "branding_title": "应用品牌",
+    "branding_company_name": "公司名称",
+    "branding_company_help": "此名称显示在侧边栏和登录页面中",
+    "branding_logo": "徽标",
+    "branding_logo_help": "上传徽标图像（PNG、JPG、GIF、WebP — 最大 2 MB）",
+    "branding_upload_logo": "上传徽标",
+    "branding_remove_logo": "删除徽标",
+    "branding_save": "保存",
+    "branding_saved": "公司名称已保存",
+    "branding_logo_uploaded": "徽标上传成功",
+    "branding_logo_removed": "徽标已删除",
+    "branding_save_failed": "保存品牌设置失败",
+    "branding_upload_failed": "上传徽标失败",
+    "branding_remove_failed": "删除徽标失败"
   },
   "login": {
     "title": "登录",

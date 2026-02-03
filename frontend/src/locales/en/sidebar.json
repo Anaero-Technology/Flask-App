@@ -17,5 +17,13 @@
   "logout": "Logout",
   "appearance": "Appearance",
   "light_mode": "Light mode",
-  "dark_mode": "Dark mode"
+  "dark_mode": "Dark mode",
+  "profile_picture": "Profile Picture",
+  "upload_profile_picture": "Upload Profile Picture",
+  "choose_image": "Choose Image",
+  "remove_picture": "Remove Picture",
+  "close": "Close",
+  "profile_picture_uploaded": "Profile picture uploaded",
+  "profile_picture_removed": "Profile picture removed",
+  "profile_picture_error": "Failed to upload profile picture"
 }

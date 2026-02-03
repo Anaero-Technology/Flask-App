@@ -17,5 +17,13 @@
   "logout": "登出",
   "appearance": "外观",
   "light_mode": "浅色模式",
-  "dark_mode": "深色模式"
+  "dark_mode": "深色模式",
+  "profile_picture": "头像",
+  "upload_profile_picture": "上传头像",
+  "choose_image": "选择图像",
+  "remove_picture": "删除头像",
+  "close": "关闭",
+  "profile_picture_uploaded": "头像上传成功",
+  "profile_picture_removed": "头像已删除",
+  "profile_picture_error": "上传头像失败"
 }

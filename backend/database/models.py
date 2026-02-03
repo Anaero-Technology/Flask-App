@@ -22,6 +22,7 @@ class User(db.Model):
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     csv_delimiter = Column(String(1), nullable=False, default=',')  # CSV delimiter preference: ',', ';', '\t'
     language = Column(String(5), nullable=False, default='en')  # Language preference: 'en', 'es', 'fr', 'de', 'zh'
+    profile_picture_filename = Column(String(255), nullable=True)  # Profile picture filename
 
     def to_dict(self):
         return {
@@ -33,7 +34,8 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'created_by': self.created_by,
             'csv_delimiter': self.csv_delimiter,
-            'language': self.language
+            'language': self.language,
+            'profile_picture_url': f'/api/v1/users/{self.id}/profile-picture' if self.profile_picture_filename else None
         }
 
 

@@ -2,12 +2,17 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../components/AuthContext';
 import { useI18n } from '../components/i18nContext';
 import { useTranslation } from 'react-i18next';
+import { useAppSettings } from '../components/AppSettingsContext';
+import { useToast } from '../components/Toast';
+import { Upload, X, Loader2 } from 'lucide-react';
 
 function Settings() {
-  const { authFetch } = useAuth();
+  const { authFetch, user, canPerform } = useAuth();
   const { changeLanguage, currentLanguage } = useI18n();
   const { t: tCommon } = useTranslation('common');
   const { t: tPages } = useTranslation('pages');
+  const { companyName, logoUrl, refreshSettings } = useAppSettings();
+  const toast = useToast();
   const [networks, setNetworks] = useState([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
@@ -26,6 +31,10 @@ function Settings() {
   const [language, setLanguage] = useState('en')
   const [savingLanguage, setSavingLanguage] = useState(false)
   const [languageMessage, setLanguageMessage] = useState({ text: '', type: '' })
+  const [brandingCompanyName, setBrandingCompanyName] = useState(companyName)
+  const [brandingLogoPreview, setBrandingLogoPreview] = useState(logoUrl)
+  const [savingBranding, setSavingBranding] = useState(false)
+  const [brandingMessage, setBrandingMessage] = useState({ text: '', type: '' })
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -284,6 +293,104 @@ function Settings() {
       setSavingLanguage(false)
     }
   }
+
+  const saveCompanyName = async () => {
+    setSavingBranding(true)
+    setBrandingMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/app-settings', {
+        method: 'PUT',
+        body: JSON.stringify({ company_name: brandingCompanyName })
+      })
+
+      if (response.ok) {
+        setBrandingMessage({ text: tPages('settings.branding_saved'), type: 'success' })
+        await refreshSettings()
+      } else {
+        const data = await response.json()
+        setBrandingMessage({ text: data.error || tPages('settings.branding_save_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setBrandingMessage({ text: 'Error saving company name: ' + error.message, type: 'error' })
+    } finally {
+      setSavingBranding(false)
+    }
+  }
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size
+    if (file.size > 2 * 1024 * 1024) {
+      setBrandingMessage({ text: tPages('settings.branding_upload_failed') + ' - File too large (max 2 MB)', type: 'error' })
+      return
+    }
+
+    setSavingBranding(true)
+    setBrandingMessage({ text: '', type: '' })
+
+    try {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const response = await authFetch('/api/v1/app-settings/logo', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (response.ok) {
+        setBrandingMessage({ text: tPages('settings.branding_logo_uploaded'), type: 'success' })
+        await refreshSettings()
+        // Show preview of new logo
+        const fileReader = new FileReader()
+        fileReader.onload = (event) => {
+          setBrandingLogoPreview(event.target?.result)
+        }
+        fileReader.readAsDataURL(file)
+      } else {
+        const data = await response.json()
+        setBrandingMessage({ text: data.error || tPages('settings.branding_upload_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setBrandingMessage({ text: 'Error uploading logo: ' + error.message, type: 'error' })
+    } finally {
+      setSavingBranding(false)
+      // Reset file input
+      e.target.value = ''
+    }
+  }
+
+  const deleteLogo = async () => {
+    setSavingBranding(true)
+    setBrandingMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/app-settings/logo', {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setBrandingMessage({ text: tPages('settings.branding_logo_removed'), type: 'success' })
+        setBrandingLogoPreview(null)
+        await refreshSettings()
+      } else {
+        const data = await response.json()
+        setBrandingMessage({ text: data.error || tPages('settings.branding_remove_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setBrandingMessage({ text: 'Error removing logo: ' + error.message, type: 'error' })
+    } finally {
+      setSavingBranding(false)
+    }
+  }
+
+  useEffect(() => {
+    // Sync branding state with context
+    setBrandingCompanyName(companyName)
+    setBrandingLogoPreview(logoUrl)
+  }, [companyName, logoUrl])
 
   useEffect(() => {
     // Auto-scan on component mount
@@ -564,6 +671,105 @@ function Settings() {
             </div>
           </div>
         </div>
+
+        {/* App Branding Section - Admin Only */}
+        {canPerform('system_settings') && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">{tPages('settings.branding_title')}</h2>
+
+            {/* Messages Display */}
+            {brandingMessage.text && (
+              <div className={`mb-4 p-3 rounded ${
+                brandingMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {brandingMessage.text}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {/* Company Name Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {tPages('settings.branding_company_name')}
+                </label>
+                <p className="text-sm text-gray-600 mb-3">
+                  {tPages('settings.branding_company_help')}
+                </p>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={brandingCompanyName}
+                    onChange={(e) => setBrandingCompanyName(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter company name"
+                  />
+                  <button
+                    onClick={saveCompanyName}
+                    disabled={savingBranding || brandingCompanyName === companyName}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingBranding ? <Loader2 size={16} className="animate-spin" /> : tPages('settings.branding_save')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Logo Upload Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {tPages('settings.branding_logo')}
+                </label>
+                <p className="text-sm text-gray-600 mb-3">
+                  {tPages('settings.branding_logo_help')}
+                </p>
+
+                <div className="flex gap-6">
+                  {/* Preview */}
+                  <div className="flex-1">
+                    {brandingLogoPreview ? (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center bg-gray-50 h-40">
+                        <img
+                          src={brandingLogoPreview}
+                          alt="Logo preview"
+                          className="max-h-32 max-w-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center bg-gray-50 h-40 text-gray-400">
+                        No logo uploaded
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload & Delete Buttons */}
+                  <div className="flex flex-col gap-3 justify-center">
+                    <label className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                      <Upload size={16} />
+                      <span>{tPages('settings.branding_upload_logo')}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        disabled={savingBranding}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {brandingLogoPreview && (
+                      <button
+                        onClick={deleteLogo}
+                        disabled={savingBranding}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <X size={16} />
+                        <span>{tPages('settings.branding_remove_logo')}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

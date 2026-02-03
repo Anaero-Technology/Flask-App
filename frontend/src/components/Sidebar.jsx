@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useTranslation } from 'react-i18next';
 import logo from '../assets/logo.png';
 import { useTheme } from './ThemeContext';
+import { useAppSettings } from './AppSettingsContext';
+import { useToast } from './Toast';
 import {
   LayoutDashboard,
   FlaskConical,
@@ -35,11 +37,16 @@ const ROLE_CONFIG = {
 };
 
 function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
-  const { user, logout, canPerform } = useAuth();
+  const { user, logout, canPerform, authFetch } = useAuth();
   const { t: tSidebar } = useTranslation('sidebar');
-  const { t: tCommon } = useTranslation('common');
+  const { t: tPages } = useTranslation('pages');
   const { theme, toggleTheme } = useTheme();
+  const { companyName, logoUrl } = useAppSettings();
+  const toast = useToast();
   const isDark = theme === 'dark';
+  const [showProfileUpload, setShowProfileUpload] = useState(false);
+  const [profilePicturePreview, setProfilePicturePreview] = useState(user?.profile_picture_url);
+  const [uploadingProfile, setUploadingProfile] = useState(false);
 
   const menuItems = [
     { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
@@ -63,6 +70,71 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleProfilePictureUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File too large (max 2 MB)');
+      return;
+    }
+
+    setUploadingProfile(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('profile_picture', file);
+
+      const response = await authFetch(`/api/v1/users/${user.id}/profile-picture`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        toast.success('Profile picture uploaded');
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setProfilePicturePreview(event.target?.result);
+        };
+        reader.readAsDataURL(file);
+        setShowProfileUpload(false);
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to upload profile picture');
+      }
+    } catch (error) {
+      toast.error('Error uploading profile picture');
+    } finally {
+      setUploadingProfile(false);
+      e.target.value = '';
+    }
+  };
+
+  const deleteProfilePicture = async () => {
+    setUploadingProfile(true);
+
+    try {
+      const response = await authFetch(`/api/v1/users/${user.id}/profile-picture`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        toast.success('Profile picture removed');
+        setProfilePicturePreview(null);
+        setShowProfileUpload(false);
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to remove profile picture');
+      }
+    } catch (error) {
+      toast.error('Error removing profile picture');
+    } finally {
+      setUploadingProfile(false);
+    }
   };
 
   // Filter items based on permissions
@@ -109,9 +181,9 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg flex items-center justify-center app-logo-wrap">
-            <img src={logo} className="h-7 w-7 object-contain app-logo" alt="Logo" />
+            <img src={logoUrl || logo} className="h-7 w-7 object-contain app-logo" alt="Logo" />
           </div>
-          <span className="text-lg font-bold text-gray-900 dark:text-slate-100 tracking-tight">{tCommon('app_name')}</span>
+          <span className="text-lg font-bold text-gray-900 dark:text-slate-100 tracking-tight">{companyName}</span>
         </div>
         {/* Close button for mobile */}
         <button
@@ -193,9 +265,17 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       {/* Footer with User Info */}
       <div className="p-4 border-t border-gray-200 bg-gray-50 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-full border border-gray-200 dark:border-slate-700 flex items-center justify-center shadow-sm">
-            <User size={20} className="text-gray-500 dark:text-slate-400" />
-          </div>
+          <button
+            onClick={() => setShowProfileUpload(!showProfileUpload)}
+            className="w-10 h-10 bg-white dark:bg-slate-800 rounded-full border border-gray-200 dark:border-slate-700 flex items-center justify-center shadow-sm hover:border-blue-400 hover:shadow-md transition-all flex-shrink-0 overflow-hidden"
+            title="Click to upload profile picture"
+          >
+            {profilePicturePreview ? (
+              <img src={profilePicturePreview} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <User size={20} className="text-gray-500 dark:text-slate-400" />
+            )}
+          </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">
@@ -213,6 +293,38 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
             <LogOut size={18} />
           </button>
         </div>
+
+        {/* Profile Picture Upload Modal */}
+        {showProfileUpload && (
+          <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 space-y-2">
+            <p className="text-xs text-gray-600 dark:text-slate-400 mb-2">{tSidebar('upload_profile_picture')}</p>
+            <label className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 cursor-pointer transition-colors w-full">
+              <span>{tSidebar('choose_image')}</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePictureUpload}
+                disabled={uploadingProfile}
+                className="hidden"
+              />
+            </label>
+            {profilePicturePreview && (
+              <button
+                onClick={deleteProfilePicture}
+                disabled={uploadingProfile}
+                className="w-full px-3 py-2 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors"
+              >
+                {tSidebar('remove_picture')}
+              </button>
+            )}
+            <button
+              onClick={() => setShowProfileUpload(false)}
+              className="w-full px-3 py-2 bg-gray-300 text-gray-900 text-xs rounded-lg hover:bg-gray-400 transition-colors dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+            >
+              {tSidebar('close')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

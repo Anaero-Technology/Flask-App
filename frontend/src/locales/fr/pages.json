@@ -39,7 +39,21 @@
     "clearing": "Effacement...",
     "download_all_serial": "Télécharger tous les messages série reçus des appareils",
     "delimiter_saved": "Préférence de délimiteur CSV enregistrée",
-    "language_saved": "Préférence de langue enregistrée"
+    "language_saved": "Préférence de langue enregistrée",
+    "branding_title": "Marque Applicative",
+    "branding_company_name": "Nom de l'Entreprise",
+    "branding_company_help": "Ce nom apparaît dans la barre latérale et sur la page de connexion",
+    "branding_logo": "Logo",
+    "branding_logo_help": "Téléchargez une image de logo (PNG, JPG, GIF, WebP — max 2 MB)",
+    "branding_upload_logo": "Télécharger Logo",
+    "branding_remove_logo": "Supprimer Logo",
+    "branding_save": "Enregistrer",
+    "branding_saved": "Nom de l'entreprise enregistré",
+    "branding_logo_uploaded": "Logo téléchargé avec succès",
+    "branding_logo_removed": "Logo supprimé",
+    "branding_save_failed": "Échec de l'enregistrement des paramètres de marque",
+    "branding_upload_failed": "Échec du téléchargement du logo",
+    "branding_remove_failed": "Échec de la suppression du logo"
   },
   "login": {
     "title": "Connexion",

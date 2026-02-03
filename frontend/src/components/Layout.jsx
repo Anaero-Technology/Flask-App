@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
+import { useAppSettings } from './AppSettingsContext';
 
 const Layout = ({ children, currentView, onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { companyName } = useAppSettings();
 
   const handleNavigate = (view) => {
     onNavigate(view);
@@ -21,7 +23,7 @@ const Layout = ({ children, currentView, onNavigate }) => {
         >
           <Menu size={24} className="text-gray-600 dark:text-slate-300" />
         </button>
-        <span className="ml-3 font-semibold text-gray-900 dark:text-slate-100">Anaero Technology</span>
+        <span className="ml-3 font-semibold text-gray-900 dark:text-slate-100">{companyName}</span>
       </div>
 
       {/* Overlay for mobile */}

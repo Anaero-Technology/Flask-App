@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../components/AuthContext';
+import { useAppSettings } from '../components/AppSettingsContext';
 import { useTranslation } from 'react-i18next';
 import { LogIn, AlertCircle, Loader2 } from 'lucide-react';
 import logo from '../assets/logo.png';
 
 function Login() {
     const { login, error, clearError } = useAuth();
-    const { t: tCommon } = useTranslation('common');
+    const { companyName, logoUrl } = useAppSettings();
     const { t: tPages } = useTranslation('pages');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -40,9 +41,9 @@ function Login() {
                 {/* Logo and Title */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
-                        <img src={logo} className="h-10 w-10 object-contain" alt="Logo" />
+                        <img src={logoUrl || logo} className="h-10 w-10 object-contain" alt="Logo" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900">{tCommon('app_name')}</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">{companyName}</h1>
                     <p className="text-gray-500 mt-1">Sign in to your account</p>
                 </div>
 
