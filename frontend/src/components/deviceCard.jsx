@@ -282,11 +282,11 @@ function DeviceCard(props) {
             <div className={`relative bg-white rounded-xl shadow-sm border transition-all hover:shadow-md group ${isCompact ? 'p-4' : 'p-6'} ${showStatusBorder ? 'border-transparent' : 'border-gray-200'}`}>
                 <div className={`flex ${isCompact ? 'flex-row items-center gap-4' : 'flex-col sm:flex-row gap-6 items-start'}`}>
                 {/* Image Container */}
-                <div className={`${isCompact ? 'w-16 h-16' : 'w-full sm:w-32 h-32'} bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0`}>
+                <div className={`${isCompact ? 'w-16 h-16' : 'w-full sm:w-32 h-32'} bg-gray-50 rounded-lg flex items-center justify-center p-2 shrink-0 device-card-image-wrap`}>
                     <img
                         src={props.image}
                         alt={props.title}
-                        className="max-w-full max-h-full object-contain mix-blend-multiply"
+                        className="max-w-full max-h-full object-contain mix-blend-multiply device-card-image"
                     />
                 </div>
 

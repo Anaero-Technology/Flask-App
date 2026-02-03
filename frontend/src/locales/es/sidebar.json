@@ -14,5 +14,8 @@
   "settings": "Configuración",
   "user_management": "Gestión de Usuarios",
   "create_sample": "Crear Muestra",
-  "logout": "Cerrar Sesión"
+  "logout": "Cerrar Sesión",
+  "appearance": "Apariencia",
+  "light_mode": "Modo claro",
+  "dark_mode": "Modo oscuro"
 }

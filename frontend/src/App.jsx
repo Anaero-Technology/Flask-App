@@ -6,6 +6,7 @@ import { ToastProvider } from './components/Toast'
 import { ChimeraProvider } from './components/ChimeraContext'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { I18nProvider } from './components/i18nContext'
+import { ThemeProvider } from './components/ThemeContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -44,8 +45,8 @@ function AppContent() {
   // Show loading spinner while checking auth
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-300" />
       </div>
     )
   }
@@ -98,13 +99,15 @@ function AppContent() {
 function App() {
   return (
     <I18nextProvider i18n={i18n}>
-      <ToastProvider>
-        <AuthProvider>
-          <I18nProvider>
-            <AppContent />
-          </I18nProvider>
-        </AuthProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <I18nProvider>
+              <AppContent />
+            </I18nProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </I18nextProvider>
   )
 }

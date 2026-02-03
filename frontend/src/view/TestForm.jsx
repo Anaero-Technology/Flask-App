@@ -471,7 +471,7 @@ function TestForm() {
                             <Server size={16} className="text-gray-500" />
                             <h2 className="font-semibold text-gray-900 text-sm">{tPages('test_form.select_devices')}</h2>
                         </div>
-                        <span className="text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                        <span className="text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full dark:bg-blue-500/20 dark:text-blue-200 dark:border dark:border-blue-400/40">
                             {selectedDevices.length} {tPages('test_form.selected')}
                         </span>
                     </div>
@@ -490,10 +490,10 @@ function TestForm() {
                                                     relative rounded-lg border transition-all duration-200 p-3 cursor-pointer
                                                     flex flex-col gap-2 group hover:shadow-sm
                                                     ${isBusy
-                                                    ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'
+                                                    ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed dark:bg-slate-900/60 dark:border-slate-800 dark:opacity-70'
                                                     : isSelected
-                                                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500'
-                                                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-500/15 dark:border-blue-400 dark:ring-blue-400/60'
+                                                        : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-blue-400/50'
                                                 }
                                                 `}
                                         >
@@ -502,15 +502,15 @@ function TestForm() {
                                                     <div className={`
                                                             p-1.5 rounded-md transition-colors
                                                             ${isBusy
-                                                            ? 'bg-gray-200 text-gray-500'
+                                                            ? 'bg-gray-200 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
                                                             : isSelected
-                                                                ? 'bg-blue-100 text-blue-600'
-                                                                : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-500'
+                                                                ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200'
+                                                                : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-500 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-blue-500/10 dark:group-hover:text-blue-200'
                                                         }
                                                         `}>
                                                         {device.device_type === 'chimera' ? <Server size={16} /> : <Beaker size={16} />}
                                                     </div>
-                                                    <span className={`font-medium text-sm truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                                    <span className={`font-medium text-sm truncate ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-slate-100'}`}>
                                                         {device.name}
                                                     </span>
                                                 </div>

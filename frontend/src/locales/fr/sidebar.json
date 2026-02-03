@@ -14,5 +14,8 @@
   "settings": "Paramètres",
   "user_management": "Gestion des Utilisateurs",
   "create_sample": "Créer un Échantillon",
-  "logout": "Déconnexion"
+  "logout": "Déconnexion",
+  "appearance": "Apparence",
+  "light_mode": "Mode clair",
+  "dark_mode": "Mode sombre"
 }

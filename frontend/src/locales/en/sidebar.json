@@ -14,5 +14,8 @@
   "settings": "Settings",
   "user_management": "User Management",
   "create_sample": "Create Sample",
-  "logout": "Logout"
+  "logout": "Logout",
+  "appearance": "Appearance",
+  "light_mode": "Light mode",
+  "dark_mode": "Dark mode"
 }

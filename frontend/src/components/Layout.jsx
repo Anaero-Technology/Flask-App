@@ -11,17 +11,17 @@ const Layout = ({ children, currentView, onNavigate }) => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
+    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 font-sans">
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center px-4 z-40">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 dark:bg-slate-900 dark:border-slate-800 flex items-center px-4 z-40">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
           aria-label="Open menu"
         >
-          <Menu size={24} className="text-gray-600" />
+          <Menu size={24} className="text-gray-600 dark:text-slate-300" />
         </button>
-        <span className="ml-3 font-semibold text-gray-900">Anaero Technology</span>
+        <span className="ml-3 font-semibold text-gray-900 dark:text-slate-100">Anaero Technology</span>
       </div>
 
       {/* Overlay for mobile */}
@@ -41,7 +41,7 @@ const Layout = ({ children, currentView, onNavigate }) => {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 lg:ml-64 overflow-y-auto p-4 pt-16 lg:pt-4">
+      <main className="flex-1 lg:ml-64 overflow-y-auto p-4 pt-16 lg:pt-4 text-gray-900 dark:text-slate-100">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
