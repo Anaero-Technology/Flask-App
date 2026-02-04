@@ -173,6 +173,7 @@ export const AuthProvider = ({ children }) => {
             // Admin only
             'manage_users': ['admin'],
             'system_settings': ['admin'],
+            'manage_database': ['admin'],
         };
 
         const allowedRoles = permissions[action];
