@@ -24,9 +24,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
-  Eye,
-  Sun,
-  Moon
+  Eye
 } from 'lucide-react';
 
 const ROLE_CONFIG = {
@@ -180,9 +178,20 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       {/* Header */}
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg flex items-center justify-center app-logo-wrap">
+          <button
+            onClick={toggleTheme}
+            aria-label={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
+            title={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
+            className={`
+              h-9 w-9 rounded-lg flex items-center justify-center app-logo-wrap cursor-pointer
+              transition-all duration-300 ease-in-out
+              ${isDark
+                ? 'hover:shadow-[0_0_20px_8px_rgba(251,191,36,0.4)] hover:scale-105'
+                : 'hover:shadow-[0_0_20px_8px_rgba(15,23,42,0.3)] hover:scale-105'}
+            `}
+          >
             <img src={logoUrl || logo} className="h-7 w-7 object-contain app-logo" alt="Logo" />
-          </div>
+          </button>
           <span className="text-lg font-bold text-gray-900 dark:text-slate-100 tracking-tight">{companyName}</span>
         </div>
         {/* Close button for mobile */}
@@ -196,45 +205,14 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
       </div>
 
       {/* CTA - Only show if user can create samples */}
-      {canPerform('create_sample') ? (
+      {canPerform('create_sample') && (
         <div className="p-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onNavigate('create-sample')}
-              className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <PlusCircle size={16} />
-              {tSidebar('create_sample')}
-            </button>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
-              title={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700"
-            >
-              {isDark ? (
-                <Sun size={16} className="text-amber-400" />
-              ) : (
-                <Moon size={16} className="text-slate-500" />
-              )}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="px-4 pt-4">
           <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
-            title={isDark ? tSidebar('light_mode') : tSidebar('dark_mode')}
-            className="w-full h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700"
+            onClick={() => onNavigate('create-sample')}
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-medium"
           >
-            {isDark ? (
-              <Sun size={16} className="text-amber-400" />
-            ) : (
-              <Moon size={16} className="text-slate-500" />
-            )}
+            <PlusCircle size={16} />
+            {tSidebar('create_sample')}
           </button>
         </div>
       )}
