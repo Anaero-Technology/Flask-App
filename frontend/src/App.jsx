@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import i18n from './i18n'
 import Layout from './components/Layout'
@@ -26,17 +26,29 @@ function AppContent() {
   const { isAuthenticated, loading, canPerform } = useAuth()
   const [currentView, setCurrentView] = useState('dashboard')
   const [plotParams, setPlotParams] = useState(null)
+  const [viewParams, setViewParams] = useState(null)
 
-  const handleNavigate = (view) => {
+  const handleNavigate = useCallback((view, params = null) => {
     // Check permissions for protected views
     if (view === 'users' && !canPerform('manage_users')) {
       return
     }
     setCurrentView(view)
+    setViewParams(params ?? null)
     if (view !== 'plot') {
       setPlotParams(null)
     }
-  }
+  }, [canPerform])
+
+  useEffect(() => {
+    const handleExternalNavigate = (event) => {
+      const nextView = event?.detail?.view
+      if (!nextView) return
+      handleNavigate(nextView, event?.detail?.params ?? null)
+    }
+    window.addEventListener('app:navigate', handleExternalNavigate)
+    return () => window.removeEventListener('app:navigate', handleExternalNavigate)
+  }, [handleNavigate])
 
   const handleViewPlot = (testId, deviceId, source = 'dashboard') => {
     setPlotParams({ testId, deviceId, source })
@@ -62,7 +74,7 @@ function AppContent() {
       case 'dashboard':
         return <Dashboard onViewPlot={handleViewPlot} />
       case 'create-sample':
-        return <SampleForm />
+        return <SampleForm returnView={viewParams?.returnView} />
       case 'test':
         return <TestForm />
       case 'database':

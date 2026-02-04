@@ -1,6 +1,98 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+
+const sanitizeIntegerInput = (value) => {
+    if (value === '' || value === null || value === undefined) return '';
+    return String(value).replace(/\D/g, '');
+};
+
+const ChimeraChannelCard = React.memo(function ChimeraChannelCard({
+    channelNum,
+    isEnabled,
+    isSelected,
+    settings,
+    recirculationMode,
+    tPages,
+    onToggleService,
+    onOpenTimeChange,
+    onVolumeChange,
+    onSelectMouseDown,
+    onSelectClick
+}) {
+    const baseClass = isEnabled
+        ? 'bg-white border-blue-200 shadow-sm'
+        : 'bg-gray-50 border-gray-100 opacity-70';
+    const selectedClass = isSelected ? 'ring-2 ring-blue-300/60 ring-inset bg-blue-50/40 border-blue-200' : '';
+
+    return (
+        <div
+            className={`
+                flex flex-col gap-2 p-2 rounded border transition-all
+                ${baseClass}
+                ${selectedClass}
+                hover:bg-blue-50/30 hover:border-blue-200/70
+            `}
+            onMouseDown={(event) => onSelectMouseDown(channelNum, event)}
+            onPointerDown={(event) => onSelectMouseDown(channelNum, event)}
+            onClick={(event) => onSelectClick(channelNum, event)}
+        >
+            <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={isEnabled}
+                        onChange={(event) => onToggleService(channelNum, event.target.checked)}
+                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className={`text-xs font-bold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                        CH {channelNum}
+                    </span>
+                </label>
+            </div>
+
+            <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.open')}</span>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    value={isEnabled ? (settings.openTime ?? '') : ''}
+                    onInput={(e) => onOpenTimeChange(channelNum, sanitizeIntegerInput(e.target.value))}
+                    disabled={!isEnabled}
+                    className={`
+                        w-full px-1.5 py-0.5 border rounded text-xs text-right
+                        ${isEnabled
+                            ? 'border-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500'
+                            : 'border-transparent bg-transparent text-gray-300'
+                        }
+                    `}
+                />
+                <span className="text-[10px] text-gray-400">s</span>
+            </div>
+
+            {recirculationMode === 'volume' && (
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.vol')}</span>
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        value={isEnabled ? (settings.volumeThreshold ?? '') : ''}
+                        onInput={(e) => onVolumeChange(channelNum, sanitizeIntegerInput(e.target.value))}
+                        disabled={!isEnabled}
+                        className={`
+                            w-full px-1.5 py-0.5 border rounded text-xs text-right
+                            ${isEnabled
+                                ? 'border-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500'
+                                : 'border-transparent bg-transparent text-gray-300'
+                            }
+                        `}
+                    />
+                    <span className="text-[10px] text-gray-400">mL</span>
+                </div>
+            )}
+        </div>
+    );
+});
 
 function ChimeraTestConfig({
     flushTime,
@@ -20,23 +112,83 @@ function ChimeraTestConfig({
     hasRecirculationSupport = true
 }) {
     const { t: tPages } = useTranslation('pages');
+    const [selectedChannels, setSelectedChannels] = useState([]);
+    const skipChannelClickRef = useRef(false);
 
-    const toggleServiceChannel = (index) => {
+    const isMultiSelectEvent = (event) => (
+        event?.altKey
+        || event?.metaKey
+        || event?.shiftKey
+        || event?.getModifierState?.('Alt')
+        || event?.getModifierState?.('Meta')
+        || event?.getModifierState?.('Shift')
+    );
+
+    const setServiceChannelState = (channelNumbers, enabled) => {
         setServiceSequence(prev => {
             const arr = prev.split('');
-            arr[index] = arr[index] === '1' ? '0' : '1';
+            channelNumbers.forEach(channelNum => {
+                const idx = channelNum - 1;
+                if (idx >= 0 && idx < arr.length) {
+                    arr[idx] = enabled ? '1' : '0';
+                }
+            });
             return arr.join('');
         });
     };
 
+    const toggleServiceChannel = (channelNum, enabled) => {
+        const targets = selectedChannels.length > 1 && selectedChannels.includes(channelNum)
+            ? selectedChannels
+            : [channelNum];
+        setServiceChannelState(targets, enabled);
+    };
+
+    const applyChannelSetting = (channelNum, field, value) => {
+        const targets = selectedChannels.length > 1 && selectedChannels.includes(channelNum)
+            ? selectedChannels
+            : [channelNum];
+        setChannelSettings(prev => {
+            const next = { ...prev };
+            targets.forEach(target => {
+                next[target] = {
+                    ...next[target],
+                    [field]: value
+                };
+            });
+            return next;
+        });
+    };
+
+    const handleSelectMouseDown = (channelNum, event) => {
+        if (!isMultiSelectEvent(event)) return;
+        skipChannelClickRef.current = true;
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedChannels(prev => (
+            prev.includes(channelNum)
+                ? prev.filter(item => item !== channelNum)
+                : [...prev, channelNum]
+        ));
+    };
+
+    const handleSelectClick = (channelNum, event) => {
+        if (skipChannelClickRef.current) {
+            skipChannelClickRef.current = false;
+            return;
+        }
+        if (!isMultiSelectEvent(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedChannels(prev => (
+            prev.includes(channelNum)
+                ? prev.filter(item => item !== channelNum)
+                : [...prev, channelNum]
+        ));
+    };
+
     const updateChannelSetting = (channelNum, field, value) => {
-        setChannelSettings(prev => ({
-            ...prev,
-            [channelNum]: {
-                ...prev[channelNum],
-                [field]: value
-            }
-        }));
+        applyChannelSetting(channelNum, field, value);
     };
 
     return (
@@ -186,74 +338,23 @@ function ChimeraTestConfig({
                                 const channelNum = i + 1;
                                 const isEnabled = serviceSequence[i] === '1';
                                 const settings = channelSettings[channelNum] || {};
+                                const isSelected = selectedChannels.includes(channelNum);
 
                                 return (
-                                    <div
+                                    <ChimeraChannelCard
                                         key={channelNum}
-                                        className={`
-                                            flex flex-col gap-2 p-2 rounded border transition-all
-                                            ${isEnabled
-                                                ? 'bg-white border-blue-200 shadow-sm'
-                                                : 'bg-gray-50 border-gray-100 opacity-70'
-                                            }
-                                        `}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isEnabled}
-                                                    onChange={() => toggleServiceChannel(i)}
-                                                    className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                />
-                                                <span className={`text-xs font-bold ${isEnabled ? 'text-gray-800' : 'text-gray-400'}`}>
-                                                    CH {channelNum}
-                                                </span>
-                                            </label>
-                                        </div>
-
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.open')}</span>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                value={isEnabled ? (settings.openTime || '') : ''}
-                                                onChange={(e) => updateChannelSetting(channelNum, 'openTime', e.target.value)}
-                                                disabled={!isEnabled}
-                                                className={`
-                                                    w-full px-1.5 py-0.5 border rounded text-xs text-right
-                                                    ${isEnabled
-                                                        ? 'border-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500'
-                                                        : 'border-transparent bg-transparent text-gray-300'
-                                                    }
-                                                `}
-                                            />
-                                            <span className="text-[10px] text-gray-400">s</span>
-                                        </div>
-
-                                        {recirculationMode === 'volume' && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="text-[10px] text-gray-400 uppercase tracking-wide w-8">{tPages('chimera_config.vol')}</span>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    step="1"
-                                                    value={isEnabled ? (settings.volumeThreshold || '') : ''}
-                                                    onChange={(e) => updateChannelSetting(channelNum, 'volumeThreshold', e.target.value)}
-                                                    disabled={!isEnabled}
-                                                    className={`
-                                                        w-full px-1.5 py-0.5 border rounded text-xs text-right
-                                                        ${isEnabled
-                                                            ? 'border-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500'
-                                                            : 'border-transparent bg-transparent text-gray-300'
-                                                        }
-                                                    `}
-                                                />
-                                                <span className="text-[10px] text-gray-400">mL</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                        channelNum={channelNum}
+                                        isEnabled={isEnabled}
+                                        isSelected={isSelected}
+                                        settings={settings}
+                                        recirculationMode={recirculationMode}
+                                        tPages={tPages}
+                                        onToggleService={toggleServiceChannel}
+                                        onOpenTimeChange={(num, value) => updateChannelSetting(num, 'openTime', value)}
+                                        onVolumeChange={(num, value) => updateChannelSetting(num, 'volumeThreshold', value)}
+                                        onSelectMouseDown={handleSelectMouseDown}
+                                        onSelectClick={handleSelectClick}
+                                    />
                                 );
                             })}
                         </div>

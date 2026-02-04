@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Save, FlaskConical, Tag, Scale, Atom } from 'lucide-react';
+import { Save, FlaskConical, Tag, Scale, Atom, ArrowLeft } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 
-function SampleForm() {
+function SampleForm({ returnView }) {
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const toast = useToast();
@@ -59,6 +59,11 @@ function SampleForm() {
         }
     };
 
+    const handleBackToTest = () => {
+        if (!returnView) return;
+        window.dispatchEvent(new CustomEvent('app:navigate', { detail: { view: returnView } }));
+    };
+
     // Component moved outside
 
 
@@ -71,11 +76,17 @@ function SampleForm() {
                     <h1 className="text-3xl font-bold text-gray-900">{tPages('sample_form.title')}</h1>
                     <p className="text-gray-500 mt-1">{tPages('sample_form.subtitle')}</p>
                 </div>
-                {/* Visual Indicator only, toggle is below */}
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border ${formData.is_inoculum ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                    }`}>
-                    <FlaskConical size={14} />
-                    {formData.is_inoculum ? tPages('sample_form.inoculum') : tPages('sample_form.substrate')}
+                <div className="flex items-center gap-3">
+                    {returnView && (
+                        <button
+                            type="button"
+                            onClick={handleBackToTest}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
+                        >
+                            <ArrowLeft size={14} />
+                            {tPages('sample_form.back_to_test')}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -158,7 +169,7 @@ function SampleForm() {
                                 <Scale size={18} className="text-gray-400" />
                                 <h2 className="font-semibold">{tPages('sample_form.physical_properties')}</h2>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="grid grid-cols-3 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <Field
                                     label={tPages('sample_form.total_solids')}
                                     name="substrate_percent_ts"
@@ -177,6 +188,15 @@ function SampleForm() {
                                     value={formData.substrate_percent_vs}
                                     onChange={handleChange}
                                 />
+                                <Field
+                                    label={tPages('sample_form.ash_content')}
+                                    name="ash_content"
+                                    type="number"
+                                    step="0.01"
+                                    suffix={tPages('sample_form.g_per_kg')}
+                                    value={formData.ash_content}
+                                    onChange={handleChange}
+                                />
                             </div>
                         </div>
 
@@ -186,7 +206,7 @@ function SampleForm() {
                                 <Atom size={18} className="text-gray-400" />
                                 <h2 className="font-semibold">{tPages('sample_form.chemical_composition')}</h2>
                             </div>
-                            <div className="grid grid-cols-3 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="grid grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <Field
                                     label={tPages('sample_form.carbon')}
                                     name="c_content"
@@ -205,26 +225,17 @@ function SampleForm() {
                                     value={formData.n_content}
                                     onChange={handleChange}
                                 />
-                                <Field
-                                    label={tPages('sample_form.ash_content')}
-                                    name="ash_content"
-                                    type="number"
-                                    step="0.01"
-                                    suffix={tPages('sample_form.g_per_kg')}
-                                    value={formData.ash_content}
-                                    onChange={handleChange}
-                                />
                             </div>
                         </div>
 
                         {/* Description (Filling remaining space) */}
-                        <div className="flex-1 flex flex-col">
+                        <div>
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">{tPages('sample_form.notes_description')}</label>
                             <textarea
                                 name="description"
                                 value={formData.description}
                                 onChange={handleChange}
-                                className="flex-1 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none shadow-sm"
+                                className="h-32 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none shadow-sm"
                                 placeholder={tPages('sample_form.notes_placeholder')}
                             />
                         </div>

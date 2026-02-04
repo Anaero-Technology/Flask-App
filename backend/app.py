@@ -1362,8 +1362,10 @@ def upload_csv_configuration():
         channel_number = 1  # Start from channel 1
         for row_num, row in enumerate(csv_reader, start=1):
             try:
-                # Get sample description (should be a string)
+                # Get channel/sample description (should be a string)
                 sample_description = row.get('Sample description', '').strip()
+                if not sample_description:
+                    sample_description = row.get('Channel number', '').strip()
 
                 # Check if we've reached the "End of data" marker
                 if sample_description == 'End of data':
@@ -1380,6 +1382,17 @@ def upload_csv_configuration():
                 inoculum_weight = float(row['Inoculum mass VS (g)'])
                 substrate_weight = 0 if inoculum_only else float(row['Sample mass VS (g)'])
                 tumbler_volume = float(row['Tumbler volume (ml)'])
+
+                explicit_channel = None
+                for key in ['Channel number', 'Channel Number', 'channel_number', 'channel number']:
+                    if key in row and row[key].strip():
+                        try:
+                            parsed_channel = int(row[key].strip())
+                            if 1 <= parsed_channel <= 15:
+                                explicit_channel = parsed_channel
+                                break
+                        except ValueError:
+                            pass
 
                 # Parse optional Chimera channel column
                 chimera_channel = None
@@ -1400,8 +1413,9 @@ def upload_csv_configuration():
 
                 # Only include channels that are in service
                 if in_service:
+                    effective_channel = explicit_channel if explicit_channel is not None else channel_number
                     configurations.append({
-                        'channel_number': channel_number,
+                        'channel_number': effective_channel,
                         'inoculum_weight_grams': inoculum_weight,
                         'substrate_weight_grams': substrate_weight,
                         'tumbler_volume': tumbler_volume,
