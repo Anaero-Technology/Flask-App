@@ -27,10 +27,7 @@ function TestForm() {
     const [inoculums, setInoculums] = useState([]);
     const [configurations, setConfigurations] = useState({});
     const [loading, setLoading] = useState(false);
-    const [selectedChannel, setSelectedChannel] = useState(null);
-    const [showChannelConfig, setShowChannelConfig] = useState(false);
     const [selectedDevices, setSelectedDevices] = useState([]);
-    const [chimeraChannelError, setChimeraChannelError] = useState('');
     const [globalDeviceModel, setGlobalDeviceModel] = useState(null); // 'chimera' or 'chimera-max'
 
     // Global Chimera recirculation settings (applies to all chimera channels)
@@ -114,11 +111,6 @@ function TestForm() {
     const toggleDeviceSelection = (deviceId) => {
         setSelectedDevices(prev => {
             if (prev.includes(deviceId)) {
-                // If deselecting a device, clear the selected channel if it belongs to this device
-                if (selectedChannel && selectedChannel.deviceId === deviceId) {
-                    setSelectedChannel(null);
-                    setShowChannelConfig(false);
-                }
                 return prev.filter(id => id !== deviceId);
             } else {
                 // Check if device is busy before adding
@@ -185,28 +177,12 @@ function TestForm() {
         });
     };
 
-    const handleChannelClick = (deviceId, channelNumber) => {
-        if (selectedChannel && selectedChannel.deviceId === deviceId && selectedChannel.channelNumber === channelNumber) {
-            // Clicking the same channel - deselect
-            setSelectedChannel(null);
-            setShowChannelConfig(false);
-        } else {
-            // Select new channel
-            setSelectedChannel({ deviceId, channelNumber });
-            setShowChannelConfig(true);
-        }
+    const handleSaveChannelConfig = (deviceId, channelNumber, config) => {
+        setChannelConfig(deviceId, channelNumber, config);
     };
 
-    const handleSaveChannelConfig = (config) => {
-        if (selectedChannel) {
-            setChannelConfig(selectedChannel.deviceId, selectedChannel.channelNumber, config);
-        }
-    };
-
-    const handleClearChannelConfig = () => {
-        if (selectedChannel) {
-            clearChannelConfig(selectedChannel.deviceId, selectedChannel.channelNumber);
-        }
+    const handleClearChannelConfig = (deviceId, channelNumber) => {
+        clearChannelConfig(deviceId, channelNumber);
     };
 
     // Helper to check if any Chimera is selected
@@ -583,15 +559,10 @@ function TestForm() {
                                                 configurations={configurations}
                                                 samples={samples}
                                                 inoculums={inoculums}
-                                                selectedChannel={selectedChannel}
-                                                onChannelClick={handleChannelClick}
                                                 onConfigurationChange={handleConfigurationChange}
-                                                showChannelConfig={showChannelConfig}
                                                 onSaveChannelConfig={handleSaveChannelConfig}
                                                 onClearChannelConfig={handleClearChannelConfig}
                                                 showChimeraChannel={shouldShowChimeraChannel()}
-                                                chimeraChannelError={chimeraChannelError}
-                                                setChimeraChannelError={setChimeraChannelError}
                                             />
                                         </div>
                                     ))}
