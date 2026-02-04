@@ -249,7 +249,22 @@
     "elapsed_time_minutes": "Verstrichene Zeit (Minuten)",
     "concentration_percent": "Konzentration (%)",
     "concentration_ppm": "Konzentration (ppm)",
-    "concentration_mixed": "Konzentration (% / ppm)"
+    "concentration_mixed": "Konzentration (% / ppm)",
+    "outliers_label": "Outliers",
+    "label_outlier": "Mark as Outlier",
+    "outlier_no_id": "Selected points do not have row IDs. Cannot label as outliers.",
+    "outliers_count": "{{count}} outlier(s) labeled",
+    "outliers_showing": "Showing",
+    "outliers_hidden": "Hidden",
+    "delete_outliers": "Delete Outliers",
+    "delete_outliers_title": "Delete Outliers Permanently",
+    "delete_outliers_confirm": "This will permanently delete {{count}} outlier point(s) from the database. This action cannot be undone.",
+    "delete_outliers_confirm_btn": "Delete",
+    "outliers_deleted": "Ausreißer erfolgreich gelöscht",
+    "outliers_delete_failed": "Fehler beim Löschen der Ausreißer",
+    "unlabel_outliers": "Markierung aufheben",
+    "outliers_unlabeled": "Ausreißer-Markierungen entfernt",
+    "cancel": "Abbrechen"
   },
   "user_management": {
     "title": "Benutzerverwaltung",

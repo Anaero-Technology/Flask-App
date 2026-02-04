@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from database.models import *
 from sqlalchemy import and_
+from utils.auth import require_minimum_role, log_audit, get_current_user
 
 data_bp = Blueprint('data', __name__)
 
@@ -141,6 +142,7 @@ def get_device_data(test_id, device_id):
         # Process raw/aggregated results
         for row in results:
             item = {}
+            item['id'] = row.id  # Include row ID for outlier labeling on frontend
             # Common fields
             item['timestamp'] = row.timestamp
             item['channel_number'] = row.channel_number
@@ -397,6 +399,223 @@ def get_recent_events():
         return jsonify(events_list[:limit])
 
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
+@data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/data', methods=['DELETE'])
+@jwt_required()
+@require_minimum_role('operator')
+def delete_data_points(test_id, device_id):
+    """Delete specific data points (outliers) from the database"""
+    try:
+        data = request.get_json()
+        ids = data.get('ids', [])
+        data_type = data.get('data_type')  # 'raw' or 'processed'
+
+        if not ids or not isinstance(ids, list):
+            return jsonify({"error": "ids must be a non-empty array"}), 400
+
+        # Verify device exists
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        # Determine which model to delete from (same logic as GET endpoint)
+        model = None
+
+        if device.device_type in ['black-box', 'black_box']:
+            if data_type == 'raw':
+                model = BlackboxRawData
+            else:
+                model = BlackBoxEventLogData
+        elif device.device_type in ['chimera', 'chimera-max']:
+            model = ChimeraRawData
+        else:
+            return jsonify({"error": f"Unsupported device type: {device.device_type}"}), 400
+
+        if not model:
+            return jsonify({"error": "Could not determine data model"}), 500
+
+        # Safety: only delete rows that belong to this test AND this device
+        # This prevents a crafted request from deleting rows in another test
+        deleted = model.query.filter(
+            model.id.in_(ids),
+            model.test_id == test_id,
+            model.device_id == device_id
+        ).delete(synchronize_session='fetch')
+
+        db.session.commit()
+
+        # Log to audit trail
+        user = get_current_user()
+        log_audit(
+            user_id=user.id if user else None,
+            action='delete_data_points',
+            target_type='data',
+            target_id=test_id,
+            details=f"Deleted {deleted} data points from {model.__tablename__} (test {test_id}, device {device_id})"
+        )
+
+        return jsonify({
+            "success": True,
+            "deleted_count": deleted
+        }), 200
+
+    except Exception as e:
+        print(f"ERROR in delete_data_points: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
+# ==================== OUTLIER ENDPOINTS ====================
+
+@data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/outliers', methods=['GET'])
+@jwt_required()
+def get_outliers(test_id, device_id):
+    """Get all outlier IDs for a specific test/device"""
+    try:
+        data_type = request.args.get('data_type', 'processed')  # 'raw' or 'processed'
+
+        outliers = Outlier.query.filter_by(
+            test_id=test_id,
+            device_id=device_id,
+            data_type=data_type
+        ).all()
+
+        return jsonify({
+            "outliers": [
+                {
+                    "id": o.id,
+                    "data_point_id": o.data_point_id,
+                    "labeled_by": o.labeled_by,
+                    "labeled_at": o.labeled_at.isoformat() if o.labeled_at else None
+                }
+                for o in outliers
+            ]
+        }), 200
+
+    except Exception as e:
+        print(f"ERROR in get_outliers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/outliers', methods=['POST'])
+@jwt_required()
+@require_minimum_role('operator')
+def label_outliers(test_id, device_id):
+    """Label specific data points as outliers"""
+    try:
+        data = request.get_json()
+        ids = data.get('ids', [])
+        data_type = data.get('data_type', 'processed')  # 'raw' or 'processed'
+
+        if not ids or not isinstance(ids, list):
+            return jsonify({"error": "ids must be a non-empty array"}), 400
+
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "User not found"}), 401
+
+        # Verify device exists
+        device = Device.query.get(device_id)
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        added_count = 0
+        for data_point_id in ids:
+            # Check if already labeled
+            existing = Outlier.query.filter_by(
+                test_id=test_id,
+                device_id=device_id,
+                data_point_id=data_point_id,
+                data_type=data_type
+            ).first()
+
+            if not existing:
+                outlier = Outlier(
+                    test_id=test_id,
+                    device_id=device_id,
+                    data_point_id=data_point_id,
+                    data_type=data_type,
+                    labeled_by=user.id
+                )
+                db.session.add(outlier)
+                added_count += 1
+
+        db.session.commit()
+
+        # Log to audit trail
+        log_audit(
+            user_id=user.id,
+            action='label_outliers',
+            target_type='data',
+            target_id=test_id,
+            details=f"Labeled {added_count} points as outliers (test {test_id}, device {device_id}, type {data_type})"
+        )
+
+        return jsonify({
+            "success": True,
+            "added_count": added_count
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR in label_outliers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.session.close()
+
+
+@data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/outliers', methods=['DELETE'])
+@jwt_required()
+@require_minimum_role('operator')
+def remove_outlier_labels(test_id, device_id):
+    """Remove outlier labels (does NOT delete the actual data points)"""
+    try:
+        data = request.get_json()
+        ids = data.get('ids', [])  # data_point_ids to unlabel
+        data_type = data.get('data_type', 'processed')
+
+        user = get_current_user()
+
+        if ids and isinstance(ids, list):
+            # Remove specific outlier labels
+            deleted = Outlier.query.filter(
+                Outlier.test_id == test_id,
+                Outlier.device_id == device_id,
+                Outlier.data_point_id.in_(ids),
+                Outlier.data_type == data_type
+            ).delete(synchronize_session='fetch')
+        else:
+            # Remove all outlier labels for this test/device/type
+            deleted = Outlier.query.filter_by(
+                test_id=test_id,
+                device_id=device_id,
+                data_type=data_type
+            ).delete(synchronize_session='fetch')
+
+        db.session.commit()
+
+        # Log to audit trail
+        log_audit(
+            user_id=user.id if user else None,
+            action='remove_outlier_labels',
+            target_type='data',
+            target_id=test_id,
+            details=f"Removed {deleted} outlier labels (test {test_id}, device {device_id}, type {data_type})"
+        )
+
+        return jsonify({
+            "success": True,
+            "removed_count": deleted
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR in remove_outlier_labels: {str(e)}")
         return jsonify({"error": str(e)}), 500
     finally:
         db.session.close()

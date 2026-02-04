@@ -9,10 +9,11 @@ import {
 } from '@tanstack/react-table';
 import Plotly from 'react-plotly.js';
 import { useToast } from '../components/Toast';
-import { Settings, X, Maximize2, Minimize2, Info } from 'lucide-react';
+import { Settings, X, Maximize2, Minimize2, Info, AlertTriangle, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../components/ThemeContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // Format gas names with proper subscripts (for Plotly - uses HTML)
 const formatGasName = (name) => {
@@ -30,11 +31,13 @@ const formatGasNameUnicode = (name) => {
 };
 
 function Plot({ initialParams, onNavigate }) {
-    const { authFetch, canPerform } = useAuth();
+    const { authFetch, canPerform } = useAuth(); 
     const toast = useToast();
     const { t: tPages } = useTranslation('pages');
     const { theme } = useTheme();
     const isDark = theme === 'dark';
+
+    // All state declarations first
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [globalFilter, setGlobalFilter] = useState('');
@@ -48,15 +51,122 @@ function Plot({ initialParams, onNavigate }) {
     const [fetchingData, setFetchingData] = useState(false);
     const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
     const [fullscreenGraph, setFullscreenGraph] = useState(false);
-
-    // New State for Enhanced Plotting
     const [aggregation, setAggregation] = useState('none'); // 'daily', 'hourly', 'none'
     const [yAxisMetric, setYAxisMetric] = useState('temperature');
     const [graphType, setGraphType] = useState('scatter'); // 'scatter', 'line', 'bar'
+    const [selectedPoints, setSelectedPoints] = useState([]);
+    const [outlierIds, setOutlierIds] = useState(new Set());  // Set of DB row IDs currently labeled as outliers
+    const [showOutliers, setShowOutliers] = useState(true);   // toggle: true = outliers visible as X markers; false = hidden entirely
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false); // gates the ConfirmDialog
+    const [xAxisMode, setXAxisMode] = useState('timestamp'); // 'timestamp', 'day', 'hour', 'minute'
+    const [groupingMode, setGroupingMode] = useState('gas'); // 'gas', 'channel'
+    const [selectedChannel, setSelectedChannel] = useState(null);
+    const [error, setError] = useState(null);
+    const [selectedGas, setSelectedGas] = useState(null);
+    const [unitFilter, setUnitFilter] = useState('all'); // 'all', 'ppm', 'percent'
 
+    // All refs next
+    const plotDivRef = useRef(null);
+
+    // Define fetch functions as useCallbacks BEFORE useEffects that use them
+    const fetchTests = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await authFetch('/api/v1/tests');
+            if (response.ok) {
+                const result = await response.json();
+                const sortedData = result.sort((a, b) => b.id - a.id);
+                setData(sortedData);
+            }
+        } catch (error) {
+            console.error('Error fetching tests:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [authFetch]);
+
+    const fetchTestDetails = useCallback(async (testId, targetDeviceId = null) => {
+        setError(null);
+        try {
+            const response = await authFetch(`/api/v1/tests/${testId}`);
+            if (response.ok) {
+                const details = await response.json();
+                setTestDetails(details);
+            }
+
+            const devicesResponse = await authFetch(`/api/v1/tests/${testId}/devices`);
+            if (devicesResponse.ok) {
+                const testDevices = await devicesResponse.json();
+                setDevices(testDevices);
+
+                if (testDevices.length > 0) {
+                    const deviceIdToSelect = targetDeviceId || testDevices[0].id;
+                    setSelectedDeviceId(deviceIdToSelect);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching test details:', error);
+        }
+    }, [authFetch]);
+
+    const fetchPlotData = useCallback(async () => {
+        if (!selectedTest || !selectedDeviceId) return;
+
+        setFetchingData(true);
+
+        try {
+            // Determine data type based on aggregation and device
+            const device = devices.find(d => d.id === selectedDeviceId);
+            let type = 'processed';
+            let aggParam = aggregation;
+
+            if (device && device.device_type.includes('chimera')) {
+                type = 'raw';
+                // Allow aggregation for Chimera
+                aggParam = aggregation === 'none' ? 'raw' : aggregation;
+            } else {
+                // BlackBox
+                // Default to 'processed' (Event Log), backend will fallback to 'raw' if empty
+                type = 'processed';
+
+                // Aggregation logic
+                if (aggregation === 'none') {
+                    aggParam = 'raw';
+                } else {
+                    aggParam = aggregation;
+                }
+            }
+
+            const url = `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/data?type=${type}&aggregation=${aggParam}`;
+
+            const response = await authFetch(url);
+            if (response.ok) {
+                const result = await response.json();
+                setPlotData(result);
+                setError(null);
+            } else {
+                const err = await response.json();
+                console.error('Failed to fetch plot data', err);
+                setPlotData(null);
+                if (err.code === 'NO_EVENT_LOG_DATA' || err.code === 'NO_CHANNEL_CONFIG') {
+                    setError(err.error);
+                } else {
+                    setError('Failed to load data');
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching plot data:', error);
+            setPlotData(null);
+        } finally {
+            setFetchingData(false);
+        }
+    }, [selectedTest, selectedDeviceId, devices, aggregation, authFetch]);
+
+    // Fetch tests on component mount
     useEffect(() => {
         fetchTests();
-    }, []);
+    }, [fetchTests]);
 
     // Handle initial params
     useEffect(() => {
@@ -66,18 +176,18 @@ function Plot({ initialParams, onNavigate }) {
                 .then(test => {
                     setSelectedTest(test);
                     setShowPlotView(true);
-                    // We'll set the device ID after devices are loaded in fetchTestDetails
                 })
                 .catch(err => console.error("Failed to load initial test", err));
         }
-    }, [initialParams]);
+    }, [initialParams, authFetch]);
 
     useEffect(() => {
         if (selectedTest) {
             fetchTestDetails(selectedTest.id, initialParams?.deviceId);
         }
-    }, [selectedTest]);
+    }, [selectedTest, initialParams?.deviceId, fetchTestDetails]);
 
+    // Fetch plot data when test/device/aggregation changes
     useEffect(() => {
         if (selectedTest && selectedDeviceId) {
             // Reset aggregation when device changes if needed
@@ -86,32 +196,46 @@ function Plot({ initialParams, onNavigate }) {
                 if (device.device_type.includes('chimera')) {
                     // Chimera now supports aggregation, so no need to force reset unless invalid
                     if (!['daily', 'hourly', 'minute', 'none'].includes(aggregation)) setAggregation('none');
-                } else {
-                    // BlackBox - default to daily if switching from chimera, or keep current if valid
-                    // If current is 'none', it's valid for BlackBox too now
                 }
             }
             fetchPlotData();
         } else {
             setPlotData(null);
         }
-    }, [selectedTest, selectedDeviceId, aggregation]);
+    }, [selectedTest, selectedDeviceId, aggregation, devices, fetchPlotData]);
 
-    // Reset Y-Axis when aggregation changes
-    useEffect(() => {
-        const options = getMetricOptions();
-        if (!options.find(o => o.value === yAxisMetric)) {
-            setYAxisMetric(options[0]?.value || 'temperature');
+    // Helper to determine data type based on device
+    const getDataType = useCallback(() => {
+        const device = devices.find(d => d.id === selectedDeviceId);
+        return device?.device_type.includes('chimera') ? 'raw' : 'processed';
+    }, [devices, selectedDeviceId]);
+
+    // Fetch outliers from database
+    const fetchOutliers = useCallback(async () => {
+        if (!selectedTest || !selectedDeviceId) {
+            setOutlierIds(new Set());
+            return;
         }
-    }, [aggregation, selectedDeviceId]);
 
-    // Selected Data State
-    const [selectedPoints, setSelectedPoints] = useState([]);
+        const dataType = getDataType();
+        try {
+            const response = await authFetch(
+                `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/outliers?data_type=${dataType}`
+            );
+            if (response.ok) {
+                const result = await response.json();
+                const ids = result.outliers.map(o => o.data_point_id);
+                setOutlierIds(new Set(ids));
+            } else {
+                setOutlierIds(new Set());
+            }
+        } catch (error) {
+            console.error('Error fetching outliers:', error);
+            setOutlierIds(new Set());
+        }
+    }, [selectedTest, selectedDeviceId, getDataType, authFetch]);
 
-    // Ref to store the plot div for native event binding
-    const plotDivRef = useRef(null);
-
-    // Metric Options based on Aggregation and Device
+    // Metric Options based on Aggregation and Device - MUST be defined before useEffects that use it
     const getMetricOptions = useCallback(() => {
         const device = devices.find(d => d.id === selectedDeviceId);
         if (!device) return [];
@@ -163,6 +287,21 @@ function Plot({ initialParams, onNavigate }) {
         // BlackBox
         return ['daily', 'hourly', 'minute', 'none'];
     }, [devices, selectedDeviceId]);
+
+    // Reset Y-Axis when aggregation changes
+    useEffect(() => {
+        const options = getMetricOptions();
+        if (!options.find(o => o.value === yAxisMetric)) {
+            setYAxisMetric(options[0]?.value || 'temperature');
+        }
+    }, [aggregation, selectedDeviceId, getMetricOptions, yAxisMetric]);
+
+    // Fetch outliers from database when test/device changes or data loads
+    useEffect(() => {
+        if (selectedTest && selectedDeviceId && plotData) {
+            fetchOutliers();
+        }
+    }, [selectedTest, selectedDeviceId, plotData, fetchOutliers]);
 
     // Columns for Selected Data Table
     const selectedDataColumns = useMemo(() => {
@@ -302,115 +441,134 @@ function Plot({ initialParams, onNavigate }) {
         initialState: { pagination: { pageSize: 5 } },
     });
 
+    // Label selected points as outliers (saves to database)
+    const labelAsOutliers = useCallback(async () => {
+        if (selectedPoints.length === 0) return;
+        const newIds = selectedPoints.map(p => p.id).filter(id => id != null);
+        if (newIds.length === 0) {
+            toast.error(tPages('plot.outlier_no_id'));
+            return;
+        }
 
-
-    const fetchPlotData = async () => {
         if (!selectedTest || !selectedDeviceId) return;
 
-        setFetchingData(true);
-        // addDebugLog(`Fetching plot data for Device ${selectedDeviceId}`, { aggregation });
+        const dataType = getDataType();
 
         try {
-            // Determine data type based on aggregation and device
-            const device = devices.find(d => d.id === selectedDeviceId);
-            let type = 'processed';
-            let aggParam = aggregation;
-
-            if (device && device.device_type.includes('chimera')) {
-                type = 'raw';
-                // Allow aggregation for Chimera
-                aggParam = aggregation === 'none' ? 'raw' : aggregation;
-            } else {
-                // BlackBox
-                // Default to 'processed' (Event Log), backend will fallback to 'raw' if empty
-                type = 'processed';
-
-                // Aggregation logic
-                if (aggregation === 'none') {
-                    aggParam = 'raw';
-                } else {
-                    aggParam = aggregation;
+            const response = await authFetch(
+                `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/outliers`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: newIds, data_type: dataType }),
                 }
-            }
+            );
 
-            const url = `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/data?type=${type}&aggregation=${aggParam}`;
-
-            // addDebugLog(`Requesting URL: ${url}`);
-
-            const response = await authFetch(url);
             if (response.ok) {
-                const result = await response.json();
-                setPlotData(result);
-                setError(null);
-                // addDebugLog(`Data fetched successfully. Count: ${result.count}`, result.data.slice(0, 3));
+                // Update local state optimistically
+                setOutlierIds(prev => {
+                    const next = new Set(prev);
+                    newIds.forEach(id => next.add(id));
+                    return next;
+                });
+                setSelectedPoints([]);
             } else {
-                const err = await response.json();
-                console.error('Failed to fetch plot data', err);
-                setPlotData(null);
-                if (err.code === 'NO_EVENT_LOG_DATA' || err.code === 'NO_CHANNEL_CONFIG') {
-                    setError(err.error);
-                } else {
-                    setError('Failed to load data');
-                }
-                // addDebugLog('Failed to fetch plot data', { status: response.status });
+                const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+                toast.error(err.error || 'Failed to label outliers');
             }
         } catch (error) {
-            console.error('Error fetching plot data:', error);
-            setPlotData(null);
-            // addDebugLog('Error exception fetching plot data', error);
-        } finally {
-            setFetchingData(false);
+            console.error('Error labeling outliers:', error);
+            toast.error('Failed to label outliers');
         }
-    };
+    }, [selectedPoints, selectedTest, selectedDeviceId, getDataType, authFetch, toast, tPages]);
 
-    const fetchTests = async () => {
-        setLoading(true);
-        setError(null);
+    // Delete outliers (deletes data points AND removes outlier labels from database)
+    const deleteOutliers = useCallback(async () => {
+        console.log('deleteOutliers called with IDs:', [...outlierIds]);
+        if (!selectedTest || !selectedDeviceId) {
+            console.error('Missing selectedTest or selectedDeviceId');
+            return;
+        }
+
+        const dataType = getDataType();
+        const idsToDelete = [...outlierIds];
+
+        console.log('Sending DELETE request:', { idsToDelete, dataType, testId: selectedTest.id, deviceId: selectedDeviceId });
+
         try {
-            const response = await authFetch('/api/v1/tests');
+            // First, delete the actual data points
+            const response = await authFetch(
+                `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/data`,
+                {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: idsToDelete, data_type: dataType }),
+                }
+            );
+            console.log('Response status:', response.status, 'ok:', response.ok);
+
             if (response.ok) {
                 const result = await response.json();
-                const sortedData = result.sort((a, b) => b.id - a.id);
-                setData(sortedData);
-            }
-        } catch (error) {
-            console.error('Error fetching tests:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+                console.log('Delete success:', result);
 
-    const fetchTestDetails = async (testId, targetDeviceId = null) => {
-        setError(null);
-        try {
-            const response = await authFetch(`/api/v1/tests/${testId}`);
-            if (response.ok) {
-                const details = await response.json();
-                setTestDetails(details);
-            }
-
-            const devicesResponse = await authFetch(`/api/v1/tests/${testId}/devices`);
-            if (devicesResponse.ok) {
-                const testDevices = await devicesResponse.json();
-                setDevices(testDevices);
-
-                if (testDevices.length > 0) {
-                    if (targetDeviceId) {
-                        const found = testDevices.find(d => d.id === targetDeviceId);
-                        if (found) {
-                            setSelectedDeviceId(targetDeviceId);
-                        } else {
-                            setSelectedDeviceId(testDevices[0].id);
-                        }
-                    } else {
-                        setSelectedDeviceId(testDevices[0].id);
+                // Also remove the outlier labels from the database
+                await authFetch(
+                    `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/outliers`,
+                    {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: idsToDelete, data_type: dataType }),
                     }
-                }
+                );
+
+                // Clear outliers from state
+                setOutlierIds(new Set());
+                toast.info(tPages('plot.outliers_deleted'));
+                setDeleteConfirmOpen(false);
+                // Re-fetch to sync the chart with the database
+                setTimeout(() => fetchPlotData(), 100);
+            } else {
+                const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('Delete failed:', err);
+                toast.error(err.error || tPages('plot.outliers_delete_failed'));
+                setDeleteConfirmOpen(false);
             }
         } catch (error) {
-            console.error('Error fetching test details:', error);
+            console.error('deleteOutliers error:', error);
+            toast.error(tPages('plot.outliers_delete_failed'));
+            setDeleteConfirmOpen(false);
         }
-    };
+    }, [outlierIds, selectedDeviceId, selectedTest, getDataType, authFetch, toast, tPages, fetchPlotData]);
+
+    // Unlabel outliers (removes labels but keeps the data points)
+    const unlabelOutliers = useCallback(async () => {
+        if (!selectedTest || !selectedDeviceId) return;
+
+        const dataType = getDataType();
+        const idsToUnlabel = [...outlierIds];
+
+        try {
+            const response = await authFetch(
+                `/api/v1/tests/${selectedTest.id}/device/${selectedDeviceId}/outliers`,
+                {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: idsToUnlabel, data_type: dataType }),
+                }
+            );
+
+            if (response.ok) {
+                setOutlierIds(new Set());
+                toast.info(tPages('plot.outliers_unlabeled') || 'Outlier labels removed');
+            } else {
+                const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+                toast.error(err.error || 'Failed to remove outlier labels');
+            }
+        } catch (error) {
+            console.error('unlabelOutliers error:', error);
+            toast.error('Failed to remove outlier labels');
+        }
+    }, [outlierIds, selectedDeviceId, selectedTest, getDataType, authFetch, toast, tPages]);
 
     const columns = useMemo(() => [
         { accessorKey: 'name', header: tPages('plot.table_name'), size: 150 },
@@ -478,13 +636,6 @@ function Plot({ initialParams, onNavigate }) {
         initialState: { pagination: { pageSize: 10 } },
     });
 
-    const [xAxisMode, setXAxisMode] = useState('timestamp'); // 'timestamp', 'day', 'hour', 'minute'
-    const [groupingMode, setGroupingMode] = useState('gas'); // 'gas', 'channel'
-    const [selectedChannel, setSelectedChannel] = useState(null);
-    const [error, setError] = useState(null);
-    const [selectedGas, setSelectedGas] = useState(null);
-    const [unitFilter, setUnitFilter] = useState('all'); // 'all', 'ppm', 'percent'
-
     // Check if a gas uses ppm units
     const isPpmGas = (gasName) => {
         if (!gasName) return false;
@@ -523,10 +674,10 @@ function Plot({ initialParams, onNavigate }) {
             return new Date(d.timestamp * 1000);
         };
 
-        if (device.device_type.includes('chimera')) {
-            // ... (Chimera logic remains mostly same, just ensure X uses getXValue if we wanted to support it later, 
-            // but for now request said ignore chimera. However, to be safe, let's just keep chimera as is or use getXValue with forced timestamp)
+        // Outlier trace accumulator
+        const outlierTrace = { x: [], y: [], text: [], customdata: [], name: tPages('plot.outliers_label') };
 
+        if (device.device_type.includes('chimera')) {
             // Filter and Group based on mode
             let filteredData = [];
             let groups = {};
@@ -543,6 +694,19 @@ function Plot({ initialParams, onNavigate }) {
 
                 // Group by Gas
                 filteredData.forEach(d => {
+                    // Check if this is an outlier
+                    if (outlierIds.has(d.id)) {
+                        if (showOutliers) {
+                            outlierTrace.x.push(getXValue(d));
+                            outlierTrace.y.push(d.peak_value);
+                            outlierTrace.text.push(
+                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                            );
+                            outlierTrace.customdata.push(d);
+                        }
+                        return; // skip normal trace
+                    }
+
                     if (!groups[d.gas_name]) {
                         groups[d.gas_name] = {
                             x: [],
@@ -567,6 +731,19 @@ function Plot({ initialParams, onNavigate }) {
 
                 // Group by Channel
                 filteredData.forEach(d => {
+                    // Check if this is an outlier
+                    if (outlierIds.has(d.id)) {
+                        if (showOutliers) {
+                            outlierTrace.x.push(getXValue(d));
+                            outlierTrace.y.push(d.peak_value);
+                            outlierTrace.text.push(
+                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                            );
+                            outlierTrace.customdata.push(d);
+                        }
+                        return; // skip normal trace
+                    }
+
                     if (!groups[d.channel_number]) {
                         groups[d.channel_number] = {
                             x: [],
@@ -586,7 +763,7 @@ function Plot({ initialParams, onNavigate }) {
                 });
             }
 
-            return Object.values(groups).map(group => {
+            const traces = Object.values(groups).map(group => {
                 let mode = 'lines+markers';
                 if (graphType === 'scatter') mode = 'markers';
                 if (graphType === 'line') mode = 'lines+markers';
@@ -598,11 +775,43 @@ function Plot({ initialParams, onNavigate }) {
                     textposition: graphType === 'bar' ? 'none' : undefined,
                 };
             });
+
+            // Append outlier trace if it has data
+            if (outlierTrace.x.length > 0) {
+                traces.push({
+                    ...outlierTrace,
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: {
+                        symbol: 'x',
+                        size: 8,
+                        color: '#ef4444',   // red-500
+                        line: { color: '#991b1b', width: 1 }  // red-800 border, thinner line
+                    },
+                    showlegend: true,
+                });
+            }
+
+            return traces;
         } else {
             // BlackBox Logic
             const channelGroups = {};
 
             plotData.data.forEach(d => {
+                // Check if this is an outlier
+                if (outlierIds.has(d.id)) {
+                    if (showOutliers) {
+                        outlierTrace.x.push(getXValue(d));
+                        let yVal = d[yAxisMetric];
+                        outlierTrace.y.push(yVal);
+                        outlierTrace.text.push(
+                            `[Outlier] Channel: ${d.channel_number}<br>${yAxisMetric}: ${yVal}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                        );
+                        outlierTrace.customdata.push(d);
+                    }
+                    return; // skip normal trace
+                }
+
                 if (!channelGroups[d.channel_number]) {
                     channelGroups[d.channel_number] = {
                         x: [],
@@ -614,7 +823,6 @@ function Plot({ initialParams, onNavigate }) {
                 }
 
                 let yVal = d[yAxisMetric];
-                // Handle cumulative metrics if needed (omitted for brevity as it wasn't requested to change)
 
                 channelGroups[d.channel_number].x.push(getXValue(d));
                 channelGroups[d.channel_number].y.push(yVal);
@@ -624,7 +832,7 @@ function Plot({ initialParams, onNavigate }) {
                 channelGroups[d.channel_number].customdata.push(d);
             });
 
-            return Object.values(channelGroups).map(group => {
+            const traces = Object.values(channelGroups).map(group => {
                 let mode = 'lines+markers';
                 if (graphType === 'scatter') mode = 'markers';
                 if (graphType === 'line') mode = 'lines+markers';
@@ -636,8 +844,26 @@ function Plot({ initialParams, onNavigate }) {
                     textposition: graphType === 'bar' ? 'none' : undefined,
                 };
             });
+
+            // Append outlier trace if it has data
+            if (outlierTrace.x.length > 0) {
+                traces.push({
+                    ...outlierTrace,
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: {
+                        symbol: 'x',
+                        size: 8,
+                        color: '#ef4444',   // red-500
+                        line: { color: '#991b1b', width: 1 }  // red-800 border, thinner line
+                    },
+                    showlegend: true,
+                });
+            }
+
+            return traces;
         }
-    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel, unitFilter]);
+    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel, unitFilter, outlierIds, showOutliers, tPages]);
 
     // Handle plot initialization and attach native Plotly event listeners
     const handlePlotInitialized = useCallback((figure, graphDiv) => {
@@ -789,6 +1015,12 @@ function Plot({ initialParams, onNavigate }) {
         return layout;
     }, [yAxisMetric, getMetricOptions, devices, selectedDeviceId, selectedGas, xAxisMode, groupingMode, tPages, isDark]);
 
+    // MUST be defined before any conditional returns
+    const dialogMessage = React.useMemo(() => {
+        const template = tPages('plot.delete_outliers_confirm');
+        return template.replace('{{count}}', outlierIds.size);
+    }, [outlierIds.size, tPages]);
+
     if (showPlotView && selectedTest) {
         const selectedDevice = devices.find(d => d.id === selectedDeviceId);
 
@@ -848,6 +1080,20 @@ function Plot({ initialParams, onNavigate }) {
         }
 
         return (
+            <>
+            <ConfirmDialog
+                isOpen={deleteConfirmOpen}
+                title={tPages('plot.delete_outliers_title')}
+                message={dialogMessage}
+                confirmText={tPages('plot.delete_outliers_confirm_btn')}
+                cancelText={tPages('plot.cancel')}
+                onConfirm={deleteOutliers}
+                onCancel={() => {
+                    console.log('ConfirmDialog Cancel clicked');
+                    setDeleteConfirmOpen(false);
+                }}
+                danger={true}
+            />
             <div className="flex flex-col lg:flex-row h-screen bg-gray-100 overflow-hidden">
                 {/* Mobile Header */}
                 <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 shrink-0">
@@ -1234,6 +1480,15 @@ function Plot({ initialParams, onNavigate }) {
                                                         </button>
                                                     </>
                                                 )}
+                                                {canPerform('delete_data_points') && aggregation === 'none' && selectedPoints.length > 0 && (
+                                                    <button
+                                                        onClick={labelAsOutliers}
+                                                        className="px-2 sm:px-3 py-1 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <AlertTriangle size={12} />
+                                                        <span className="hidden sm:inline">{tPages('plot.label_outlier')}</span>
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => setSelectedPoints([])}
                                                     className="px-2 sm:px-3 py-1 text-red-600 hover:text-red-800 font-medium text-xs border border-red-300 rounded hover:bg-red-50 transition-colors"
@@ -1243,6 +1498,51 @@ function Plot({ initialParams, onNavigate }) {
                                             </div>
                                         )}
                                     </div>
+                                    {outlierIds.size > 0 && aggregation === 'none' && (
+                                        <div className="px-4 sm:px-6 py-2 bg-orange-50 border-b border-orange-200 flex items-center gap-3 flex-wrap">
+                                            <span className="text-xs text-orange-600 font-medium">
+                                                {(() => {
+                                                    const template = tPages('plot.outliers_count');
+                                                    return template.replace('{{count}}', outlierIds.size);
+                                                })()}
+                                            </span>
+                                            {/* Show/Hide toggle - available to everyone */}
+                                            <button
+                                                onClick={() => setShowOutliers(prev => !prev)}
+                                                className={`px-2 py-1 text-xs font-medium rounded border transition-colors flex items-center gap-1 ${
+                                                    showOutliers
+                                                        ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                                                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {showOutliers ? <Eye size={12} /> : <EyeOff size={12} />}
+                                                <span>{showOutliers ? tPages('plot.outliers_showing') : tPages('plot.outliers_hidden')}</span>
+                                            </button>
+                                            {/* Unlabel button - only for admin/operator */}
+                                            {canPerform('delete_data_points') && (
+                                                <button
+                                                    onClick={unlabelOutliers}
+                                                    className="px-2 py-1 border border-orange-400 text-orange-700 rounded text-xs font-medium hover:bg-orange-100 transition-colors flex items-center gap-1"
+                                                >
+                                                    <X size={12} />
+                                                    <span className="hidden sm:inline">{tPages('plot.unlabel_outliers') || 'Unlabel'}</span>
+                                                </button>
+                                            )}
+                                            {/* Delete button - only for admin/operator */}
+                                            {canPerform('delete_data_points') && (
+                                                <button
+                                                    onClick={() => {
+                                                        console.log('Delete button clicked, opening confirmation dialog');
+                                                        setDeleteConfirmOpen(true);
+                                                    }}
+                                                    className="px-2 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-colors flex items-center gap-1"
+                                                >
+                                                    <Trash2 size={12} />
+                                                    <span className="hidden sm:inline">{tPages('plot.delete_outliers')}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="flex-1 overflow-auto">
                                         {selectedPoints.length > 0 ? (
                                             <table className="min-w-full divide-y divide-gray-200">
@@ -1316,11 +1616,26 @@ function Plot({ initialParams, onNavigate }) {
                     </div>
                 </div>
             </div>
+            </>
         );
     }
 
     return (
-        <div className="space-y-4">
+        <>
+            <ConfirmDialog
+                isOpen={deleteConfirmOpen}
+                title={tPages('plot.delete_outliers_title')}
+                message={dialogMessage}
+                confirmText={tPages('plot.delete_outliers_confirm_btn')}
+                cancelText={tPages('plot.cancel')}
+                onConfirm={deleteOutliers}
+                onCancel={() => {
+                    console.log('ConfirmDialog Cancel clicked');
+                    setDeleteConfirmOpen(false);
+                }}
+                danger={true}
+            />
+            <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{tPages('plot.title')}</h1>
                 <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
@@ -1441,7 +1756,8 @@ function Plot({ initialParams, onNavigate }) {
                     </>
                 )}
             </div>
-        </div>
+            </div>
+        </>
     );
 }
 

@@ -249,7 +249,22 @@
     "elapsed_time_minutes": "经过时间 (分钟)",
     "concentration_percent": "浓度 (%)",
     "concentration_ppm": "浓度 (ppm)",
-    "concentration_mixed": "浓度 (% / ppm)"
+    "concentration_mixed": "浓度 (% / ppm)",
+    "outliers_label": "Outliers",
+    "label_outlier": "Mark as Outlier",
+    "outlier_no_id": "Selected points do not have row IDs. Cannot label as outliers.",
+    "outliers_count": "{{count}} outlier(s) labeled",
+    "outliers_showing": "Showing",
+    "outliers_hidden": "Hidden",
+    "delete_outliers": "Delete Outliers",
+    "delete_outliers_title": "Delete Outliers Permanently",
+    "delete_outliers_confirm": "This will permanently delete {{count}} outlier point(s) from the database. This action cannot be undone.",
+    "delete_outliers_confirm_btn": "Delete",
+    "outliers_deleted": "异常值已成功删除",
+    "outliers_delete_failed": "删除异常值失败",
+    "unlabel_outliers": "取消标记",
+    "outliers_unlabeled": "异常值标记已移除",
+    "cancel": "取消"
   },
   "user_management": {
     "title": "用户管理",

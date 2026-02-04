@@ -41,7 +41,6 @@ class ChimeraHandler(SerialHandler):
         self.register_automatic_handler("connect", self._handle_wifi_connect)
         self.register_automatic_handler("calibration", self._handle_calibration)
         self.register_automatic_handler("valve", self._handle_valve)
-        self.register_automatic_handler("done calibrate", self._handle_calibration_done)
         
     def connect(self) -> bool:
         """Connect to device and get info. Returns True on success."""
@@ -291,14 +290,6 @@ class ChimeraHandler(SerialHandler):
         except (ValueError, IndexError) as e:
             print(f"Failed to parse calibration message: {e}")
             pass
-
-    def _handle_calibration_done(self, line: str):
-        """Process calibration completion message (done calibrate)
-
-        This just logs/confirms the calibration finished. The frontend
-        already knows calibration is complete when progress stops flowing.
-        """
-        print(f"[CHIMERA CALIBRATION] Calibration completed: {line}")
 
     def _handle_valve(self, line: str):
         """Process valve status messages to track flushing/reading state

@@ -229,3 +229,20 @@ class ChimeraChannelConfiguration(db.Model):
        db.UniqueConstraint('chimera_config_id', 'channel_number', name='unique_chimera_config_channel'),
    )
 
+
+class Outlier(db.Model):
+   """Tracks data points that have been labeled as outliers"""
+   __tablename__ = "outliers"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   data_point_id = Column(Integer, nullable=False)  # ID of the data point in the source table
+   data_type = Column(String(20), nullable=False)  # 'raw' or 'processed' - indicates which table the data point is in
+   labeled_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+   labeled_at = Column(DateTime, default=datetime.utcnow)
+
+   __table_args__ = (
+       db.UniqueConstraint('test_id', 'device_id', 'data_point_id', 'data_type', name='unique_outlier'),
+   )
+

@@ -167,6 +167,7 @@ export const AuthProvider = ({ children }) => {
             'delete_sample': ['admin', 'operator'],
             'modify_test': ['admin', 'operator'],
             'delete_test': ['admin', 'operator'],
+            'delete_data_points': ['admin', 'operator'],
             'manage_devices': ['admin', 'operator'],
 
             // Admin only
