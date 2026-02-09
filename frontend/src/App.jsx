@@ -89,8 +89,6 @@ function AppContent() {
         return <Chimera />
       case 'plc':
         return <div className="p-6">PLC - Coming Soon</div>
-      case 'monitor':
-        return <div className="p-6">Monitor - Coming Soon</div>
       case 'settings':
         return <Settings />
       case 'users':

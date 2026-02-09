@@ -215,9 +215,11 @@ function BlackBox() {
     }, []);
 
     return (
-        <div>
-            <h1 className="text-4xl font-bold text-black dark:text-slate-100 pl-6 m-6">{tPages('black_box.title')}</h1>
-            <div className="p-6 pt-6">
+        <div className="space-y-4">
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('black_box.title')}</h1>
+            </div>
+            <div className="max-w-4xl">
                 {blackBoxes.length === 0 && !loading && (
                     <div className="text-center text-gray-500 py-8">
                         {tPages('black_box.no_devices')}

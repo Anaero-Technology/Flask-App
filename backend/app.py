@@ -1930,6 +1930,11 @@ def download_test_data(test_id):
         has_bb_raw = len(bb_raw) > 0
         has_chimera = len(chimera_data) > 0
 
+        # When event log data exists, raw data is redundant (same tips, less processing).
+        # Only use raw data as a fallback when no event log exists.
+        if has_bb_events:
+            has_bb_raw = False
+
         if not has_bb_events and not has_bb_raw and not has_chimera:
              return jsonify({"error": "No data found for this test"}), 404
 

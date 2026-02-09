@@ -4,7 +4,12 @@ import { useI18n } from '../components/i18nContext';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../components/AppSettingsContext';
 import { useToast } from '../components/Toast';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { useTheme } from '../components/ThemeContext';
+import {
+  Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
+  Lock, Search, Download, Trash2, GitBranch, ShieldAlert,
+  Sun, Moon, Monitor
+} from 'lucide-react';
 
 function Settings() {
   const { authFetch, user, canPerform } = useAuth();
@@ -13,6 +18,11 @@ function Settings() {
   const { t: tPages } = useTranslation('pages');
   const { companyName, logoUrl, refreshSettings } = useAppSettings();
   const toast = useToast();
+  const { setTheme } = useTheme();
+  const [themePreference, setThemePreference] = useState(() => {
+    const stored = localStorage.getItem('themePreference')
+    return stored === 'light' || stored === 'dark' ? stored : 'system'
+  })
   const [networks, setNetworks] = useState([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
@@ -142,12 +152,21 @@ function Settings() {
 
   const getSignalIcon = (signal) => {
     const signalNum = parseInt(signal)
-    if (isNaN(signalNum)) return '📶'
+    if (isNaN(signalNum)) return <WifiOff size={18} className="text-gray-400" />
 
-    if (signalNum >= -50) return '📶'
-    if (signalNum >= -60) return '📶'
-    if (signalNum >= -70) return '📡'
-    return '📡'
+    if (signalNum >= -50) return <WifiHigh size={18} className="text-green-500" />
+    if (signalNum >= -60) return <Wifi size={18} className="text-blue-500" />
+    if (signalNum >= -70) return <WifiLow size={18} className="text-amber-500" />
+    return <WifiOff size={18} className="text-red-400" />
+  }
+
+  const getSignalColor = (signal) => {
+    const signalNum = parseInt(signal)
+    if (isNaN(signalNum)) return 'text-gray-500'
+    if (signalNum >= -50) return 'text-green-600'
+    if (signalNum >= -60) return 'text-blue-600'
+    if (signalNum >= -70) return 'text-amber-600'
+    return 'text-red-600'
   }
 
   const pullFromGithub = async () => {
@@ -473,6 +492,11 @@ function Settings() {
     }
   }
 
+  const handleThemeChange = (value) => {
+    setThemePreference(value)
+    setTheme(value)
+  }
+
   const saveCompanyName = async () => {
     setSavingBranding(true)
     setBrandingMessage({ text: '', type: '' })
@@ -578,71 +602,160 @@ function Settings() {
     loadUserPreferences()
   }, [])
 
-  return (
-    <div className="p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">{tPages('settings.title')}</h1>
+  const getMessageClasses = (type) => (
+    type === 'success'
+      ? 'bg-green-50 text-green-700 border-green-200'
+      : 'bg-red-50 text-red-700 border-red-200'
+  )
 
-        {/* WiFi Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">{tPages('settings.wifi')}</h2>
-            <button
-              onClick={scanNetworks}
-              disabled={loading}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {loading ? tPages('settings.scanning') : tPages('settings.scan_networks')}
-            </button>
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('settings.title')}</h1>
+          <p className="text-sm text-gray-500">Manage preferences, connectivity, and system maintenance.</p>
+        </div>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold text-gray-900">{tCommon('preferences')}</h2>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{tCommon('Theme') || 'Theme'}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">Choose light, dark, or follow your system setting.</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {[
+                  { value: 'light', icon: Sun, label: tCommon('light') || 'Light' },
+                  { value: 'dark', icon: Moon, label: tCommon('dark') || 'Dark' },
+                  { value: 'system', icon: Monitor, label: tCommon('system') || 'System' },
+                ].map(({ value, icon: Icon, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => handleThemeChange(value)}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      themePreference === value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{tCommon('language')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">Choose your preferred display language.</p>
+              </div>
+              <div className="flex items-center">
+                <select
+                  value={language}
+                  onChange={(e) => saveLanguagePreference(e.target.value)}
+                  disabled={savingLanguage}
+                  className="min-w-40 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                >
+                  <option value="en">{tCommon('english')}</option>
+                  <option value="es">{tCommon('spanish')}</option>
+                  <option value="fr">{tCommon('french')}</option>
+                  <option value="de">{tCommon('german')}</option>
+                  <option value="zh">{tCommon('chinese')}</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.csv_delimiter')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.csv_delimiter_help')}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={csvDelimiter}
+                  onChange={(e) => setCsvDelimiter(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value=",">{tPages('settings.comma')}</option>
+                  <option value=";">{tPages('settings.semicolon')}</option>
+                  <option value="\t">{tPages('settings.tab')}</option>
+                </select>
+                <button
+                  onClick={saveDelimiterPreference}
+                  disabled={savingDelimiter}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {savingDelimiter ? 'Saving...' : tCommon('save')}
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Message Display */}
-          {message.text && (
-            <div className={`mb-4 p-3 rounded ${
-              message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {message.text}
+          {languageMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(languageMessage.type)}`}>
+              {languageMessage.text}
             </div>
           )}
+          {delimiterMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(delimiterMessage.type)}`}>
+              {delimiterMessage.text}
+            </div>
+          )}
+        </section>
 
-          {/* Networks List */}
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">
-              {tPages('settings.scanning_for_networks')}
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.wifi')}</h2>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Available Networks</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">Scan and connect to available wireless networks.</p>
+              </div>
+              <div className="flex items-center">
+                <button
+                  onClick={scanNetworks}
+                  disabled={loading}
+                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                  {loading ? tPages('settings.scanning') : tPages('settings.scan_networks')}
+                </button>
+              </div>
             </div>
-          ) : networks.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {tPages('settings.no_networks')}
-            </div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <div className="max-h-96 overflow-y-auto">
-                {networks.map((network, index) => {
+
+            <div className="max-h-96 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center gap-2 px-5 py-4 text-sm text-gray-500">
+                  <Loader2 size={14} className="animate-spin" />
+                  {tPages('settings.scanning_for_networks')}
+                </div>
+              ) : networks.length === 0 ? (
+                <div className="px-5 py-4 text-sm text-gray-500">{tPages('settings.no_networks')}</div>
+              ) : (
+                networks.map((network, index) => {
                   const isSelected = selectedNetworkIndex === index
                   const needsPassword = network.security !== 'None' && network.security !== 'Open' && network.security !== ''
 
                   return (
-                    <div
-                      key={index}
-                      className={`border-b last:border-b-0 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                    >
+                    <div key={index} className="border-b border-gray-200 last:border-b-0">
                       <div
-                        className="p-4 flex justify-between items-center cursor-pointer"
+                        className={`grid cursor-pointer grid-cols-1 gap-4 px-4 py-2.5 transition-colors sm:grid-cols-[1fr_auto] sm:px-5 ${isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
                         onClick={() => handleNetworkSelect(network, index)}
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{getSignalIcon(network.signal)}</span>
-                            <span className="font-semibold">{network.ssid}</span>
-                            {needsPassword && <span className="text-gray-500">🔒</span>}
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            Signal: {getSignalStrength(network.signal)} ({network.signal}) • {network.security}
-                          </div>
-                        </div>
                         <div>
+                          <div className="flex items-center gap-2">
+                            {getSignalIcon(network.signal)}
+                            <span className="text-sm font-bold text-gray-900">{network.ssid}</span>
+                            {needsPassword && <Lock size={14} className="text-gray-400" />}
+                          </div>
+                          <p className="mt-0.5 text-[13px] text-gray-500">
+                            Signal: <span className={getSignalColor(network.signal)}>{getSignalStrength(network.signal)}</span> ({network.signal}) • {network.security}
+                          </p>
+                        </div>
+                        <div className="flex items-center">
                           <button
-                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleNetworkSelect(network, index)
@@ -653,41 +766,39 @@ function Settings() {
                         </div>
                       </div>
 
-                      {/* Expandable Password Input Section */}
                       {isSelected && needsPassword && (
-                        <div className="px-4 pb-4 bg-blue-50">
+                        <div className="border-t border-blue-100 bg-blue-50/60 px-4 py-2.5 sm:px-5">
                           <form onSubmit={(e) => handleConnectWithPassword(e, network)} className="space-y-3">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                              <label className="mb-1 block text-sm font-medium text-gray-700">
                                 {tPages('settings.password')}
                               </label>
                               <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder={tPages('settings.enter_password')}
                                 autoFocus
                                 required
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </div>
-
-                            <div className="flex gap-3 justify-end">
+                            <div className="flex flex-wrap justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleCancelConnect()
                                 }}
-                                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                                 disabled={connecting}
                               >
                                 {tPages('settings.cancel')}
                               </button>
                               <button
                                 type="submit"
-                                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                                 disabled={connecting || !password}
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -699,304 +810,201 @@ function Settings() {
                       )}
                     </div>
                   )
-                })}
+                })
+              )}
+            </div>
+          </div>
+
+          {message.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(message.type)}`}>
+              {message.text}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold text-gray-900">System Tools</h2>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Update Software</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">Pull latest changes from GitHub repository.</p>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* User Preferences */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">{tCommon('preferences')}</h2>
-
-          {/* Messages Display */}
-          {delimiterMessage.text && (
-            <div className={`mb-4 p-3 rounded ${
-              delimiterMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {delimiterMessage.text}
-            </div>
-          )}
-
-          {languageMessage.text && (
-            <div className={`mb-4 p-3 rounded ${
-              languageMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {languageMessage.text}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {tCommon('language')}
-              </label>
-              <div className="flex items-center gap-3">
-                <select
-                  value={language}
-                  onChange={(e) => saveLanguagePreference(e.target.value)}
-                  disabled={savingLanguage}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <option value="en">{tCommon('english')}</option>
-                  <option value="es">{tCommon('spanish')}</option>
-                  <option value="fr">{tCommon('french')}</option>
-                  <option value="de">{tCommon('german')}</option>
-                  <option value="zh">{tCommon('chinese')}</option>
-                </select>
-              </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Choose your preferred display language
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {tPages('settings.csv_delimiter')}
-              </label>
-              <div className="flex items-center gap-3">
-                <select
-                  value={csvDelimiter}
-                  onChange={(e) => setCsvDelimiter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value=",">{tPages('settings.comma')}</option>
-                  <option value=";">{tPages('settings.semicolon')}</option>
-                  <option value="\t">{tPages('settings.tab')}</option>
-                </select>
+              <div className="flex items-center">
                 <button
-                  onClick={saveDelimiterPreference}
-                  disabled={savingDelimiter}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={pullFromGithub}
+                  disabled={pulling}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {savingDelimiter ? 'Saving...' : tCommon('save')}
+                  {pulling ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
+                  {pulling ? 'Pulling...' : 'Pull from GitHub'}
                 </button>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
-                {tPages('settings.csv_delimiter_help')}
-              </p>
             </div>
+
+            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Serial Communication Log</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">
+                  Download all serial messages received from devices
+                  {serialLogInfo?.exists && (
+                    <span className="ml-1">({serialLogInfo.size_formatted})</span>
+                  )}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={clearSerialLog}
+                  disabled={clearingLog || !serialLogInfo?.exists}
+                  className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  <Trash2 size={14} />
+                  {clearingLog ? 'Clearing...' : 'Clear Log'}
+                </button>
+                <button
+                  onClick={downloadSerialLog}
+                  disabled={downloadingLog || !serialLogInfo?.exists}
+                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  <Download size={14} />
+                  {downloadingLog ? 'Downloading...' : 'Download Log'}
+                </button>
+              </div>
+            </div>
+
+            {canPerform('manage_database') && (
+              <>
+                <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">{tPages('settings.database_download_title')}</h3>
+                    <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.database_download_help')}</p>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={downloadDatabase}
+                      disabled={downloadingDb}
+                      className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      <Download size={14} />
+                      {downloadingDb ? tPages('settings.database_downloading') : tPages('settings.database_download_button')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">{tPages('settings.database_transfer_title')}</h3>
+                    <p className="mt-0.5 text-[13px] text-gray-500">
+                      {tPages('settings.database_transfer_help')}
+                      {databaseFile && <span className="ml-1">({databaseFile.name})</span>}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200">
+                      <Upload size={14} />
+                      {tPages('settings.database_transfer_choose')}
+                      <input
+                        type="file"
+                        accept=".sqlite,.db"
+                        onChange={handleDatabaseFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      onClick={transferDatabase}
+                      disabled={transferringDb || !databaseFile}
+                      className="flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      {transferringDb ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {transferringDb ? tPages('settings.database_transferring') : tPages('settings.database_transfer_button')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 rounded-b-2xl border-t border-red-200 bg-red-50/30 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-red-600">{tPages('settings.database_delete_title')}</h3>
+                    <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.database_delete_help')}</p>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={deleteDatabase}
+                      disabled={deletingDb}
+                      className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      <Trash2 size={14} />
+                      {deletingDb ? tPages('settings.database_deleting') : tPages('settings.database_delete_button')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </div>
 
-        {/* System Settings */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">System</h2>
-
-          {/* Pull Message Display */}
           {pullMessage.text && (
-            <div className={`mb-4 p-3 rounded ${
-              pullMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              <pre className="whitespace-pre-wrap text-sm">{pullMessage.text}</pre>
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(pullMessage.type)}`}>
+              <pre className="whitespace-pre-wrap">{pullMessage.text}</pre>
             </div>
           )}
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">Update Software</h3>
-              <p className="text-sm text-gray-600">Pull latest changes from GitHub repository</p>
-            </div>
-            <button
-              onClick={pullFromGithub}
-              disabled={pulling}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {pulling ? 'Pulling...' : 'Pull from GitHub'}
-            </button>
-          </div>
-        </div>
-
-        {/* Serial Log Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-          <h2 className="text-xl font-semibold mb-4">Serial Communication Log</h2>
-
-          {/* Serial Log Message Display */}
           {serialLogMessage.text && (
-            <div className={`mb-4 p-3 rounded ${
-              serialLogMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(serialLogMessage.type)}`}>
               {serialLogMessage.text}
             </div>
           )}
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">Download Serial Log</h3>
-              <p className="text-sm text-gray-600">
-                Download all serial messages received from devices
-                {serialLogInfo && serialLogInfo.exists && (
-                  <span className="ml-2 text-gray-500">
-                    (Current size: {serialLogInfo.size_formatted})
-                  </span>
-                )}
-              </p>
+          {databaseMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(databaseMessage.type)}`}>
+              {databaseMessage.text}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={clearSerialLog}
-                disabled={clearingLog || !serialLogInfo?.exists}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {clearingLog ? 'Clearing...' : 'Clear Log'}
-              </button>
-              <button
-                onClick={downloadSerialLog}
-                disabled={downloadingLog || !serialLogInfo?.exists}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {downloadingLog ? 'Downloading...' : 'Download Log'}
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+        </section>
 
-        {canPerform('manage_database') && (
-          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-            <h2 className="text-xl font-semibold mb-4">{tPages('settings.database_management_title')}</h2>
-
-            {databaseMessage.text && (
-              <div className={`mb-4 p-3 rounded ${
-                databaseMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {databaseMessage.text}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">{tPages('settings.database_download_title')}</h3>
-                  <p className="text-sm text-gray-600">{tPages('settings.database_download_help')}</p>
-                </div>
-                <button
-                  onClick={downloadDatabase}
-                  disabled={downloadingDb}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {downloadingDb ? tPages('settings.database_downloading') : tPages('settings.database_download_button')}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">{tPages('settings.database_transfer_title')}</h3>
-                  <p className="text-sm text-gray-600">
-                    {tPages('settings.database_transfer_help')}
-                    {databaseFile && (
-                      <span className="ml-2 text-gray-500">({databaseFile.name})</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <label className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 cursor-pointer">
-                    {tPages('settings.database_transfer_choose')}
-                    <input
-                      type="file"
-                      accept=".sqlite,.db"
-                      onChange={handleDatabaseFileChange}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    onClick={transferDatabase}
-                    disabled={transferringDb || !databaseFile}
-                    className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {transferringDb ? tPages('settings.database_transferring') : tPages('settings.database_transfer_button')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium text-red-600">{tPages('settings.database_delete_title')}</h3>
-                  <p className="text-sm text-gray-600">{tPages('settings.database_delete_help')}</p>
-                </div>
-                <button
-                  onClick={deleteDatabase}
-                  disabled={deletingDb}
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {deletingDb ? tPages('settings.database_deleting') : tPages('settings.database_delete_button')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* App Branding Section - Admin Only */}
         {canPerform('system_settings') && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">{tPages('settings.branding_title')}</h2>
-
-            {/* Messages Display */}
-            {brandingMessage.text && (
-              <div className={`mb-4 p-3 rounded ${
-                brandingMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {brandingMessage.text}
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {/* Company Name Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {tPages('settings.branding_company_name')}
-                </label>
-                <p className="text-sm text-gray-600 mb-3">
-                  {tPages('settings.branding_company_help')}
-                </p>
-                <div className="flex gap-3">
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">{tPages('settings.branding_title')}</h2>
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+              <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{tPages('settings.branding_company_name')}</h3>
+                  <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.branding_company_help')}</p>
+                </div>
+                <div className="flex w-full max-w-sm flex-wrap items-center gap-2">
                   <input
                     type="text"
                     value={brandingCompanyName}
                     onChange={(e) => setBrandingCompanyName(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="min-w-56 flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter company name"
                   />
                   <button
                     onClick={saveCompanyName}
                     disabled={savingBranding || brandingCompanyName === companyName}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                   >
-                    {savingBranding ? <Loader2 size={16} className="animate-spin" /> : tPages('settings.branding_save')}
+                    {savingBranding ? <Loader2 size={14} className="animate-spin" /> : tPages('settings.branding_save')}
                   </button>
                 </div>
               </div>
 
-              {/* Logo Upload Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {tPages('settings.branding_logo')}
-                </label>
-                <p className="text-sm text-gray-600 mb-3">
-                  {tPages('settings.branding_logo_help')}
-                </p>
-
-                <div className="flex gap-6">
-                  {/* Preview */}
-                  <div className="flex-1">
+              <div className="grid grid-cols-1 gap-4 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{tPages('settings.branding_logo')}</h3>
+                  <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.branding_logo_help')}</p>
+                </div>
+                <div className="grid w-full max-w-sm grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3">
                     {brandingLogoPreview ? (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center bg-gray-50 h-40">
-                        <img
-                          src={brandingLogoPreview}
-                          alt="Logo preview"
-                          className="max-h-32 max-w-full object-contain"
-                        />
-                      </div>
+                      <img
+                        src={brandingLogoPreview}
+                        alt="Logo preview"
+                        className="max-h-16 max-w-full object-contain"
+                      />
                     ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center bg-gray-50 h-40 text-gray-400">
-                        No logo uploaded
-                      </div>
+                      <span className="text-sm text-gray-400">No logo uploaded</span>
                     )}
                   </div>
-
-                  {/* Upload & Delete Buttons */}
-                  <div className="flex flex-col gap-3 justify-center">
-                    <label className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                      <Upload size={16} />
+                  <div className="flex flex-col gap-2">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400">
+                      <Upload size={14} />
                       <span>{tPages('settings.branding_upload_logo')}</span>
                       <input
                         type="file"
@@ -1006,14 +1014,13 @@ function Settings() {
                         className="hidden"
                       />
                     </label>
-
                     {brandingLogoPreview && (
                       <button
                         onClick={deleteLogo}
                         disabled={savingBranding}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                       >
-                        <X size={16} />
+                        <X size={14} />
                         <span>{tPages('settings.branding_remove_logo')}</span>
                       </button>
                     )}
@@ -1021,19 +1028,32 @@ function Settings() {
                 </div>
               </div>
             </div>
-          </div>
+
+            {brandingMessage.text && (
+              <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(brandingMessage.type)}`}>
+                {brandingMessage.text}
+              </div>
+            )}
+          </section>
         )}
 
         {passwordPrompt.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {tPages('settings.database_password_title')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-600">
-                {passwordPrompt.message || tPages('settings.database_password_prompt')}
-              </p>
-              <div className="mt-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="rounded-lg bg-amber-50 p-2 text-amber-600">
+                  <ShieldAlert size={20} />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    {tPages('settings.database_password_title')}
+                  </h3>
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    {passwordPrompt.message || tPages('settings.database_password_prompt')}
+                  </p>
+                </div>
+              </div>
+              <div>
                 <input
                   type="password"
                   value={passwordPrompt.password}
@@ -1043,8 +1063,9 @@ function Settings() {
                       verifyPassword()
                     }
                   }}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder={tPages('settings.password')}
+                  autoFocus
                 />
                 {passwordPrompt.error && (
                   <p className="mt-2 text-sm text-red-600">{passwordPrompt.error}</p>
@@ -1053,7 +1074,7 @@ function Settings() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   onClick={() => resolvePasswordPrompt(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   disabled={passwordPrompt.loading}
                 >
                   {tCommon('cancel')}
@@ -1061,7 +1082,7 @@ function Settings() {
                 <button
                   onClick={verifyPassword}
                   disabled={passwordPrompt.loading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
                 >
                   {passwordPrompt.loading
                     ? tPages('settings.database_password_verifying')
@@ -1072,7 +1093,6 @@ function Settings() {
           </div>
         )}
       </div>
-    </div>
   )
 }
 

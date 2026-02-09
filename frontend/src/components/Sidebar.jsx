@@ -13,7 +13,6 @@ import {
   Upload,
   Box,
   Activity,
-  Monitor,
   Settings,
   PlusCircle,
   User,
@@ -58,7 +57,6 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
     { id: 'blackbox', labelKey: 'blackbox', icon: Box },
     { id: 'chimera', labelKey: 'chimera', icon: Activity },
     { id: 'plc', labelKey: 'plc', icon: Cpu },
-    { id: 'monitor', labelKey: 'monitor', icon: Monitor },
     { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
 

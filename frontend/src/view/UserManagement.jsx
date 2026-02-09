@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
 import {
-    Users,
     UserPlus,
     Edit2,
     Trash2,
@@ -231,29 +230,26 @@ function UserManagement() {
     }
 
     return (
-        <div className="p-6 max-w-6xl mx-auto">
+        <div className="space-y-4 max-w-6xl">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                        <Users className="w-6 h-6 text-blue-600" />
-                    </div>
+                <div className="flex items-center gap-2">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">{tPages('user_management.title')}</h1>
-                        <p className="text-gray-500 text-sm">{users.length} {tPages('user_management.users_total')}</p>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('user_management.title')}</h1>
+                        <p className="text-gray-500 text-xs">{users.length} {tPages('user_management.users_total')}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDownloadAuditLog}
                         disabled={downloadingAuditLog}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors"
                         title={tPages('user_management.download_audit_log_tooltip')}
                     >
                         {downloadingAuditLog ? (
-                            <Loader2 size={20} className="animate-spin" />
+                            <Loader2 size={14} className="animate-spin" />
                         ) : (
-                            <Download size={20} />
+                            <Download size={14} />
                         )}
                         {tPages('user_management.download_audit_log')}
                     </button>
@@ -262,27 +258,27 @@ function UserManagement() {
                             setFormData({ username: '', email: '', password: '', role: 'viewer' });
                             setShowCreateModal(true);
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                        <UserPlus size={20} />
+                        <UserPlus size={14} />
                         {tPages('user_management.add_user')}
                     </button>
                 </div>
             </div>
 
             {/* Users Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+            <div className="overflow-hidden border border-gray-200 rounded-lg">
+                <table className="w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.user_header')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.role_header')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.status_header')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.created_header')}</th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{tPages('user_management.actions_header')}</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.user_header')}</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.role_header')}</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.status_header')}</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.created_header')}</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.actions_header')}</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="bg-white divide-y divide-gray-200">
                         {users.map((user) => {
                             const roleInfo = getRoleInfo(user.role);
                             const RoleIcon = roleInfo.icon;
@@ -290,60 +286,60 @@ function UserManagement() {
 
                             return (
                                 <tr key={user.id} className={`hover:bg-gray-50 ${!user.is_active ? 'opacity-60' : ''}`}>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2 text-sm text-gray-900">
                                         <div>
-                                            <div className="font-medium text-gray-900">
+                                            <div className="font-medium">
                                                 {user.username}
                                                 {isCurrentUser && (
-                                                    <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{tPages('user_management.you')}</span>
+                                                    <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">{tPages('user_management.you')}</span>
                                                 )}
                                             </div>
-                                            <div className="text-sm text-gray-500">{user.email}</div>
+                                            <div className="text-xs text-gray-500">{user.email}</div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${roleInfo.color}`}>
-                                            <RoleIcon size={14} />
+                                    <td className="px-3 py-2 text-sm text-gray-900">
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${roleInfo.color}`}>
+                                            <RoleIcon size={12} />
                                             {roleInfo.name}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2 text-sm text-gray-900">
                                         {user.is_active ? (
-                                            <span className="inline-flex items-center gap-1 text-green-600 text-sm">
-                                                <Check size={16} /> {tPages('user_management.active')}
+                                            <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+                                                <Check size={14} /> {tPages('user_management.active')}
                                             </span>
                                         ) : (
-                                            <span className="inline-flex items-center gap-1 text-gray-400 text-sm">
-                                                <X size={16} /> {tPages('user_management.inactive')}
+                                            <span className="inline-flex items-center gap-1 text-gray-400 text-xs">
+                                                <X size={14} /> {tPages('user_management.inactive')}
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-500">
+                                    <td className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap">
                                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
+                                    <td className="px-3 py-2 text-right">
+                                        <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={() => openEditModal(user)}
-                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                 title={tPages('user_management.edit_user_tooltip')}
                                             >
-                                                <Edit2 size={18} />
+                                                <Edit2 size={14} />
                                             </button>
                                             <button
                                                 onClick={() => openResetPasswordModal(user)}
-                                                className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                                className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                                 title={tPages('user_management.reset_password_tooltip')}
                                             >
-                                                <Key size={18} />
+                                                <Key size={14} />
                                             </button>
                                             {!isCurrentUser && user.is_active && (
                                                 <button
                                                     onClick={() => handleDeactivate(user)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                     title={tPages('user_management.deactivate_user_tooltip')}
                                                 >
-                                                    <Trash2 size={18} />
+                                                    <Trash2 size={14} />
                                                 </button>
                                             )}
                                         </div>

@@ -1354,7 +1354,10 @@ const Database = ({ onViewPlot }) => {
                                                 const url = window.URL.createObjectURL(blob);
                                                 const a = document.createElement('a');
                                                 a.href = url;
-                                                a.download = `test_${test.id}_data.csv`;
+                                                // Use filename from Content-Disposition header if available
+                                                const disposition = response.headers.get('Content-Disposition');
+                                                const filenameMatch = disposition && disposition.match(/filename=(.+)/);
+                                                a.download = filenameMatch ? filenameMatch[1] : `test_${test.id}_data.csv`;
                                                 document.body.appendChild(a);
                                                 a.click();
                                                 window.URL.revokeObjectURL(url);
