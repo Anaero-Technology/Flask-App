@@ -39,6 +39,13 @@ const BlackBoxConfigTooltip = ({ testId, deviceId, activeTestName }) => {
         setShow(false);
     };
 
+    const isChannelInService = (channel) => {
+        if (channel?.in_service === undefined || channel?.in_service === null) {
+            return true;
+        }
+        return Boolean(channel.in_service);
+    };
+
     // Group channels by sample name
     const groupChannelsBySample = (channels) => {
         const groups = {};
@@ -64,7 +71,7 @@ const BlackBoxConfigTooltip = ({ testId, deviceId, activeTestName }) => {
         );
     }
 
-    const channels = config.channels || [];
+    const channels = (config.channels || []).filter(isChannelInService);
     const channelsBySample = groupChannelsBySample(channels);
 
     return (

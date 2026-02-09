@@ -80,9 +80,9 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
     }
 
     const chimera = config.chimera_config;
-    const channels = config.channels || [];
     const serviceChannels = getServiceChannels(chimera.service_sequence);
-    const channelsByample = groupChannelsBySample(channels);
+    const channels = (config.channels || []).filter(channel => serviceChannels.includes(channel.channel_number));
+    const channelsBySample = groupChannelsBySample(channels);
 
     return (
         <div
@@ -136,7 +136,7 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                                     {tPages('chimera_config.channels')} ({serviceChannels.length}/15)
                                 </p>
                                 <div className="space-y-1.5">
-                                    {Object.entries(channelsByample).map(([sample, chNumbers]) => (
+                                    {Object.entries(channelsBySample).map(([sample, chNumbers]) => (
                                         <div key={sample}>
                                             <p className="text-xs font-medium text-gray-700 mb-1 truncate" title={sample}>
                                                 {sample}
