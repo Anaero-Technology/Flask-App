@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from 'react-i18next';
 import DeviceCard from '../components/deviceCard';
-import ChimeraConfig from '../components/ChimeraConfig';
 import ChimeraImage from '../assets/chimera.jpg';
 import refreshIcon from '../assets/refresh.svg';
 import { useAuth } from '../components/AuthContext';
@@ -18,9 +17,7 @@ function Chimera() {
     const [memoryInfo, setMemoryInfo] = useState(null);
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [showFileManager, setShowFileManager] = useState(false);
-    const [showConfig, setShowConfig] = useState(false);
     const [loggingStates, setLoggingStates] = useState({});
-    const [deviceConfig, setDeviceConfig] = useState({});
 
     const fetchChimeras = async () => {
         setLoading(true);
@@ -71,28 +68,10 @@ function Chimera() {
         }
     };
 
-    const fetchDeviceConfig = async (deviceId) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${deviceId}/info`);
-            if (response.ok) {
-                const data = await response.json();
-                setDeviceConfig(data);
-            }
-        } catch (error) {
-            console.error('Error fetching device config:', error);
-        }
-    };
-
     const handleFileView = (device) => {
         setSelectedDevice(device);
         setShowFileManager(true);
         fetchFiles(device.device_id);
-    };
-
-    const handleConfigView = (device) => {
-        setSelectedDevice(device);
-        setShowConfig(true);
-        fetchDeviceConfig(device.device_id);
     };
 
     const downloadFile = async (filename) => {
@@ -232,145 +211,17 @@ function Chimera() {
         }
     };
 
-    const updateTiming = async (openTime, flushTime) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/timing`, {
-                method: 'POST',
-                body: JSON.stringify({ open_time_ms: openTime, flush_time_ms: flushTime })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.timing_updated_success'));
-                    fetchDeviceConfig(selectedDevice.device_id);
-                } else {
-                    toast.error(tPages('chimera.failed_update_timing', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Update timing error:', error);
-            toast.error(tPages('chimera.failed_update_timing_error'));
-        }
-    };
-
-    const calibrateSensor = async (sensorNumber, gasPercentage) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/calibrate`, {
-                method: 'POST',
-                body: JSON.stringify({ sensor_number: sensorNumber, gas_percentage: gasPercentage })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.sensor_calibrated_success'));
-                } else {
-                    toast.error(tPages('chimera.failed_calibrate_sensor', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Calibration error:', error);
-            toast.error(tPages('chimera.failed_calibrate_error'));
-        }
-    };
-
-    const toggleRecirculation = async (enable) => {
-        try {
-            const endpoint = enable ? 'enable' : 'disable';
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/${endpoint}`, {
-                method: 'POST'
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.recirculation_updated_success'));
-                    fetchDeviceConfig(selectedDevice.device_id);
-                } else {
-                    toast.error(tPages('chimera.failed_update_recirculation', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Recirculation error:', error);
-            toast.error(tPages('chimera.failed_update_recirculation_error'));
-        }
-    };
-
-    const updateRecirculationDays = async (days) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/days`, {
-                method: 'POST',
-                body: JSON.stringify({ days: parseInt(days) })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.recirculation_days_updated_success'));
-                    fetchDeviceConfig(selectedDevice.device_id);
-                } else {
-                    toast.error(tPages('chimera.failed_update_recirculation_days', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Recirculation days error:', error);
-            toast.error(tPages('chimera.failed_update_recirculation_days_error'));
-        }
-    };
-
-    const updateRecirculationTime = async (hour, minute) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/recirculation/time`, {
-                method: 'POST',
-                body: JSON.stringify({ hour: parseInt(hour), minute: parseInt(minute) })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.recirculation_time_updated_success'));
-                    fetchDeviceConfig(selectedDevice.device_id);
-                } else {
-                    toast.error(tPages('chimera.failed_update_recirculation_time', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Recirculation time error:', error);
-            toast.error(tPages('chimera.failed_update_recirculation_time_error'));
-        }
-    };
-
-    const updateService = async (serviceSequence) => {
-        try {
-            const response = await authFetch(`/api/v1/chimera/${selectedDevice.device_id}/service`, {
-                method: 'POST',
-                body: JSON.stringify({ service_sequence: serviceSequence })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    toast.success(tPages('chimera.service_config_updated_success'));
-                    fetchDeviceConfig(selectedDevice.device_id);
-                } else {
-                    toast.error(tPages('chimera.failed_update_service_config', { message: data.message }));
-                }
-            }
-        } catch (error) {
-            console.error('Service configuration error:', error);
-            toast.error(tPages('chimera.failed_update_service_config_error'));
-        }
-    };
 
     useEffect(() => {
         fetchChimeras();
     }, []);
 
     return (
-        <div>
-            <h1 className="text-4xl font-bold text-black dark:text-slate-100 pl-6 m-6">{tPages('chimera.title')}</h1>
-            <div className="p-6 pt-6">
+        <div className="space-y-4">
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('chimera.title')}</h1>
+            </div>
+            <div className="max-w-4xl">
                 {chimeras.length === 0 && !loading && (
                     <div className="text-center text-gray-500 py-8">
                         {tPages('chimera.no_devices')}
@@ -403,13 +254,6 @@ function Chimera() {
                                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
                                 >
                                     {tPages('chimera.file_view_button')}
-                                </button>
-
-                                <button
-                                    onClick={() => handleConfigView(device)}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
-                                >
-                                    {tPages('chimera.configure_button')}
                                 </button>
 
                                 {device.active_test_id ? (
@@ -539,26 +383,6 @@ function Chimera() {
                 </div>
             )}
 
-            {/* Configuration Modal */}
-            {showConfig && selectedDevice && (
-                <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-3/4 max-w-6xl">
-                    <div className="bg-white rounded-lg p-6 max-h-[80vh] overflow-y-auto shadow-2xl border">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-2xl font-bold">
-                                {tPages('chimera.configure_modal_title', { device_name: selectedDevice?.name })}
-                            </h2>
-                            <button
-                                onClick={() => setShowConfig(false)}
-                                className="text-gray-500 hover:text-gray-700 text-2xl"
-                            >
-                                ×
-                            </button>
-                        </div>
-
-                        <ChimeraConfig device={{ ...selectedDevice, id: selectedDevice.device_id }} />
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
