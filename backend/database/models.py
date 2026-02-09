@@ -162,6 +162,8 @@ class ChannelConfiguration(db.Model):
    test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
    device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
    channel_number = Column(Integer, nullable=False)  # 1-15
+   in_service = Column(Boolean, nullable=False, default=True)
+   
    
    inoculum_sample_id = Column(Integer, ForeignKey('samples.id'), nullable=True)
    inoculum_weight_grams = Column(Float, nullable=False)
@@ -245,4 +247,3 @@ class Outlier(db.Model):
    __table_args__ = (
        db.UniqueConstraint('test_id', 'device_id', 'data_point_id', 'data_type', name='unique_outlier'),
    )
-

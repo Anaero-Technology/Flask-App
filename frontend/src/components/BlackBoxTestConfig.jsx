@@ -17,6 +17,76 @@ const sanitizeIntegerInput = (value) => {
     return String(value).replace(/\D/g, '');
 };
 
+const normalizeInService = (value, fallback = false) => {
+    if (value === undefined || value === null || value === '') {
+        return fallback;
+    }
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return value !== 0;
+    }
+    if (typeof value === 'string') {
+        const lowered = value.trim().toLowerCase();
+        if (['false', '0', 'no', 'n', 'off'].includes(lowered)) return false;
+        if (['true', '1', 'yes', 'y', 'on'].includes(lowered)) return true;
+    }
+    return fallback;
+};
+
+const createDefaultBlackboxConfig = (inService = false) => ({
+    inoculum_sample_id: '',
+    inoculum_weight_grams: '',
+    substrate_sample_id: '',
+    substrate_weight_grams: '',
+    tumbler_volume: '',
+    chimera_channel: null,
+    in_service: inService
+});
+
+const buildDraftConfigsFromConfigurations = (configurations, deviceId, defaultInService = false) => {
+    const next = {};
+    for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
+        const saved = configurations?.[`${deviceId}-${channelNumber}`];
+        if (saved) {
+            const inService = normalizeInService(saved.in_service, isConfigActive(saved));
+            next[channelNumber] = { ...createDefaultBlackboxConfig(defaultInService), ...saved, in_service: inService };
+        } else {
+            next[channelNumber] = createDefaultBlackboxConfig(defaultInService);
+        }
+    }
+    return next;
+};
+
+const isConfigActive = (config) => {
+    if (!config) return false;
+    if (config.in_service !== undefined && config.in_service !== null) {
+        return normalizeInService(config.in_service, false);
+    }
+    const hasValue = (value) => {
+        if (value === null || value === undefined || value === '') return false;
+        if (typeof value === 'number') return value !== 0;
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed === '') return false;
+            const numeric = Number(trimmed);
+            if (!Number.isNaN(numeric)) return numeric !== 0;
+            return true;
+        }
+        return true;
+    };
+
+    return (
+        hasValue(config.inoculum_sample_id)
+        || hasValue(config.substrate_sample_id)
+        || hasValue(config.inoculum_weight_grams)
+        || hasValue(config.substrate_weight_grams)
+        || hasValue(config.tumbler_volume)
+        || hasValue(config.chimera_channel)
+    );
+};
+
 const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
     channelNumber,
     config,
@@ -25,6 +95,9 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
     isControl,
     isSelected,
     isActive,
+    disableActiveToggle,
+    isReadOnly,
+    autoSaveOnBlur,
     showChimeraChannel,
     inoculums,
     samples,
@@ -48,9 +121,21 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
         <React.Fragment>
             <tr
                 className={`group border-b border-gray-100 ${rowClass} ${selectionClass} ${inactiveClass}`}
-                onMouseDown={(event) => onRowMouseDown(channelNumber, event)}
-                onPointerDown={(event) => onRowMouseDown(channelNumber, event)}
-                onClick={(event) => onRowClick(channelNumber, event)}
+                onMouseDown={(event) => {
+                    if (!isReadOnly) {
+                        onRowMouseDown(channelNumber, event);
+                    }
+                }}
+                onPointerDown={(event) => {
+                    if (!isReadOnly) {
+                        onRowMouseDown(channelNumber, event);
+                    }
+                }}
+                onClick={(event) => {
+                    if (!isReadOnly) {
+                        onRowClick(channelNumber, event);
+                    }
+                }}
             >
                 <td className={`px-2 py-2 text-xs text-gray-700 whitespace-nowrap ${cellClass} ${cellHoverClass}`}>
                     <div className="flex items-center gap-2">
@@ -58,9 +143,14 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                         <input
                             type="checkbox"
                             checked={isActive}
-                            onChange={() => onToggleActive(channelNumber)}
+                            onChange={() => {
+                                if (!disableActiveToggle && !isReadOnly) {
+                                    onToggleActive(channelNumber);
+                                }
+                            }}
+                            disabled={disableActiveToggle || isReadOnly}
                             aria-label={tPages('test_config.active_channel')}
-                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500/30"
+                            className={`h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500/30 ${disableActiveToggle ? 'cursor-not-allowed opacity-60' : ''}`}
                         />
                     </div>
                 </td>
@@ -68,12 +158,17 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                     <select
                         value={config.inoculum_sample_id}
                         onChange={(e) => onFieldChange(channelNumber, prev => ({ ...prev, inoculum_sample_id: e.target.value }))}
-                        onBlur={() => onAttemptSave(channelNumber)}
+                        onBlur={() => {
+                            if (autoSaveOnBlur) {
+                                onAttemptSave(channelNumber);
+                            }
+                        }}
+                        disabled={isReadOnly}
                         className="w-44 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     >
                         <option value="">{tPages('test_config.select_inoculum')}</option>
                         {inoculums.map(inoculum => (
-                            <option key={inoculum.id} value={inoculum.id}>
+                            <option key={inoculum.id} value={String(inoculum.id)}>
                                 {inoculum.sample_name}
                             </option>
                         ))}
@@ -88,7 +183,12 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                             const nextValue = sanitizeDecimalInput(e.target.value);
                             onFieldChange(channelNumber, prev => ({ ...prev, inoculum_weight_grams: nextValue }));
                         }}
-                        onBlur={() => onAttemptSave(channelNumber)}
+                        onBlur={() => {
+                            if (autoSaveOnBlur) {
+                                onAttemptSave(channelNumber);
+                            }
+                        }}
+                        disabled={isReadOnly}
                         className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         placeholder="0.0"
                     />
@@ -102,7 +202,12 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                             const nextValue = sanitizeDecimalInput(e.target.value);
                             onFieldChange(channelNumber, prev => ({ ...prev, tumbler_volume: nextValue }));
                         }}
-                        onBlur={() => onAttemptSave(channelNumber)}
+                        onBlur={() => {
+                            if (autoSaveOnBlur) {
+                                onAttemptSave(channelNumber);
+                            }
+                        }}
+                        disabled={isReadOnly}
                         className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         placeholder="0.0"
                     />
@@ -118,12 +223,17 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                                 substrate_weight_grams: newValue ? prev.substrate_weight_grams : ''
                             }));
                         }}
-                        onBlur={() => onAttemptSave(channelNumber)}
+                        onBlur={() => {
+                            if (autoSaveOnBlur) {
+                                onAttemptSave(channelNumber);
+                            }
+                        }}
+                        disabled={isReadOnly}
                         className="w-44 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     >
                         <option value="">{tPages('test_config.inoculum_only_control')}</option>
                         {samples.map(sample => (
-                            <option key={sample.id} value={sample.id}>
+                            <option key={sample.id} value={String(sample.id)}>
                                 {sample.sample_name}
                             </option>
                         ))}
@@ -138,8 +248,12 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                             const nextValue = sanitizeDecimalInput(e.target.value);
                             onFieldChange(channelNumber, prev => ({ ...prev, substrate_weight_grams: nextValue }));
                         }}
-                        onBlur={() => onAttemptSave(channelNumber)}
-                        disabled={!config.substrate_sample_id}
+                        onBlur={() => {
+                            if (autoSaveOnBlur) {
+                                onAttemptSave(channelNumber);
+                            }
+                        }}
+                        disabled={isReadOnly}
                         className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                         placeholder={config.substrate_sample_id ? '0.0' : tPages('test_config.no_substrate_selected')}
                     />
@@ -154,7 +268,12 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
                                 const nextValue = sanitizeIntegerInput(e.target.value);
                                 onFieldChange(channelNumber, prev => ({ ...prev, chimera_channel: nextValue }));
                             }}
-                            onBlur={() => onAttemptSave(channelNumber)}
+                            onBlur={() => {
+                                if (autoSaveOnBlur) {
+                                    onAttemptSave(channelNumber);
+                                }
+                            }}
+                            disabled={isReadOnly}
                             className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             placeholder="1-15"
                         />
@@ -192,35 +311,58 @@ function BlackBoxTestConfig({
     onConfigurationChange,
     onSaveChannelConfig,
     onClearChannelConfig,
-    showChimeraChannel
+    showChimeraChannel,
+    hideActions = false,
+    disableActiveToggle = false,
+    disableClear = false,
+    embedded = false,
+    defaultExpanded = false,
+    persistExpandedState = true,
+    showUploadCsv = true,
+    showExportCsv = true,
+    showCreateSample = true,
+    readOnly = false,
+    persistDrafts = true,
+    autoSaveOnBlur = true,
+    showSaveButton = false,
+    confirmSaveMessage = '',
+    saveNoticeMessage = '',
+    onSaveComplete,
+    onDraftChange,
+    onSaveAllChannelConfigs,
+    commitOnToggle = false,
+    clearOnToggle = true,
+    defaultInService = false,
+    showActiveOnly = false,
+    saveInactiveAsEmpty = false
 }) {
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const draftStorageKey = `test_form_blackbox_drafts_${device.id}`;
-    const activeStorageKey = `test_form_blackbox_active_${device.id}`;
     const expandedStorageKey = `test_form_blackbox_expanded_${device.id}`;
     const [uploadingCsv, setUploadingCsv] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(() => readExpandedState(expandedStorageKey));
+    const [isExpanded, setIsExpanded] = useState(() => (
+        persistExpandedState && !embedded ? readExpandedState(expandedStorageKey) : defaultExpanded
+    ));
     const [channelErrors, setChannelErrors] = useState({});
-    const [draftConfigs, setDraftConfigs] = useState({});
+    const defaultChannelInService = Boolean(defaultInService);
+    const [draftConfigs, setDraftConfigs] = useState(() => (
+        buildDraftConfigsFromConfigurations(configurations, device.id, defaultChannelInService)
+    ));
     const [selectedChannels, setSelectedChannels] = useState([]);
-    const [activeChannels, setActiveChannels] = useState([]);
     const savedConfigsRef = useRef({});
     const skipRowClickRef = useRef(false);
     const [didRestoreDrafts, setDidRestoreDrafts] = useState(false);
+    const seededDefaultsRef = useRef(false);
+    const isReadOnly = Boolean(readOnly);
+    const shouldPersistDrafts = Boolean(persistDrafts);
+    const allowClearOnToggle = Boolean(clearOnToggle);
+    const shouldCommitOnToggle = Boolean(commitOnToggle);
+    const shouldSaveInactiveAsEmpty = Boolean(saveInactiveAsEmpty);
 
     const getChannelConfig = (channelNumber) => {
         return configurations[`${device.id}-${channelNumber}`] || null;
     };
-
-    const getDefaultConfig = () => ({
-        inoculum_sample_id: '',
-        inoculum_weight_grams: '',
-        substrate_sample_id: '',
-        substrate_weight_grams: '',
-        tumbler_volume: '',
-        chimera_channel: null
-    });
 
     const isEmptyDraftConfig = (config) => (
         !config
@@ -234,26 +376,37 @@ function BlackBoxTestConfig({
         )
     );
 
-    const normalizeConfig = (config) => ({
-        ...config,
-        inoculum_weight_grams: config.inoculum_weight_grams ? parseFloat(config.inoculum_weight_grams) : '',
-        substrate_weight_grams: config.substrate_weight_grams ? parseFloat(config.substrate_weight_grams) : 0,
-        tumbler_volume: config.tumbler_volume ? parseFloat(config.tumbler_volume) : '',
-        chimera_channel: config.chimera_channel === '' || config.chimera_channel === null || config.chimera_channel === undefined
-            ? null
-            : parseInt(config.chimera_channel)
-    });
+    const normalizeConfig = (config) => {
+        return ({
+            ...config,
+            inoculum_weight_grams: config.inoculum_weight_grams
+                ? parseFloat(config.inoculum_weight_grams)
+                : 0,
+            substrate_weight_grams: config.substrate_weight_grams ? parseFloat(config.substrate_weight_grams) : 0,
+            tumbler_volume: config.tumbler_volume ? parseFloat(config.tumbler_volume) : 0,
+            chimera_channel: config.chimera_channel === '' || config.chimera_channel === null || config.chimera_channel === undefined
+                ? null
+                : parseInt(config.chimera_channel),
+            in_service: normalizeInService(config.in_service, isConfigActive(config))
+        });
+    };
 
-    const getDraftConfig = (channelNumber) => draftConfigs[channelNumber] || getDefaultConfig();
+    const getDraftConfig = (channelNumber) => (
+        draftConfigs[channelNumber] || createDefaultBlackboxConfig(defaultChannelInService)
+    );
+    const isChannelActive = (channelNumber) => isConfigActive(getDraftConfig(channelNumber));
 
     const updateDraftConfigs = (channelNumbers, updater) => {
         setDraftConfigs(prev => {
             const next = { ...prev };
             channelNumbers.forEach(channelNumber => {
-                const current = prev[channelNumber] || getDefaultConfig();
+                const current = prev[channelNumber] || createDefaultBlackboxConfig();
                 const updated = typeof updater === 'function' ? updater(current, channelNumber) : updater;
                 next[channelNumber] = updated;
             });
+            if (typeof onDraftChange === 'function') {
+                onDraftChange(device.id, next);
+            }
             return next;
         });
     };
@@ -286,10 +439,15 @@ function BlackBoxTestConfig({
     };
 
     useEffect(() => {
+        if (!persistExpandedState || embedded) return;
         setIsExpanded(readExpandedState(expandedStorageKey));
-    }, [expandedStorageKey]);
+    }, [expandedStorageKey, persistExpandedState, embedded]);
 
     useEffect(() => {
+        if (!shouldPersistDrafts) {
+            setDidRestoreDrafts(true);
+            return;
+        }
         try {
             const storedDrafts = sessionStorage.getItem(draftStorageKey);
             if (storedDrafts) {
@@ -298,59 +456,58 @@ function BlackBoxTestConfig({
                     setDraftConfigs(parsed);
                 }
             }
-            const storedActive = sessionStorage.getItem(activeStorageKey);
-            if (storedActive) {
-                const parsed = JSON.parse(storedActive);
-                if (Array.isArray(parsed)) {
-                    setActiveChannels(parsed);
-                }
-            }
         } catch (error) {
             console.error('Failed to restore blackbox draft configs:', error);
         } finally {
             setDidRestoreDrafts(true);
         }
-    }, [device.id, draftStorageKey, activeStorageKey]);
+    }, [device.id, draftStorageKey, shouldPersistDrafts]);
 
     useEffect(() => {
+        if (!persistExpandedState || embedded) return;
         try {
             sessionStorage.setItem(expandedStorageKey, JSON.stringify(isExpanded));
         } catch (error) {
             console.error('Failed to persist blackbox expanded state:', error);
         }
-    }, [isExpanded, expandedStorageKey]);
+    }, [isExpanded, expandedStorageKey, persistExpandedState, embedded]);
 
     useEffect(() => {
-        if (!didRestoreDrafts) return;
+        if (!shouldPersistDrafts || !didRestoreDrafts) return;
         try {
             sessionStorage.setItem(draftStorageKey, JSON.stringify(draftConfigs));
         } catch (error) {
             console.error('Failed to persist blackbox draft configs:', error);
         }
-    }, [didRestoreDrafts, draftConfigs, draftStorageKey]);
+    }, [didRestoreDrafts, draftConfigs, draftStorageKey, shouldPersistDrafts]);
 
     useEffect(() => {
-        if (!didRestoreDrafts) return;
-        try {
-            sessionStorage.setItem(activeStorageKey, JSON.stringify(activeChannels));
-        } catch (error) {
-            console.error('Failed to persist blackbox active channels:', error);
+        if (typeof onDraftChange !== 'function') return;
+        onDraftChange(device.id, draftConfigs);
+    }, [draftConfigs, device.id, onDraftChange]);
+
+    useEffect(() => {
+        if (!defaultChannelInService || seededDefaultsRef.current) return;
+        if (typeof onConfigurationChange !== 'function') return;
+
+        const hasExisting = Object.keys(configurations || {}).some(key => key.startsWith(`${device.id}-`));
+        if (hasExisting) {
+            seededDefaultsRef.current = true;
+            return;
         }
-    }, [didRestoreDrafts, activeChannels, activeStorageKey]);
+
+        const defaults = {};
+        for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
+            defaults[`${device.id}-${channelNumber}`] = createDefaultBlackboxConfig(true);
+        }
+        onConfigurationChange(defaults);
+        seededDefaultsRef.current = true;
+    }, [defaultChannelInService, configurations, device.id, onConfigurationChange]);
 
     useEffect(() => {
-        setActiveChannels(prev => {
-            const next = new Set(prev);
-            for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
-                if (getChannelConfig(channelNumber)) {
-                    next.add(channelNumber);
-                }
-            }
-            return Array.from(next);
-        });
-
         setDraftConfigs(prev => {
             const next = { ...prev };
+            const defaults = buildDraftConfigsFromConfigurations(configurations, device.id, defaultChannelInService);
             for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
                 const savedConfig = getChannelConfig(channelNumber);
                 const previousSaved = savedConfigsRef.current[channelNumber];
@@ -360,51 +517,162 @@ function BlackBoxTestConfig({
                 if (savedKey !== prevKey) {
                     const existingDraft = next[channelNumber];
                     if (!existingDraft || isEmptyDraftConfig(existingDraft)) {
-                        next[channelNumber] = savedConfig ? { ...getDefaultConfig(), ...savedConfig } : getDefaultConfig();
+                        next[channelNumber] = defaults[channelNumber];
+                    } else {
+                        next[channelNumber] = {
+                            ...existingDraft,
+                            in_service: defaults[channelNumber]?.in_service ?? existingDraft.in_service
+                        };
                     }
                     savedConfigsRef.current[channelNumber] = savedConfig ? { ...savedConfig } : null;
                 } else if (!next[channelNumber]) {
-                    next[channelNumber] = getDefaultConfig();
+                    next[channelNumber] = defaults[channelNumber];
                 }
             }
             return next;
         });
-    }, [configurations, device.id]);
+    }, [configurations, device.id, defaultChannelInService]);
 
     const toggleActiveChannel = (channelNumber) => {
-        const isConfigured = getChannelConfig(channelNumber) !== null;
-        setActiveChannels(prev => {
-            const isActive = prev.includes(channelNumber) || isConfigured;
-            if (isActive) {
-                return prev.filter(item => item !== channelNumber);
+        const targets = getTargetChannels(channelNumber);
+        const isCurrentlyActive = isChannelActive(channelNumber);
+        const nextConfigs = {};
+
+        updateDraftConfigs(targets, (current, target) => {
+            if (isCurrentlyActive && allowClearOnToggle && getChannelConfig(target) !== null) {
+                const cleared = createDefaultBlackboxConfig(false);
+                nextConfigs[target] = cleared;
+                return cleared;
             }
-            return [...prev, channelNumber];
+            const updated = { ...current, in_service: !isCurrentlyActive };
+            nextConfigs[target] = updated;
+            return updated;
         });
 
-        if (isConfigured) {
-            onClearChannelConfig(device.id, channelNumber);
-            setDraftConfigs(prev => ({ ...prev, [channelNumber]: getDefaultConfig() }));
-            setChannelErrors(prev => ({ ...prev, [channelNumber]: '' }));
+        if (isCurrentlyActive && allowClearOnToggle) {
+            targets.forEach(target => {
+                if (getChannelConfig(target) !== null) {
+                    onClearChannelConfig(device.id, target);
+                }
+            });
+            setChannelErrors(prev => {
+                const next = { ...prev };
+                targets.forEach(target => {
+                    next[target] = '';
+                });
+                return next;
+            });
+        }
+
+        if (shouldCommitOnToggle) {
+            targets.forEach(target => {
+                const hasExisting = getChannelConfig(target) !== null;
+                if (isCurrentlyActive && allowClearOnToggle && hasExisting) {
+                    onClearChannelConfig(device.id, target);
+                    return;
+                }
+                const configToSave = nextConfigs[target] || getDraftConfig(target);
+                onSaveChannelConfig(device.id, target, normalizeConfig(configToSave));
+            });
+        }
+    };
+
+    const handleSaveAll = async () => {
+        if (confirmSaveMessage && !window.confirm(confirmSaveMessage)) {
+            return;
+        }
+
+        const nextErrors = {};
+        let hasError = false;
+        const toSave = [];
+
+        for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
+            const targetConfig = getDraftConfig(channelNumber);
+            if (!targetConfig) continue;
+
+            const isActive = isConfigActive(targetConfig);
+            const hasSavedConfig = getChannelConfig(channelNumber) !== null;
+
+            const isEmptyConfig = (
+                !targetConfig.inoculum_sample_id
+                && !targetConfig.inoculum_weight_grams
+                && !targetConfig.substrate_sample_id
+                && !targetConfig.substrate_weight_grams
+                && !targetConfig.tumbler_volume
+                && !targetConfig.chimera_channel
+            );
+
+            if (!isActive) {
+                nextErrors[channelNumber] = '';
+                if (hasSavedConfig || (!isEmptyConfig && shouldSaveInactiveAsEmpty)) {
+                    toSave.push({
+                        channelNumber,
+                        config: normalizeConfig({ ...targetConfig, in_service: false })
+                    });
+                }
+                continue;
+            }
+
+            if (isEmptyConfig) {
+                nextErrors[channelNumber] = '';
+                toSave.push({
+                    channelNumber,
+                    config: normalizeConfig({ ...targetConfig, in_service: true })
+                });
+                continue;
+            }
+
+            const validationError = validateConfig(targetConfig);
+            if (validationError) {
+                nextErrors[channelNumber] = validationError;
+                hasError = true;
+                continue;
+            }
+
+            nextErrors[channelNumber] = '';
+            toSave.push({
+                channelNumber,
+                config: normalizeConfig({ ...targetConfig, in_service: true })
+            });
+        }
+
+        setChannelErrors(prev => ({ ...prev, ...nextErrors }));
+
+        if (hasError) {
+            return;
+        }
+
+        try {
+            if (typeof onSaveAllChannelConfigs === 'function') {
+                await onSaveAllChannelConfigs(
+                    device.id,
+                    toSave.map(item => ({
+                        channelNumber: item.channelNumber,
+                        config: item.config
+                    }))
+                );
+            } else {
+                await Promise.all(
+                    toSave.map(item => onSaveChannelConfig(device.id, item.channelNumber, item.config))
+                );
+            }
+            if (onSaveComplete) {
+                onSaveComplete();
+            }
+        } catch (error) {
+            alert(error.message || tPages('test_config.save_failed'));
         }
     };
 
     const validateConfig = (config) => {
-        if (!config.inoculum_sample_id) {
-            return tPages('test_config.error_select_inoculum');
-        }
-
-        if (!config.inoculum_weight_grams || parseFloat(config.inoculum_weight_grams) <= 0) {
-            return tPages('test_config.error_inoculum_weight');
-        }
-
-        if (!config.tumbler_volume || parseFloat(config.tumbler_volume) <= 0) {
-            return tPages('test_config.error_tumbler_volume');
-        }
-
-        if (showChimeraChannel) {
-            if (!config.chimera_channel || config.chimera_channel === '') {
-                return tPages('test_config.error_chimera_required');
+        if (config.tumbler_volume !== '' && config.tumbler_volume !== null && config.tumbler_volume !== undefined) {
+            const tumblerValue = parseFloat(config.tumbler_volume);
+            if (isNaN(tumblerValue) || tumblerValue < 0) {
+                return tPages('test_config.error_tumbler_volume');
             }
+        }
+
+        if (showChimeraChannel && config.chimera_channel !== null && config.chimera_channel !== undefined && config.chimera_channel !== '') {
             const channelNum = parseInt(config.chimera_channel);
             if (isNaN(channelNum) || channelNum < 1 || channelNum > 15) {
                 return tPages('test_config.error_chimera_range');
@@ -439,19 +707,46 @@ function BlackBoxTestConfig({
             result.configurations.forEach(csvConfig => {
                 if (csvConfig.channel_number >= 1 && csvConfig.channel_number <= 15) {
                     const configKey = `${device.id}-${csvConfig.channel_number}`;
+                    const inService = normalizeInService(csvConfig.in_service, true);
                     newConfigurations[configKey] = {
                         inoculum_sample_id: '',
                         inoculum_weight_grams: csvConfig.inoculum_weight_grams,
-                        substrate_sample_id: csvConfig.is_control ? '' : '',
+                        substrate_sample_id: '',
                         substrate_weight_grams: csvConfig.substrate_weight_grams,
                         tumbler_volume: csvConfig.tumbler_volume,
-                        chimera_channel: csvConfig.chimera_channel || null
+                        chimera_channel: csvConfig.chimera_channel || null,
+                        in_service: inService,
+                        notes: csvConfig.notes || ''
                     };
                     appliedCount++;
                 }
             });
 
+            // Update parent configurations
             onConfigurationChange(newConfigurations);
+
+            // Directly update draft configs so values appear in the form immediately
+            // (the sync effect only partially updates non-empty drafts)
+            setDraftConfigs(prev => {
+                const next = { ...prev };
+                result.configurations.forEach(csvConfig => {
+                    if (csvConfig.channel_number >= 1 && csvConfig.channel_number <= 15) {
+                        const inService = normalizeInService(csvConfig.in_service, true);
+                        next[csvConfig.channel_number] = {
+                            ...(prev[csvConfig.channel_number] || createDefaultBlackboxConfig()),
+                            inoculum_sample_id: '',
+                            inoculum_weight_grams: csvConfig.inoculum_weight_grams,
+                            substrate_sample_id: '',
+                            substrate_weight_grams: csvConfig.substrate_weight_grams,
+                            tumbler_volume: csvConfig.tumbler_volume,
+                            chimera_channel: csvConfig.chimera_channel || null,
+                            in_service: inService,
+                            notes: csvConfig.notes || ''
+                        };
+                    }
+                });
+                return next;
+            });
 
             alert(tPages('test_config.csv_uploaded', { count: appliedCount, device: device.name }));
 
@@ -465,6 +760,18 @@ function BlackBoxTestConfig({
     };
 
     const columnCount = showChimeraChannel ? 7 : 6;
+    const activeDraftChannels = React.useMemo(() => {
+        const list = [];
+        for (let channelNumber = 1; channelNumber <= 15; channelNumber += 1) {
+            if (isConfigActive(getDraftConfig(channelNumber))) {
+                list.push(channelNumber);
+            }
+        }
+        return list;
+    }, [draftConfigs]);
+    const displayedChannels = showActiveOnly
+        ? (activeDraftChannels.length > 0 ? activeDraftChannels : Array.from({ length: 15 }, (_, i) => i + 1))
+        : Array.from({ length: 15 }, (_, i) => i + 1);
 
     const handleExportCsv = () => {
         const rows = Array.from({ length: 15 }, (_, i) => i + 1)
@@ -474,10 +781,11 @@ function BlackBoxTestConfig({
                 const sampleDescription = `${channelNumber}`;
 
                 const inoculumOnly = Number(config.substrate_weight_grams || 0) === 0;
+                const inService = normalizeInService(config.in_service, isConfigActive(config)) ? 1 : 0;
 
                 return {
                     sampleDescription,
-                    inService: 1,
+                    inService,
                     inoculumOnly: inoculumOnly ? 1 : 0,
                     inoculumWeight: config.inoculum_weight_grams ?? '',
                     substrateWeight: inoculumOnly ? 0 : (config.substrate_weight_grams ?? ''),
@@ -553,16 +861,16 @@ function BlackBoxTestConfig({
     };
 
     const applyFieldChange = (channelNumber, updater) => {
+        if (isReadOnly) return;
         const targets = getTargetChannels(channelNumber);
-        setActiveChannels(prev => {
-            const next = new Set(prev);
-            targets.forEach(target => next.add(target));
-            return Array.from(next);
+        updateDraftConfigs(targets, (current, target) => {
+            const updated = typeof updater === 'function' ? updater(current, target) : updater;
+            return { ...updated, in_service: true };
         });
-        updateDraftConfigs(targets, updater);
     };
 
     const attemptSave = (channelNumber) => {
+        if (isReadOnly) return;
         const targets = getTargetChannels(channelNumber);
         setChannelErrors(prev => {
             const nextErrors = { ...prev };
@@ -574,6 +882,7 @@ function BlackBoxTestConfig({
                     return;
                 }
 
+                const isActive = isConfigActive(targetConfig);
                 const isEmptyConfig = (
                     !targetConfig.inoculum_sample_id
                     && !targetConfig.inoculum_weight_grams
@@ -583,9 +892,17 @@ function BlackBoxTestConfig({
                     && !targetConfig.chimera_channel
                 );
 
-                if (isEmptyConfig) {
-                    onClearChannelConfig(device.id, targetChannel);
+                if (!isActive) {
                     nextErrors[targetChannel] = '';
+                    if (shouldSaveInactiveAsEmpty && getChannelConfig(targetChannel) !== null) {
+                        onSaveChannelConfig(device.id, targetChannel, normalizeConfig({ ...targetConfig, in_service: false }));
+                    }
+                    return;
+                }
+
+                if (isEmptyConfig) {
+                    nextErrors[targetChannel] = '';
+                    onSaveChannelConfig(device.id, targetChannel, normalizeConfig({ ...targetConfig, in_service: true }));
                     return;
                 }
 
@@ -596,7 +913,7 @@ function BlackBoxTestConfig({
                 }
 
                 nextErrors[targetChannel] = '';
-                onSaveChannelConfig(device.id, targetChannel, normalizeConfig(targetConfig));
+                onSaveChannelConfig(device.id, targetChannel, normalizeConfig({ ...targetConfig, in_service: true }));
             });
 
             return nextErrors;
@@ -604,18 +921,135 @@ function BlackBoxTestConfig({
     };
 
     const handleRowMouseDown = (channelNumber, event) => {
+        if (isReadOnly) return;
         if (!isMultiSelectEvent(event)) return;
         skipRowClickRef.current = true;
         handleRowSelection(channelNumber, event);
     };
 
     const handleRowClick = (channelNumber, event) => {
+        if (isReadOnly) return;
         if (skipRowClickRef.current) {
             skipRowClickRef.current = false;
             return;
         }
         handleRowSelection(channelNumber, event);
     };
+
+    const actionsContent = !hideActions ? (
+        <div className="flex items-center gap-2">
+            {showSaveButton && (
+                <button
+                    type="button"
+                    onClick={handleSaveAll}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all"
+                >
+                    {tPages('test_config.save_changes')}
+                </button>
+            )}
+            {showUploadCsv && (
+                <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm cursor-pointer transition-all">
+                    <Upload size={14} />
+                    {tPages('test_config.bulk_config')}
+                    <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleCsvUpload}
+                        disabled={uploadingCsv}
+                        className="hidden"
+                    />
+                </label>
+            )}
+            {showExportCsv && (
+                <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
+                >
+                    <Download size={14} />
+                    {tPages('test_config.export_csv')}
+                </button>
+            )}
+            {showCreateSample && (
+                <button
+                    type="button"
+                    onClick={handleCreateSample}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
+                >
+                    <Plus size={14} />
+                    {tPages('test_config.create_sample')}
+                </button>
+            )}
+        </div>
+    ) : null;
+
+    const content = (
+        <div className={embedded ? '' : 'p-6'}>
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        {tPages('test_config.configure_channel')}
+                    </h4>
+                    <span className="text-xs text-gray-400">{tPages('test_config.gas_flow_meter')}</span>
+                    {saveNoticeMessage && (
+                        <div className="mt-1 text-[11px] text-amber-700">
+                            {saveNoticeMessage}
+                        </div>
+                    )}
+                </div>
+                {actionsContent}
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse text-xs">
+                    <thead>
+                        <tr className="text-[10px] uppercase tracking-wider text-gray-500">
+                            <th className="px-2 py-2 text-left">{tPages('test_config.channel')}</th>
+                            <th className="px-2 py-2 text-left">{tPages('test_config.inoculum_sample')}</th>
+                            <th className="px-2 py-2 text-left">{tPages('test_config.inoculum_weight')}</th>
+                            <th className="px-2 py-2 text-left">{tPages('test_config.tumbler_volume')}</th>
+                            <th className="px-2 py-2 text-left">{tPages('test_config.substrate_sample')}</th>
+                            <th className="px-2 py-2 text-left">{tPages('test_config.substrate_weight')}</th>
+                            {showChimeraChannel && (
+                                <th className="px-2 py-2 text-left">{tPages('test_config.chimera_channel')}</th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {displayedChannels.map(channelNumber => (
+                            <BlackBoxChannelRow
+                                key={channelNumber}
+                                channelNumber={channelNumber}
+                                config={getDraftConfig(channelNumber)}
+                                error={channelErrors[channelNumber]}
+                                isConfigured={getChannelConfig(channelNumber) !== null}
+                                isControl={(getChannelConfig(channelNumber)?.substrate_weight_grams ?? null) === 0}
+                                isSelected={selectedChannels.includes(channelNumber)}
+                                isActive={isChannelActive(channelNumber)}
+                                disableActiveToggle={disableActiveToggle}
+                                isReadOnly={isReadOnly}
+                                showChimeraChannel={showChimeraChannel}
+                                inoculums={inoculums}
+                                samples={samples}
+                                tPages={tPages}
+                                onRowMouseDown={handleRowMouseDown}
+                                onRowClick={handleRowClick}
+                                onToggleActive={toggleActiveChannel}
+                                onFieldChange={applyFieldChange}
+                                onAttemptSave={attemptSave}
+                                autoSaveOnBlur={autoSaveOnBlur}
+                                columnCount={columnCount}
+                            />
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
+    if (embedded) {
+        return content;
+    }
 
     return (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm transition-all hover:shadow-md">
@@ -634,89 +1068,7 @@ function BlackBoxTestConfig({
                 </div>
             </div>
 
-            {isExpanded && (
-                <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                {tPages('test_config.configure_channel')}
-                            </h4>
-                            <span className="text-xs text-gray-400">{tPages('test_config.gas_flow_meter')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm cursor-pointer transition-all">
-                                <Upload size={14} />
-                                {tPages('test_config.bulk_config')}
-                                <input
-                                    type="file"
-                                    accept=".csv"
-                                    onChange={handleCsvUpload}
-                                    disabled={uploadingCsv}
-                                    className="hidden"
-                                />
-                            </label>
-                            <button
-                                type="button"
-                                onClick={handleExportCsv}
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
-                            >
-                                <Download size={14} />
-                                {tPages('test_config.export_csv')}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCreateSample}
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
-                            >
-                                <Plus size={14} />
-                                {tPages('test_config.create_sample')}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full border-collapse text-xs">
-                            <thead>
-                                <tr className="text-[10px] uppercase tracking-wider text-gray-500">
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.channel')}</th>
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.inoculum_sample')}</th>
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.inoculum_weight')}</th>
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.tumbler_volume')}</th>
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.substrate_sample')}</th>
-                                    <th className="px-2 py-2 text-left">{tPages('test_config.substrate_weight')}</th>
-                                    {showChimeraChannel && (
-                                        <th className="px-2 py-2 text-left">{tPages('test_config.chimera_channel')}</th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {Array.from({ length: 15 }, (_, i) => i + 1).map(channelNumber => (
-                                    <BlackBoxChannelRow
-                                        key={channelNumber}
-                                        channelNumber={channelNumber}
-                                        config={getDraftConfig(channelNumber)}
-                                        error={channelErrors[channelNumber]}
-                                        isConfigured={getChannelConfig(channelNumber) !== null}
-                                        isControl={(getChannelConfig(channelNumber)?.substrate_weight_grams ?? null) === 0}
-                                        isSelected={selectedChannels.includes(channelNumber)}
-                                        isActive={activeChannels.includes(channelNumber) || getChannelConfig(channelNumber) !== null}
-                                        showChimeraChannel={showChimeraChannel}
-                                        inoculums={inoculums}
-                                        samples={samples}
-                                        tPages={tPages}
-                                        onRowMouseDown={handleRowMouseDown}
-                                        onRowClick={handleRowClick}
-                                        onToggleActive={toggleActiveChannel}
-                                        onFieldChange={applyFieldChange}
-                                        onAttemptSave={attemptSave}
-                                        columnCount={columnCount}
-                                    />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
+            {isExpanded && content}
         </div>
     );
 }

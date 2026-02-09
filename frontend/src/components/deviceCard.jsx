@@ -397,7 +397,13 @@ function DeviceCard(props) {
                                                     value={calibrationGasPct}
                                                     onChange={(e) => setCalibrationGasPct(e.target.value)}
                                                 />
-                                                <span className="text-sm text-gray-500">%</span>
+                                                <span className="text-sm text-gray-500">
+                                                    {(() => {
+                                                        const sensor = availableSensors.find(s => s.sensor_number === parseInt(calibrationSensor));
+                                                        const gasName = sensor?.gas_name?.toUpperCase() || '';
+                                                        return ['H2S', 'H2', 'CO', 'NH3'].includes(gasName) ? 'ppm' : '%';
+                                                    })()}
+                                                </span>
                                             </div>
 
                                             <div className="flex gap-1">

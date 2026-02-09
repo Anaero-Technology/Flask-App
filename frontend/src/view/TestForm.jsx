@@ -27,6 +27,7 @@ function TestForm() {
     const [samples, setSamples] = useState([]);
     const [inoculums, setInoculums] = useState([]);
     const [configurations, setConfigurations] = useState({});
+    const [blackboxDrafts, setBlackboxDrafts] = useState({});
     const [loading, setLoading] = useState(false);
     const [selectedDevices, setSelectedDevices] = useState([]);
     const [globalDeviceModel, setGlobalDeviceModel] = useState(null); // 'chimera' or 'chimera-max'
@@ -133,11 +134,17 @@ function TestForm() {
         }
     };
 
+    const isBlackBoxDeviceType = (deviceType) => {
+        if (!deviceType) return false;
+        const normalized = String(deviceType).toLowerCase().replace(/[_\s]/g, '-');
+        return normalized === 'black-box' || normalized === 'blackbox';
+    };
+
     // Auto-switch to off if volume mode is selected but no BlackBox is available
     // Also auto-switch to off if global device model doesn't support recirculation
     useEffect(() => {
         const selected = devices.filter(d => selectedDevices.includes(d.id));
-        const hasBlackBox = selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+        const hasBlackBox = selected.some(d => isBlackBoxDeviceType(d.device_type));
         const hasChimera = selected.some(d => ['chimera', 'chimera-max'].includes(d.device_type));
 
         if (hasChimera && globalDeviceModel !== 'chimera-max' && recirculationMode !== 'off') {
@@ -247,6 +254,13 @@ function TestForm() {
         clearChannelConfig(deviceId, channelNumber);
     };
 
+    const handleBlackboxDraftChange = (deviceId, drafts) => {
+        setBlackboxDrafts(prev => ({
+            ...prev,
+            [deviceId]: drafts
+        }));
+    };
+
     // Helper to check if any Chimera is selected
     const hasChimeraSelected = () => {
         const selected = devices.filter(d => selectedDevices.includes(d.id));
@@ -256,7 +270,7 @@ function TestForm() {
     // Helper to check if any BlackBox is selected
     const hasBlackBoxSelected = () => {
         const selected = devices.filter(d => selectedDevices.includes(d.id));
-        return selected.some(d => ['black-box', 'black_box'].includes(d.device_type));
+        return selected.some(d => isBlackBoxDeviceType(d.device_type));
     };
 
     // Helper to check if Chimera channel field should be shown in BlackBox config (needs both)
@@ -288,24 +302,90 @@ function TestForm() {
 
     const getTestValidationStatus = () => {
         const missing = [];
+        const warnings = [];
+        const hasValue = (value) => {
+            if (value === null || value === undefined || value === '') return false;
+            if (typeof value === 'number') return value !== 0;
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed === '') return false;
+                const numeric = Number(trimmed);
+                if (!Number.isNaN(numeric)) return numeric !== 0;
+                return true;
+            }
+            return true;
+        };
+        const hasConfigData = (config) => {
+            if (!config) return false;
+            return (
+                hasValue(config.inoculum_sample_id)
+                || hasValue(config.substrate_sample_id)
+                || hasValue(config.inoculum_weight_grams)
+                || hasValue(config.substrate_weight_grams)
+                || hasValue(config.tumbler_volume)
+                || hasValue(config.chimera_channel)
+            );
+        };
+        const normalizeInServiceValue = (value) => {
+            if (value === true) return true;
+            if (value === false) return false;
+            if (typeof value === 'number') return value !== 0;
+            if (typeof value === 'string') {
+                const lowered = value.trim().toLowerCase();
+                if (['true', '1', 'yes', 'y', 'on'].includes(lowered)) return true;
+                if (['false', '0', 'no', 'n', 'off', ''].includes(lowered)) return false;
+            }
+            return false;
+        };
+        const getDraftConfigForDevice = (deviceId) => {
+            if (blackboxDrafts[deviceId]) return blackboxDrafts[deviceId];
+            try {
+                const stored = sessionStorage.getItem(`test_form_blackbox_drafts_${deviceId}`);
+                if (!stored) return null;
+                const parsed = JSON.parse(stored);
+                if (!parsed || typeof parsed !== 'object') return null;
+                return parsed;
+            } catch (error) {
+                return null;
+            }
+        };
+        const hasInServiceForDevice = (deviceId) => {
+            const draftMap = getDraftConfigForDevice(deviceId);
+            if (draftMap && Object.keys(draftMap).length > 0) {
+                return Object.values(draftMap).some(config => normalizeInServiceValue(config?.in_service));
+            }
+            const configsForDevice = Object.entries(configurations).filter(([key]) => (
+                key.startsWith(`${deviceId}-`)
+            ));
+            return configsForDevice.some(([, config]) => normalizeInServiceValue(config?.in_service));
+        };
 
         if (!testName.trim()) {
             missing.push(tPages('test_form.test_name_required'));
         }
 
-        const configCount = Object.keys(configurations).length;
+        const selectedBlackboxIds = devices
+            .filter(d => selectedDevices.includes(d.id) && isBlackBoxDeviceType(d.device_type))
+            .map(d => d.id);
+        const activeConfigCount = selectedBlackboxIds.filter(deviceId => hasInServiceForDevice(deviceId)).length;
+        const configuredDataCount = Object.entries(configurations).filter(([key, config]) => {
+            if (!config) return false;
+            const deviceId = parseInt(key.split('-')[0], 10);
+            if (!selectedBlackboxIds.includes(deviceId)) return false;
+            return hasConfigData(config);
+        }).length;
         const deviceCount = selectedDevices.length;
 
         if (deviceCount === 0) {
             missing.push(tPages('test_form.at_least_one_device'));
-        } else if (configCount === 0) {
+        } else {
             // Check if any selected device is a BlackBox (which requires config)
-            const hasBlackBox = devices
-                .filter(d => selectedDevices.includes(d.id))
-                .some(d => ['black-box', 'black_box'].includes(d.device_type));
+            const hasBlackBox = selectedBlackboxIds.length > 0;
 
-            if (hasBlackBox) {
+            if (hasBlackBox && activeConfigCount === 0) {
                 missing.push(tPages('test_form.blackbox_config_required'));
+            } else if (hasBlackBox && configuredDataCount === 0) {
+                warnings.push(tPages('test_form.blackbox_config_required'));
             }
         }
 
@@ -316,7 +396,8 @@ function TestForm() {
 
         return {
             isValid: missing.length === 0,
-            missing: missing
+            missing,
+            warnings
         };
     };
 
@@ -325,6 +406,10 @@ function TestForm() {
 
         if (!validation.isValid) {
             toast.warning(`${tPages('test_form.cannot_start_test')}. ${tPages('test_form.missing')} ${validation.missing.join(', ')}`);
+            return;
+        }
+
+        if (!window.confirm(tPages('test_form.start_confirm'))) {
             return;
         }
 
@@ -352,6 +437,19 @@ function TestForm() {
 
         setLoading(true);
         try {
+            const getDraftConfigForDevice = (deviceId) => {
+                if (blackboxDrafts[deviceId]) return blackboxDrafts[deviceId];
+                try {
+                    const stored = sessionStorage.getItem(`test_form_blackbox_drafts_${deviceId}`);
+                    if (!stored) return null;
+                    const parsed = JSON.parse(stored);
+                    if (!parsed || typeof parsed !== 'object') return null;
+                    return parsed;
+                } catch (error) {
+                    return null;
+                }
+            };
+
             // Create test
             const testResponse = await authFetch('/api/v1/tests', {
                 method: 'POST',
@@ -371,16 +469,24 @@ function TestForm() {
             // Create channel configurations (BlackBox)
             const configArray = Object.entries(configurations).map(([key, config]) => {
                 const [deviceId, channelNumber] = key.split('-');
+                const numericDeviceId = parseInt(deviceId, 10);
+                const draftConfig = getDraftConfigForDevice(numericDeviceId)?.[channelNumber];
+                const draftInService = draftConfig?.in_service;
                 return {
-                    device_id: parseInt(deviceId),
-                    channel_number: parseInt(channelNumber),
+                    device_id: numericDeviceId,
+                    channel_number: parseInt(channelNumber, 10),
                     inoculum_sample_id: config.inoculum_sample_id,
                     inoculum_weight_grams: config.inoculum_weight_grams,
                     substrate_sample_id: config.substrate_sample_id || null,
                     substrate_weight_grams: config.substrate_weight_grams || 0,
                     tumbler_volume: config.tumbler_volume,
                     chimera_channel: config.chimera_channel || null,
-                    notes: config.notes || ''
+                    notes: config.notes || '',
+                    in_service: draftInService === undefined || draftInService === null
+                        ? (config.in_service === undefined || config.in_service === null
+                            ? false
+                            : Boolean(config.in_service))
+                        : Boolean(draftInService)
                 };
             });
 
@@ -437,6 +543,7 @@ function TestForm() {
             setTestName('');
             setTestDescription('');
             setConfigurations({});
+            setSelectedDevices([]);
             fetchDevices(); // Refresh devices to show updated busy status
 
         } catch (error) {
@@ -614,7 +721,11 @@ function TestForm() {
                                                     onConfigurationChange={handleConfigurationChange}
                                                     onSaveChannelConfig={handleSaveChannelConfig}
                                                     onClearChannelConfig={handleClearChannelConfig}
+                                                    onDraftChange={handleBlackboxDraftChange}
                                                     showChimeraChannel={shouldShowChimeraChannel()}
+                                                    commitOnToggle
+                                                    defaultInService
+                                                    clearOnToggle={false}
                                                 />
                                             </div>
                                         ))}
@@ -652,6 +763,12 @@ function TestForm() {
                                             <span className="text-sm text-red-600 flex items-center gap-1.5 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
                                                 <AlertCircle size={14} />
                                                 {tPages('test_form.missing')} {validation.missing.join(', ')}
+                                            </span>
+                                        )}
+                                        {validation.warnings?.length > 0 && (
+                                            <span className="text-sm text-amber-700 flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
+                                                <AlertCircle size={14} />
+                                                {tPages('test_form.missing')} {validation.warnings.join(', ')}
                                             </span>
                                         )}
                                         <button

@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_sse import sse
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from database.models import *
-from utils.auth import require_role
+from utils.auth import require_role, log_audit
 import serial.tools.list_ports
 from device_manager import DeviceManager
 from config import Config
@@ -13,6 +13,7 @@ import os
 import re
 from werkzeug.utils import secure_filename
 from sqlalchemy.engine import make_url
+from sqlalchemy import text, or_
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
@@ -34,6 +35,20 @@ register_cli(app)
 # Create tables
 with app.app_context():
     db.create_all()
+
+    def ensure_channel_in_service_column():
+        try:
+            if db.engine.dialect.name != 'sqlite':
+                return
+            columns = [row[1] for row in db.session.execute(text("PRAGMA table_info(channel_configurations)"))]
+            if 'in_service' not in columns:
+                db.session.execute(text("ALTER TABLE channel_configurations ADD COLUMN in_service BOOLEAN DEFAULT 1"))
+                db.session.execute(text("UPDATE channel_configurations SET in_service = 1 WHERE in_service IS NULL"))
+                db.session.commit()
+        except Exception as exc:
+            print(f"[WARN] Failed to ensure in_service column on channel_configurations: {exc}")
+
+    ensure_channel_in_service_column()
 
 # Create uploads directory for branding assets
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -509,18 +524,28 @@ def create_sample():
 @app.route("/api/v1/samples", methods=['GET'])
 @jwt_required()
 def list_substrate_samples():
-    """Get all samples (substrates only, not inoculums)"""
+    """Get samples (substrates by default). Use include_inoculum=true to include inoculums."""
     try:
-        # Only return non-inoculum samples for substrate selection
-        samples = Sample.query.filter_by(is_inoculum=False).all()
+        include_inoculum = request.args.get('include_inoculum') == 'true'
+        query = Sample.query
+        if not include_inoculum:
+            query = query.filter_by(is_inoculum=False)
+        samples = query.all()
         return jsonify([{
             "id": sample.id,
             "sample_name": sample.sample_name,
             "substrate_source": sample.substrate_source,
             "description": sample.description,
             "substrate_type": sample.substrate_type,
+            "substrate_subtype": sample.substrate_subtype,
+            "ash_content": sample.ash_content,
+            "c_content": sample.c_content,
+            "n_content": sample.n_content,
+            "substrate_percent_ts": sample.substrate_percent_ts,
+            "substrate_percent_vs": sample.substrate_percent_vs,
             "author": sample.author,
-            "date_created": sample.date_created.isoformat() if sample.date_created else None
+            "date_created": sample.date_created.isoformat() if sample.date_created else None,
+            "is_inoculum": sample.is_inoculum
         } for sample in samples])
     except Exception as e:
         db.session.rollback()
@@ -590,6 +615,19 @@ def update_sample(sample_id):
             sample.temperature = float(data['temperature']) if data['temperature'] else None
 
         db.session.commit()
+
+        # Audit log entry
+        try:
+            user_id = get_jwt_identity()
+            log_audit(
+                int(user_id),
+                'update_sample',
+                'sample',
+                sample_id,
+                f"Updated sample '{sample.sample_name}'"
+            )
+        except Exception as audit_error:
+            print(f"[AUDIT] Failed to log sample update: {audit_error}")
 
         return jsonify({
             "success": True,
@@ -752,10 +790,59 @@ def get_test(test_id):
                 "substrate_sample_id": config.substrate_sample_id,
                 "substrate_weight_grams": config.substrate_weight_grams,
                 "tumbler_volume": config.tumbler_volume,
+                "chimera_channel": config.chimera_channel,
+                "in_service": config.in_service if config.in_service is not None else True,
                 "notes": config.notes
             } for config in configurations]
         })
     except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/v1/tests/<int:test_id>", methods=['PUT'])
+@jwt_required()
+@require_role(['admin', 'operator'])
+def update_test(test_id):
+    """Update test name/description"""
+    try:
+        data = request.get_json() or {}
+        test = Test.query.get(test_id)
+        if not test:
+            return jsonify({"error": "Test not found"}), 404
+
+        name = data.get('name')
+        description = data.get('description')
+
+        if name is not None:
+            if not str(name).strip():
+                return jsonify({"error": "Test name cannot be empty"}), 400
+            test.name = name
+        if description is not None:
+            test.description = description
+
+        db.session.commit()
+
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        audit_log = AuditLog(
+            user_id=int(user_id),
+            action='update_test',
+            target_type='test',
+            target_id=test_id,
+            details=f"Updated test '{test.name}' by {user.username if user else 'Unknown'}"
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "test": {
+                "id": test.id,
+                "name": test.name,
+                "description": test.description
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 @app.route("/api/v1/tests/<int:test_id>/chimera-configuration", methods=['GET'])
@@ -797,6 +884,10 @@ def get_chimera_configuration(test_id):
         for channel_cfg in channel_configs:
             # Get sample information linked to this channel
             sample_name = None
+            inoculum_name = None
+            substrate_name = None
+            inoculum_sample_id = None
+            substrate_sample_id = None
 
             # Find BlackBox configuration for this Chimera channel
             bb_config = ChannelConfiguration.query.filter_by(
@@ -805,14 +896,13 @@ def get_chimera_configuration(test_id):
             ).first()
 
             if bb_config:
-                inoculum_name = None
-                substrate_name = None
-
                 if bb_config.inoculum_sample_id:
+                    inoculum_sample_id = bb_config.inoculum_sample_id
                     inoculum = Sample.query.get(bb_config.inoculum_sample_id)
                     inoculum_name = inoculum.sample_name if inoculum else "Unknown Inoculum"
 
                 if bb_config.substrate_sample_id:
+                    substrate_sample_id = bb_config.substrate_sample_id
                     substrate = Sample.query.get(bb_config.substrate_sample_id)
                     substrate_name = substrate.sample_name if substrate else "Unknown Substrate"
 
@@ -827,7 +917,11 @@ def get_chimera_configuration(test_id):
                 "channel_number": channel_cfg.channel_number,
                 "open_time_seconds": channel_cfg.open_time_seconds,
                 "volume_threshold_ml": channel_cfg.volume_threshold_ml,
-                "sample_name": sample_name
+                "sample_name": sample_name,
+                "inoculum_sample_id": inoculum_sample_id,
+                "inoculum_name": inoculum_name,
+                "substrate_sample_id": substrate_sample_id,
+                "substrate_name": substrate_name
             })
 
         # Sort channels by channel number
@@ -889,9 +983,15 @@ def get_blackbox_configuration(test_id, device_id):
             channels.append({
                 "channel_number": channel_cfg.channel_number,
                 "sample_name": sample_name,
+                "inoculum_sample_id": channel_cfg.inoculum_sample_id,
+                "inoculum_name": inoculum_name,
+                "substrate_sample_id": channel_cfg.substrate_sample_id,
+                "substrate_name": substrate_name,
                 "inoculum_weight_grams": channel_cfg.inoculum_weight_grams,
                 "substrate_weight_grams": channel_cfg.substrate_weight_grams,
-                "tumbler_volume": channel_cfg.tumbler_volume
+                "tumbler_volume": channel_cfg.tumbler_volume,
+                "chimera_channel": channel_cfg.chimera_channel,
+                "in_service": channel_cfg.in_service if channel_cfg.in_service is not None else True
             })
 
         # Sort channels by channel number
@@ -913,6 +1013,7 @@ def get_blackbox_configuration(test_id, device_id):
 @require_role(['admin', 'operator', 'technician'])
 def start_test(test_id):
     """Start a test and assign it to devices, initiating logging"""
+    started_devices = []
     try:
         from datetime import datetime
         test = Test.query.get(test_id)
@@ -1007,6 +1108,27 @@ def start_test(test_id):
             if device.active_test_id and device.active_test_id != test_id:
                 return jsonify({"error": f"Device {device.name} is already in use by another test"}), 400
 
+        # Ensure at least one in-service channel for each selected BlackBox device
+        def is_blackbox_device_type(device_type):
+            if not device_type:
+                return False
+            normalized = str(device_type).lower().replace('_', '-').replace(' ', '-')
+            return normalized in ['black-box', 'blackbox']
+
+        blackbox_devices = []
+        for device_id in all_device_ids:
+            device = Device.query.get(device_id)
+            if device and is_blackbox_device_type(device.device_type):
+                blackbox_devices.append(device)
+        for device in blackbox_devices:
+            has_in_service = ChannelConfiguration.query.filter(
+                ChannelConfiguration.test_id == test_id,
+                ChannelConfiguration.device_id == device.id,
+                or_(ChannelConfiguration.in_service == True, ChannelConfiguration.in_service.is_(None))
+            ).first()
+            if not has_in_service:
+                return jsonify({"error": f"No in-service channels configured for {device.name}. Please enable at least one channel."}), 400
+
         # Update test status
         test.status = 'running'
         test.date_started = datetime.now()
@@ -1018,8 +1140,19 @@ def start_test(test_id):
             handler = device_manager.get_device(device_id)
 
             if not handler:
+                for started_device, started_handler in started_devices:
+                    try:
+                        if started_handler:
+                            started_handler.stop_logging()
+                    except Exception:
+                        pass
+                    if started_handler:
+                        try:
+                            started_handler.set_test_id(None)
+                        except Exception:
+                            pass
                 db.session.rollback()
-                return jsonify({"error": f"Handler not found for device {device.name}"}), 500
+                return jsonify({"error": f"Handler not found for device {device.name}. Any devices already started were stopped."}), 500
 
             # Start logging based on device type
             if device.device_type in ['black-box', 'black_box']:
@@ -1044,8 +1177,19 @@ def start_test(test_id):
                 print(f"[DEBUG] Generated filename: '{filename}' (length: {len(filename)})")
                 success, message = handler.start_logging(filename)
                 if not success:
+                    for started_device, started_handler in started_devices:
+                        try:
+                            if started_handler:
+                                started_handler.stop_logging()
+                        except Exception:
+                            pass
+                        if started_handler:
+                            try:
+                                started_handler.set_test_id(None)
+                            except Exception:
+                                pass
                     db.session.rollback()
-                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}. Any devices already started were stopped."}), 500
 
                 logging_results.append({
                     "device": device.name,
@@ -1064,8 +1208,8 @@ def start_test(test_id):
                 # Clean device name
                 clean_device_name = re.sub(r'[^a-zA-Z0-9_]', '', device.name.replace(' ', '_'))
 
-                # Format: testname_devicename (max 59 chars)
-                filename = f"{clean_test_name}_{clean_device_name}"
+                # Format: testname_devicename_testid (max 59 chars)
+                filename = f"{clean_test_name}_{clean_device_name}_t{test_id}"
 
                 # Truncate to 59 chars max (Chimera firmware limit)
                 if len(filename) > 59:
@@ -1077,8 +1221,19 @@ def start_test(test_id):
                 print(f"[DEBUG] Chimera start_logging result: success={success}, message={message}")
 
                 if not success:
+                    for started_device, started_handler in started_devices:
+                        try:
+                            if started_handler:
+                                started_handler.stop_logging()
+                        except Exception:
+                            pass
+                        if started_handler:
+                            try:
+                                started_handler.set_test_id(None)
+                            except Exception:
+                                pass
                     db.session.rollback()
-                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}"}), 500
+                    return jsonify({"error": f"Failed to start logging on {device.name}: {message}. Any devices already started were stopped."}), 500
 
                 logging_results.append({
                     "device": device.name,
@@ -1089,6 +1244,7 @@ def start_test(test_id):
             handler.set_test_id(test_id)
             device.active_test_id = test_id
             device.logging = True
+            started_devices.append((device, handler))
 
         db.session.commit()
 
@@ -1113,6 +1269,18 @@ def start_test(test_id):
         }), 200
 
     except Exception as e:
+        if started_devices:
+            for started_device, started_handler in started_devices:
+                try:
+                    if started_handler:
+                        started_handler.stop_logging()
+                except Exception:
+                    pass
+                if started_handler:
+                    try:
+                        started_handler.set_test_id(None)
+                    except Exception:
+                        pass
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
@@ -1190,42 +1358,175 @@ def create_channel_configuration(test_id):
         if not configurations:
             return jsonify({"error": "No configurations provided"}), 400
         
+        def normalize_optional_int(value):
+            if value is None:
+                return None
+            if isinstance(value, str) and value.strip() == '':
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        def normalize_float(value, default=0.0):
+            if value is None:
+                return default
+            if isinstance(value, str) and value.strip() == '':
+                return default
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def normalize_optional_id(value):
+            if value is None:
+                return None
+            if isinstance(value, str) and value.strip() == '':
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        def normalize_bool(value, default=True):
+            if value is None:
+                return default
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return bool(value)
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in ['true', '1', 'yes', 'y', 'on']:
+                    return True
+                if lowered in ['false', '0', 'no', 'n', 'off']:
+                    return False
+            return default
+
         created_configs = []
+        affected_device_ids = set()
+
+        def normalize_device_id(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
         for config_data in configurations:
+            device_id = normalize_device_id(config_data.get('device_id'))
+            if device_id is None:
+                raise ValueError("Invalid device_id in configuration payload")
+            inoculum_sample_id = normalize_optional_id(config_data.get('inoculum_sample_id'))
+            substrate_sample_id = normalize_optional_id(config_data.get('substrate_sample_id'))
+            inoculum_weight_grams = normalize_float(config_data.get('inoculum_weight_grams'), default=0.0)
+            substrate_weight_grams = normalize_float(config_data.get('substrate_weight_grams'), default=0.0)
+            tumbler_volume = normalize_float(config_data.get('tumbler_volume'), default=0.0)
+            chimera_channel = normalize_optional_int(config_data.get('chimera_channel'))
+            affected_device_ids.add(device_id)
+
             # Check if configuration already exists
             existing = ChannelConfiguration.query.filter_by(
                 test_id=test_id,
-                device_id=config_data['device_id'],
+                device_id=device_id,
                 channel_number=config_data['channel_number']
             ).first()
-            
+
+            in_service_raw = config_data.get('in_service')
+            in_service = normalize_bool(in_service_raw, default=True)
+            if in_service_raw is None and existing is not None:
+                in_service = existing.in_service
+
             if existing:
                 # Update existing
-                existing.inoculum_sample_id = config_data['inoculum_sample_id']
-                existing.inoculum_weight_grams = config_data['inoculum_weight_grams']
-                existing.substrate_sample_id = config_data.get('substrate_sample_id')
-                existing.substrate_weight_grams = config_data.get('substrate_weight_grams', 0)
-                existing.tumbler_volume = config_data['tumbler_volume']
-                existing.chimera_channel = config_data.get('chimera_channel')
+                existing.inoculum_sample_id = inoculum_sample_id
+                existing.inoculum_weight_grams = inoculum_weight_grams
+                existing.substrate_sample_id = substrate_sample_id
+                existing.substrate_weight_grams = substrate_weight_grams
+                existing.tumbler_volume = tumbler_volume
+                existing.chimera_channel = chimera_channel
+                existing.in_service = in_service
                 existing.notes = config_data.get('notes')
                 created_configs.append(existing)
             else:
                 # Create new
                 config = ChannelConfiguration(
                     test_id=test_id,
-                    device_id=config_data['device_id'],
+                    device_id=device_id,
                     channel_number=config_data['channel_number'],
-                    inoculum_sample_id=config_data['inoculum_sample_id'],
-                    inoculum_weight_grams=config_data['inoculum_weight_grams'],
-                    substrate_sample_id=config_data.get('substrate_sample_id'),
-                    substrate_weight_grams=config_data.get('substrate_weight_grams', 0),
-                    tumbler_volume=config_data['tumbler_volume'],
-                    chimera_channel=config_data.get('chimera_channel'),
+                    inoculum_sample_id=inoculum_sample_id,
+                    inoculum_weight_grams=inoculum_weight_grams,
+                    substrate_sample_id=substrate_sample_id,
+                    substrate_weight_grams=substrate_weight_grams,
+                    tumbler_volume=tumbler_volume,
+                    chimera_channel=chimera_channel,
+                    in_service=in_service,
                     notes=config_data.get('notes')
                 )
                 db.session.add(config)
                 created_configs.append(config)
         
+        def is_blackbox_device(device):
+            if not device or not device.device_type:
+                return False
+            normalized = device.device_type.strip().lower().replace('_', '-')
+            return normalized in ['black-box', 'blackbox']
+
+        db.session.flush()
+
+        if affected_device_ids:
+            from black_box_handler import BlackBoxHandler
+
+            with BlackBoxHandler._db_write_lock:
+                blackbox_device_ids = {
+                    device.id
+                    for device in Device.query.filter(Device.id.in_(affected_device_ids)).all()
+                    if is_blackbox_device(device)
+                }
+
+                for device_id in blackbox_device_ids:
+                    # Clear calculated logs and channel running counters for deterministic rebuild.
+                    BlackBoxEventLogData.query.filter_by(test_id=test_id, device_id=device_id).delete(synchronize_session=False)
+                    ChannelConfiguration.query.filter_by(
+                        test_id=test_id,
+                        device_id=device_id
+                    ).update({
+                        ChannelConfiguration.tip_count: 0,
+                        ChannelConfiguration.total_stp_volume: 0.0,
+                        ChannelConfiguration.total_net_volume: 0.0,
+                        ChannelConfiguration.hourly_tips: 0,
+                        ChannelConfiguration.daily_tips: 0,
+                        ChannelConfiguration.last_tip_time: None,
+                        ChannelConfiguration.hourly_volume: 0.0,
+                        ChannelConfiguration.daily_volume: 0.0
+                    }, synchronize_session=False)
+
+                    db.session.flush()
+                    db.session.expire_all()
+
+                    raw_tips_query = BlackboxRawData.query.filter_by(
+                        test_id=test_id,
+                        device_id=device_id
+                    ).order_by(
+                        BlackboxRawData.tip_number.asc(),
+                        BlackboxRawData.timestamp.asc(),
+                        BlackboxRawData.id.asc()
+                    ).yield_per(1000)
+
+                    handler = BlackBoxHandler(port="")
+                    handler.app = app
+                    handler.test_id = test_id
+                    handler.id = device_id
+
+                    for tip in raw_tips_query:
+                        tip_data = {
+                            "tip_number": tip.tip_number,
+                            "timestamp": tip.timestamp,
+                            "seconds_elapsed": tip.seconds_elapsed,
+                            "channel_number": tip.channel_number,
+                            "temperature": tip.temperature,
+                            "pressure": tip.pressure
+                        }
+                        handler.calculateEventLogTip(tip_data, reprocess_mode=True, commit_changes=False)
+
         db.session.commit()
         
         return jsonify({
@@ -1351,79 +1652,153 @@ def upload_csv_configuration():
         if file.filename == '':
             return jsonify({"error": "No file selected"}), 400
         
-        if not file.filename.endswith('.csv'):
+        if not file.filename.lower().endswith('.csv'):
             return jsonify({"error": "File must be a CSV"}), 400
         
-        # Read and parse CSV
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_reader = csv.DictReader(stream)
+        # Read and parse CSV (support BOM + comma/semicolon/tab delimiters)
+        raw_bytes = file.stream.read()
+        try:
+            text_content = raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text_content = raw_bytes.decode("latin-1")
+
+        sample_text = text_content[:4096]
+        try:
+            dialect = csv.Sniffer().sniff(sample_text, delimiters=[',', ';', '\t'])
+            delimiter = dialect.delimiter
+        except csv.Error:
+            delimiter = ','
+
+        stream = io.StringIO(text_content, newline=None)
+        csv_reader = csv.DictReader(stream, delimiter=delimiter)
         
         configurations = []
-        channel_number = 1  # Start from channel 1
+        next_channel_number = 1
+
+        def normalize_header(header):
+            return ' '.join(str(header or '').strip().lower().replace('_', ' ').split())
+
+        def get_row_value(normalized_row, *aliases):
+            for alias in aliases:
+                normalized_alias = normalize_header(alias)
+                if normalized_alias in normalized_row:
+                    return normalized_row.get(normalized_alias, '')
+            return ''
+
+        def parse_bool(value, default=False):
+            if value is None:
+                return default
+            text = str(value).strip()
+            if text == '':
+                return default
+            lowered = text.lower()
+            if lowered in ['1', 'true', 'yes', 'y', 'on']:
+                return True
+            if lowered in ['0', 'false', 'no', 'n', 'off']:
+                return False
+            try:
+                return float(text) != 0.0
+            except ValueError:
+                raise ValueError(f"Invalid boolean value: {value}")
+
+        def parse_float(value, default=0.0):
+            if value is None:
+                return default
+            text = str(value).strip()
+            if text == '':
+                return default
+            return float(text)
+
+        def parse_optional_channel(value):
+            text = str(value or '').strip()
+            if text == '':
+                return None
+            parsed = int(text)
+            if parsed < 1 or parsed > 15:
+                raise ValueError("Channel number must be between 1 and 15")
+            return parsed
+
+        if not csv_reader.fieldnames:
+            return jsonify({"error": "CSV file has no headers"}), 400
+
+        normalized_headers = {normalize_header(name) for name in csv_reader.fieldnames if name is not None}
+        required_header_groups = [
+            {'channel number', 'sample description'},
+            {'in service'},
+            {'inoculum only'},
+            {'inoculum mass vs (g)'},
+            {'sample mass vs (g)'},
+            {'tumbler volume (ml)'}
+        ]
+        for group in required_header_groups:
+            if normalized_headers.isdisjoint(group):
+                expected = ' / '.join(sorted(group))
+                return jsonify({"error": f"Missing expected CSV header: {expected}"}), 400
+
         for row_num, row in enumerate(csv_reader, start=1):
             try:
-                # Get channel/sample description (should be a string)
-                sample_description = row.get('Sample description', '').strip()
-                if not sample_description:
-                    sample_description = row.get('Channel number', '').strip()
-
-                # Check if we've reached the "End of data" marker
-                if sample_description == 'End of data':
-                    break
-
-                # Skip empty rows
-                if not sample_description:
+                normalized_row = {
+                    normalize_header(key): ('' if value is None else str(value).strip())
+                    for key, value in row.items()
+                }
+                if not any(normalized_row.values()):
                     continue
 
-                # Parse CSV columns based on the format:
-                # Sample description,In service,Inoculum only,Inoculum mass VS (g),Sample mass VS (g),Tumbler volume (ml),Chimera channel (optional)
-                in_service = int(row['In service']) == 1
-                inoculum_only = int(row['Inoculum only']) == 1
-                inoculum_weight = float(row['Inoculum mass VS (g)'])
-                substrate_weight = 0 if inoculum_only else float(row['Sample mass VS (g)'])
-                tumbler_volume = float(row['Tumbler volume (ml)'])
+                channel_text = get_row_value(
+                    normalized_row,
+                    'channel number',
+                    'channel_number',
+                    'channel'
+                )
+                sample_description = get_row_value(
+                    normalized_row,
+                    'sample description',
+                    'sample name',
+                    'description'
+                )
+                identifier = sample_description or channel_text
 
-                explicit_channel = None
-                for key in ['Channel number', 'Channel Number', 'channel_number', 'channel number']:
-                    if key in row and row[key].strip():
-                        try:
-                            parsed_channel = int(row[key].strip())
-                            if 1 <= parsed_channel <= 15:
-                                explicit_channel = parsed_channel
-                                break
-                        except ValueError:
-                            pass
+                if str(identifier).strip().lower() == 'end of data':
+                    break
 
-                # Parse optional Chimera channel column
-                chimera_channel = None
-                chimera_column_key = None
-                # Try different possible column names
-                for key in ['Chimera channel', 'Chimera Channel', 'chimera_channel', 'chimera channel']:
-                    if key in row:
-                        chimera_column_key = key
-                        break
+                in_service_raw = get_row_value(normalized_row, 'in service', 'active')
+                inoculum_only = parse_bool(get_row_value(normalized_row, 'inoculum only'), default=False)
+                inoculum_weight = parse_float(get_row_value(normalized_row, 'inoculum mass vs (g)'), default=0.0)
+                substrate_weight_input = parse_float(get_row_value(normalized_row, 'sample mass vs (g)'), default=0.0)
+                tumbler_volume = parse_float(get_row_value(normalized_row, 'tumbler volume (ml)'), default=0.0)
+                chimera_channel = parse_optional_channel(get_row_value(normalized_row, 'chimera channel'))
 
-                if chimera_column_key and row[chimera_column_key].strip():
-                    try:
-                        chimera_val = int(row[chimera_column_key].strip())
-                        if 1 <= chimera_val <= 15:
-                            chimera_channel = chimera_val
-                    except ValueError:
-                        pass  # Invalid value, keep as None
+                # If "In service" is blank but row has meaningful values, treat as active.
+                inferred_in_service = any([
+                    inoculum_weight > 0,
+                    substrate_weight_input > 0,
+                    tumbler_volume > 0,
+                    chimera_channel is not None,
+                    inoculum_only
+                ])
+                in_service = parse_bool(in_service_raw, default=inferred_in_service)
 
-                # Only include channels that are in service
-                if in_service:
-                    effective_channel = explicit_channel if explicit_channel is not None else channel_number
-                    configurations.append({
-                        'channel_number': effective_channel,
-                        'inoculum_weight_grams': inoculum_weight,
-                        'substrate_weight_grams': substrate_weight,
-                        'tumbler_volume': tumbler_volume,
-                        'is_control': inoculum_only,
-                        'chimera_channel': chimera_channel,
-                        'notes': sample_description  # Store sample description in notes
-                    })
-                    channel_number += 1  # Increment channel number for next in-service row
+                explicit_channel = parse_optional_channel(channel_text)
+                effective_channel = explicit_channel if explicit_channel is not None else next_channel_number
+                if explicit_channel is None:
+                    next_channel_number += 1
+
+                if effective_channel < 1 or effective_channel > 15:
+                    continue
+
+                substrate_weight = 0.0 if inoculum_only else substrate_weight_input
+                note_text = sample_description if sample_description else str(effective_channel)
+
+                configurations.append({
+                    'channel_number': effective_channel,
+                    'inoculum_weight_grams': inoculum_weight,
+                    'substrate_weight_grams': substrate_weight,
+                    'tumbler_volume': tumbler_volume,
+                    'is_control': inoculum_only,
+                    'chimera_channel': chimera_channel,
+                    'in_service': in_service,
+                    'notes': note_text
+                })
             except (ValueError, KeyError) as e:
                 return jsonify({"error": f"Invalid data in row {row_num}: {str(e)}"}), 400
         

@@ -1,11 +1,15 @@
 import time
 import threading
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
+from flask import has_app_context, current_app
 from serial_handler import SerialHandler
 from database.models import ChannelConfiguration, db
 
 class BlackBoxHandler(SerialHandler):
+    _db_write_lock = threading.RLock()
+
     def __init__(self, port: str):
         super().__init__()
         self.port = port
@@ -108,7 +112,7 @@ class BlackBoxHandler(SerialHandler):
             # Save tip data to database if test_id is set and app context is available
             if self.test_id and self.app and hasattr(self, 'id'):
                 try:
-                    with self.app.app_context():
+                    with BlackBoxHandler._db_write_lock, self.app.app_context():
                         from database.models import BlackboxRawData, db
 
                         # Check if tips were missed (gap in tip numbers)
@@ -325,7 +329,9 @@ class BlackBoxHandler(SerialHandler):
         start_time = time.time()
         while time.time() - start_time < 5.0:
             line = self.read_line(timeout=0.5)
-            
+            if line is None:
+                continue
+
             # Check for error responses
             if line == "failed download nofile":
                 return False, ["File does not exist"]
@@ -572,22 +578,27 @@ class BlackBoxHandler(SerialHandler):
         seconds = seconds - (m * secondsInMinute)
         return d, h, m, seconds
 
-    def calculateEventLogTip(self, tipData):
+    def calculateEventLogTip(self, tipData, reprocess_mode=False, commit_changes=True):
         '''Convert from setup information and events to a fully processed event, day and hour logs with net volumes'''
 
-        print(f"[DEBUG calculateEventLogTip] Called with tipData: {tipData}")
-        print(f"[DEBUG calculateEventLogTip] self.test_id={self.test_id}, self.id={getattr(self, 'id', 'NOT SET')}, self.app={self.app is not None}")
+        debug_log = not reprocess_mode
 
         if not self.app:
-            print("[DEBUG calculateEventLogTip] No app found - returning early")
+            if debug_log:
+                print("[DEBUG calculateEventLogTip] No app found - returning early")
             return
 
-        with self._tip_processing_lock, self.app.app_context():
+        autoflush_context = db.session.no_autoflush if (reprocess_mode and not commit_changes) else nullcontext()
+        app_context_manager = nullcontext()
+        if (not has_app_context()) or (current_app._get_current_object() is not self.app):
+            app_context_manager = self.app.app_context()
+
+        with BlackBoxHandler._db_write_lock, self._tip_processing_lock, app_context_manager, autoflush_context:
             try:
-                tableData = db.session.query(ChannelConfiguration).filter_by(test_id = self.test_id).all()
-                print(f"[DEBUG calculateEventLogTip] Loaded {len(tableData)} channel configurations for test_id {self.test_id}")
-                for row in tableData:
-                    print(f"[DEBUG calculateEventLogTip]   Config: device_id={row.device_id}, channel={row.channel_number}")
+                tableData = db.session.query(ChannelConfiguration).filter_by(
+                    test_id=self.test_id,
+                    device_id=self.id
+                ).all()
             except Exception as e:
                 print(f" Error loading channel configurations: {type(e).__name__}: {e}")
                 return ""
@@ -616,7 +627,7 @@ class BlackBoxHandler(SerialHandler):
             for row in tableData:
                 channelIdx = row.channel_number - 1  # DB stores 1-15, convert to 0-14 for array access
                 if channelIdx >= 0 and channelIdx < 15:
-                    setup["inUse"][channelIdx] = True
+                    setup["inUse"][channelIdx] = True if row.in_service is None else bool(row.in_service)
                     setup["names"][channelIdx] = row.notes
                     setup["chimeraChannel"][channelIdx] = row.chimera_channel
                     sample = False
@@ -627,7 +638,7 @@ class BlackBoxHandler(SerialHandler):
 
                     # Get volume_since_last_recirculation from ChimeraChannelConfiguration if mapped
                     overall["volumeRecirculation"][channelIdx] = 0.0  # Default
-                    if row.chimera_channel:
+                    if row.chimera_channel and not reprocess_mode:
                         from database.models import ChimeraConfiguration, ChimeraChannelConfiguration
                         # Find the chimera config for this test
                         chimera_config = ChimeraConfiguration.query.filter_by(test_id=self.test_id).first()
@@ -661,12 +672,14 @@ class BlackBoxHandler(SerialHandler):
                     #Get the channel number (device sends 1-15, convert to 0-14 for array access)
                     channelNum = tipData["channel_number"]  # 1-15 for database
                     channelIdx = channelNum - 1  # 0-14 for array access
-                    print(f"[DEBUG calculateEventLogTip] channelNum: {channelNum} (DB), channelIdx: {channelIdx} (array)")
-                    print(f"[DEBUG calculateEventLogTip] setup['inUse'] = {setup['inUse']}")
-                    print(f"[DEBUG calculateEventLogTip] Checking if channel {channelIdx} is in use: {setup['inUse'][channelIdx] if channelIdx < len(setup['inUse']) else 'INDEX OUT OF BOUNDS'}")
+                    if debug_log:
+                        print(f"[DEBUG calculateEventLogTip] channelNum: {channelNum} (DB), channelIdx: {channelIdx} (array)")
+                        print(f"[DEBUG calculateEventLogTip] setup['inUse'] = {setup['inUse']}")
+                        print(f"[DEBUG calculateEventLogTip] Checking if channel {channelIdx} is in use: {setup['inUse'][channelIdx] if channelIdx < len(setup['inUse']) else 'INDEX OUT OF BOUNDS'}")
                     #If this channel should be logging
                     if setup["inUse"][channelIdx]:
-                        print(f"[DEBUG calculateEventLogTip] Channel {channelNum} IS in use - processing tip")
+                        if debug_log:
+                            print(f"[DEBUG calculateEventLogTip] Channel {channelNum} IS in use - processing tip")
                         #Get the time, temperature and pressure
                         eventTime = tipData["seconds_elapsed"]
                         timestamp = tipData["timestamp"]
@@ -701,16 +714,17 @@ class BlackBoxHandler(SerialHandler):
                         overall["tips"][channelIdx] = overall["tips"][channelIdx] + 1
                         overall["volumeSTP"][channelIdx] = overall["volumeSTP"][channelIdx] + eventVolume
 
-                        # Only add to recirculation volume if chimera is not currently reading this channel
-                        # (gas does not go to gas bags when reading so does add to recirculation value)
-                        chimera_channel = setup["chimeraChannel"][channelIdx]
-                        if chimera_channel:
-                            from device_manager import DeviceManager
-                            reading_channel = DeviceManager().get_chimera_reading_channel(self.test_id)
-                            if reading_channel != chimera_channel:
+                        if not reprocess_mode:
+                            # Only add to recirculation volume if chimera is not currently reading this channel
+                            # (gas does not go to gas bags when reading so does add to recirculation value)
+                            chimera_channel = setup["chimeraChannel"][channelIdx]
+                            if chimera_channel:
+                                from device_manager import DeviceManager
+                                reading_channel = DeviceManager().get_chimera_reading_channel(self.test_id)
+                                if reading_channel != chimera_channel:
+                                    overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
+                            else:
                                 overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
-                        else:
-                            overall["volumeRecirculation"][channelIdx] = overall["volumeRecirculation"][channelIdx] + eventVolume
 
                         hourlyTips = hourlyTips + 1
                         dailyTips = dailyTips + 1
@@ -753,10 +767,12 @@ class BlackBoxHandler(SerialHandler):
 
                         # Update channel configuration
                         databaseRow = ChannelConfiguration.query.filter_by(test_id = self.test_id, device_id = self.id, channel_number = channelNum).first()
-                        print(f"[DEBUG calculateEventLogTip] Query for config: test_id={self.test_id}, device_id={self.id}, channel_number={channelNum}")
-                        print(f"[DEBUG calculateEventLogTip] databaseRow found: {databaseRow is not None}")
+                        if debug_log:
+                            print(f"[DEBUG calculateEventLogTip] Query for config: test_id={self.test_id}, device_id={self.id}, channel_number={channelNum}")
+                            print(f"[DEBUG calculateEventLogTip] databaseRow found: {databaseRow is not None}")
                         if not databaseRow:
-                            print(f"[DEBUG calculateEventLogTip] Warning: No channel configuration found for test {self.test_id}, device {self.id}, channel {channelNum}")
+                            if debug_log:
+                                print(f"[DEBUG calculateEventLogTip] Warning: No channel configuration found for test {self.test_id}, device {self.id}, channel {channelNum}")
                             return ""
 
                         databaseRow.hourly_tips = hourlyTips
@@ -771,7 +787,7 @@ class BlackBoxHandler(SerialHandler):
                         # Update volume_since_last_recirculation in ChimeraChannelConfiguration if mapped
                         chimera_channel_config = None
                         chimera_config = None
-                        if databaseRow.chimera_channel:
+                        if databaseRow.chimera_channel and not reprocess_mode:
                             from database.models import ChimeraConfiguration, ChimeraChannelConfiguration
                             chimera_config = ChimeraConfiguration.query.filter_by(test_id=self.test_id).first()
                             if chimera_config:
@@ -807,11 +823,13 @@ class BlackBoxHandler(SerialHandler):
                         )
                         db.session.add(event_log)
 
-                        db.session.commit()
-                        print(f"[DEBUG calculateEventLogTip] SUCCESS: Event log saved! event_log.id={event_log.id}")
+                        if commit_changes:
+                            db.session.commit()
+                        if debug_log:
+                            print(f"[DEBUG calculateEventLogTip] SUCCESS: Event log saved! event_log.id={event_log.id}")
 
                         # Check for volume-based recirculation trigger using ChimeraConfiguration
-                        if chimera_config and chimera_channel_config and databaseRow.chimera_channel:
+                        if (not reprocess_mode) and chimera_config and chimera_channel_config and databaseRow.chimera_channel:
                             print(f"[DEBUG Recirculation] Checking recirculation: mode={chimera_config.recirculation_mode}, threshold={chimera_channel_config.volume_threshold_ml}, chimera_channel={databaseRow.chimera_channel}")
                             print(f"[DEBUG Recirculation] Current volume since last recirculation: {overall['volumeRecirculation'][channelIdx]:.2f}")
 
@@ -867,7 +885,8 @@ class BlackBoxHandler(SerialHandler):
 
                         return result.format(*eventData)
                     else:
-                        print(f"[DEBUG calculateEventLogTip] Channel {channelNum} is NOT in use - skipping tip processing")
+                        if debug_log:
+                            print(f"[DEBUG calculateEventLogTip] Channel {channelNum} is NOT in use - skipping tip processing")
             except:
                 import traceback
                 print("[DEBUG calculateEventLogTip] EXCEPTION occurred:")

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from database.models import *
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from utils.auth import require_minimum_role, log_audit, get_current_user
 
 data_bp = Blueprint('data', __name__)
@@ -35,7 +35,11 @@ def get_device_data(test_id, device_id):
             else:
                 # Default to Event Log, but check if channels are configured
                 # If no channels are configured for this test/device, return error
-                channels_configured = ChannelConfiguration.query.filter_by(test_id=test_id, device_id=device_id).first()
+                channels_configured = ChannelConfiguration.query.filter(
+                    ChannelConfiguration.test_id == test_id,
+                    ChannelConfiguration.device_id == device_id,
+                    or_(ChannelConfiguration.in_service == True, ChannelConfiguration.in_service.is_(None))
+                ).first()
                 if channels_configured:
                     model = BlackBoxEventLogData
                 else:
@@ -212,7 +216,10 @@ def get_test_devices(test_id):
         devices_map = {}  # device_id -> {channels: set()}
 
         # 1. Check ChannelConfiguration
-        configs = ChannelConfiguration.query.filter_by(test_id=test_id).all()
+        configs = ChannelConfiguration.query.filter(
+            ChannelConfiguration.test_id == test_id,
+            or_(ChannelConfiguration.in_service == True, ChannelConfiguration.in_service.is_(None))
+        ).all()
         for config in configs:
             if config.device_id not in devices_map:
                 devices_map[config.device_id] = {'channels': set()}
