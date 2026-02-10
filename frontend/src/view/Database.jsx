@@ -28,6 +28,7 @@ const Database = ({ onViewPlot, initialParams }) => {
     const [sampleOptions, setSampleOptions] = useState([]);
     const [sampleOptionsLoading, setSampleOptionsLoading] = useState(false);
     const [pendingSampleId, setPendingSampleId] = useState(null);
+    const [pendingTestId, setPendingTestId] = useState(null);
     const [editingSampleId, setEditingSampleId] = useState(null);
     const [sampleDrafts, setSampleDrafts] = useState({});
     const [savingSampleId, setSavingSampleId] = useState(null);
@@ -50,9 +51,18 @@ const Database = ({ onViewPlot, initialParams }) => {
 
     useEffect(() => {
         if (!initialParams?.focusTestId) return;
+        const parsedTestId = Number(initialParams.focusTestId);
+        if (!Number.isFinite(parsedTestId)) return;
         setActiveTable('tests');
-        setGlobalFilter(String(initialParams.focusTestId));
-        setPagination(prev => ({ ...prev, pageIndex: 0 }));
+        setGlobalFilter('');
+        setPendingTestId(parsedTestId);
+        setPaginationByTable(current => ({
+            ...current,
+            tests: {
+                ...(current.tests || { pageIndex: 0, pageSize: 10 }),
+                pageIndex: 0
+            }
+        }));
     }, [initialParams]);
 
     useEffect(() => {
@@ -81,6 +91,33 @@ const Database = ({ onViewPlot, initialParams }) => {
         });
         setPendingSampleId(null);
     }, [activeTable, pendingSampleId, data, loading, pagination.pageSize]);
+
+    useEffect(() => {
+        if (activeTable !== 'tests' || !pendingTestId) return;
+        if (loading) return;
+        const index = data.findIndex(test => test.id === pendingTestId);
+        if (index === -1) {
+            setPendingTestId(null);
+            return;
+        }
+        const targetTest = data[index];
+        const pageSize = pagination.pageSize || 10;
+        const nextPage = Math.floor(index / pageSize);
+        setPagination(prev => ({ ...prev, pageIndex: nextPage }));
+        setPaginationByTable(prev => ({
+            ...prev,
+            tests: { ...(prev.tests || prev[activeTable] || {}), pageIndex: nextPage, pageSize }
+        }));
+        setExpandedTests(prev => {
+            const next = new Set(prev);
+            next.add(pendingTestId);
+            return next;
+        });
+        if (!testDetails[pendingTestId]) {
+            fetchTestDetails(targetTest);
+        }
+        setPendingTestId(null);
+    }, [activeTable, pendingTestId, data, loading, pagination.pageSize, testDetails]);
 
     const mergeSampleLists = (samplesList = [], inoculumsList = []) => {
         const map = new Map();
