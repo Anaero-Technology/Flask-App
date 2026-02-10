@@ -12,8 +12,6 @@ import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
 import TestForm from './view/TestForm'
-import BlackBox from './view/BlackBox'
-import Chimera from './view/Chimera'
 import Settings from './view/Settings'
 import Login from './view/Login'
 import UserManagement from './view/UserManagement'
@@ -83,10 +81,6 @@ function AppContent() {
         return <Plot initialParams={plotParams} onNavigate={handleNavigate} />
       case 'upload':
         return <div className="p-6">Upload Data - Coming Soon</div>
-      case 'blackbox':
-        return <BlackBox initialParams={viewParams} />
-      case 'chimera':
-        return <Chimera initialParams={viewParams} />
       case 'plc':
         return <div className="p-6">PLC - Coming Soon</div>
       case 'settings':

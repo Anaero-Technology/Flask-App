@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import DeviceCard from '../components/deviceCard'
-import ActiveTestCard from '../components/ActiveTestCard'
-import TipNotification from '../components/TipNotification'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
 import { RefreshCw, Server, Activity, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';

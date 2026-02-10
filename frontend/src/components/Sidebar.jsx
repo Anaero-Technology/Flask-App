@@ -11,8 +11,6 @@ import {
   Database,
   LineChart,
   Upload,
-  Box,
-  Activity,
   Settings,
   PlusCircle,
   User,
@@ -54,8 +52,6 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
   ];
 
   const secondaryItems = [
-    { id: 'blackbox', labelKey: 'blackbox', icon: Box },
-    { id: 'chimera', labelKey: 'chimera', icon: Activity },
     { id: 'plc', labelKey: 'plc', icon: Cpu },
     { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
