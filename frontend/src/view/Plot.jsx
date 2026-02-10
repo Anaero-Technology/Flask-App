@@ -572,7 +572,19 @@ function Plot({ initialParams, onNavigate }) {
 
     const columns = useMemo(() => [
         { accessorKey: 'name', header: tPages('plot.table_name'), size: 150 },
-        { accessorKey: 'description', header: tPages('plot.table_description'), size: 200 },
+        {
+            accessorKey: 'description',
+            header: tPages('plot.table_description'),
+            size: 200,
+            cell: info => {
+                const value = info.getValue();
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    return trimmed ? trimmed : 'N/A';
+                }
+                return value ? String(value) : 'N/A';
+            }
+        },
         {
             accessorKey: 'status',
             header: tPages('plot.table_status'),
