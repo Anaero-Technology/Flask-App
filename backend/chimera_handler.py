@@ -431,22 +431,27 @@ class ChimeraHandler(SerialHandler):
     
     def stop_logging(self) -> Tuple[bool, str]:
         """Stop logging"""
-        self.send_command_no_wait("stoplogging")
-        
-        # Read through all queued responses until we find the final result
-        while True:
-            response = self.get_response(timeout=5.0)
-            if not response:
-                return False, "Timeout waiting for stop logging response"
-                
-            if response == "done stoplogging":
-                self.is_logging = False
-                return True, "Logging stopped successfully"
-            elif response == "failed stoplogging notlogging":
-                return False, "Device is already not logging"
-            elif response.startswith("failed stoplogging"):
-                return False, f"Stop logging failed: {response}"
-            # Continue reading other queued messages
+        try:
+            self.send_command_no_wait("stoplogging")
+
+            # Read through all queued responses until we find the final result
+            while True:
+                response = self.get_response(timeout=5.0)
+                if not response:
+                    return False, "Timeout waiting for stop logging response"
+
+                if response == "done stoplogging":
+                    self.is_logging = False
+                    return True, "Logging stopped successfully"
+                elif response == "failed stoplogging notlogging":
+                    return False, "Device is already not logging"
+                elif response.startswith("failed stoplogging"):
+                    return False, f"Stop logging failed: {response}"
+                # Continue reading other queued messages
+        except OSError as e:
+            return False, f"Serial I/O error while stopping logging: {e}"
+        except Exception as e:
+            return False, f"Failed to stop logging: {e}"
     
     def get_files(self) -> Tuple[bool, Dict]:
         """Get list of files on SD card with memory info"""

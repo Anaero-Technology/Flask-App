@@ -1298,22 +1298,55 @@ def stop_test(test_id):
         # Get all devices involved in this test
         devices = Device.query.filter_by(active_test_id=test_id).all()
 
-        # Stop logging on each device
+        # Stop logging on each device. Keep stopping the test even if one device fails.
         stop_results = []
         for device in devices:
             handler = device_manager.get_device(device.id)
-            if handler and handler.is_logging:
-                success, message = handler.stop_logging()
-                stop_results.append({
-                    "device": device.name,
-                    "success": success,
-                    "message": message
-                })
-                if success:
-                    device.logging = False
+            result = None
 
-            # Remove test assignment
-            device.active_test_id = None
+            try:
+                if handler is None:
+                    result = {
+                        "device": device.name,
+                        "success": False,
+                        "message": "Device handler unavailable; marked as stopped in database"
+                    }
+                else:
+                    # Always issue a stop command for every device in this test.
+                    # Relying on cached handler.is_logging can miss devices that are still logging.
+                    success, message = handler.stop_logging()
+                    result = {
+                        "device": device.name,
+                        "success": success,
+                        "message": message
+                    }
+            except OSError as e:
+                result = {
+                    "device": device.name,
+                    "success": False,
+                    "message": f"Serial I/O error while stopping logging: {e}"
+                }
+            except Exception as e:
+                result = {
+                    "device": device.name,
+                    "success": False,
+                    "message": f"Failed to stop logging: {e}"
+                }
+            finally:
+                # Test is being stopped regardless of serial state.
+                device.logging = False
+                device.active_test_id = None
+                if handler:
+                    try:
+                        handler.set_test_id(None)
+                    except Exception:
+                        pass
+
+            stop_results.append(result or {
+                "device": device.name,
+                "success": False,
+                "message": "Unknown stop state"
+            })
 
         # Update test status
         test.status = 'completed'

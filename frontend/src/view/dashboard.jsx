@@ -253,7 +253,8 @@ function Dashboard({ onViewPlot }) {
 
   const handleStopTestFromDevice = async (testId) => {
     if (!testId) return
-    if (!window.confirm(tPages('database.stop_confirmation'))) return
+    const stopWarningMessage = `${tPages('database.stop_confirmation')}\n\nStopping this test will stop logging on all devices associated with this test.`
+    if (!window.confirm(stopWarningMessage)) return
 
     try {
       const response = await authFetch(`/api/v1/tests/${testId}/stop`, {

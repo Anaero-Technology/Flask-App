@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 
@@ -23,7 +23,7 @@ const ChimeraChannelCard = React.memo(function ChimeraChannelCard({
     const baseClass = isEnabled
         ? 'bg-white border-blue-200 shadow-sm'
         : 'bg-gray-50 border-gray-100 opacity-70';
-    const selectedClass = isSelected ? 'ring-2 ring-blue-300/60 ring-inset bg-blue-50/40 border-blue-200' : '';
+    const selectedClass = isSelected ? 'ring-2 ring-blue-500/70 ring-inset bg-blue-100/75 border-blue-300' : '';
 
     return (
         <div
@@ -31,7 +31,7 @@ const ChimeraChannelCard = React.memo(function ChimeraChannelCard({
                 flex flex-col gap-2 p-2 rounded border transition-all
                 ${baseClass}
                 ${selectedClass}
-                hover:bg-blue-50/30 hover:border-blue-200/70
+                hover:bg-blue-100/60 hover:border-blue-300
             `}
             onMouseDown={(event) => onSelectMouseDown(channelNum, event)}
             onPointerDown={(event) => onSelectMouseDown(channelNum, event)}
@@ -186,6 +186,17 @@ function ChimeraTestConfig({
                 : [...prev, channelNum]
         ));
     };
+
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            setSelectedChannels([]);
+            skipChannelClickRef.current = false;
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const updateChannelSetting = (channelNum, field, value) => {
         applyChannelSetting(channelNum, field, value);

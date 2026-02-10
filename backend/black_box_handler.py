@@ -256,21 +256,26 @@ class BlackBoxHandler(SerialHandler):
     
     def stop_logging(self) -> Tuple[bool, str]:
         """Stop logging"""
-        response = self.send_command("stop")
+        try:
+            response = self.send_command("stop")
 
-        parts = response.split()
-        for x in parts:
-            print(x)
-        if response == "done stop" or response == "Setup successfully updated":
-            self.is_logging = False
-            self.current_log_file = None
-            return True, "Successfully stopped logging"
-        elif response == "failed stop nofiles":
-            return False, "SD card not working"
-        elif response == "already stop":
-            return False, "Device is already not logging"
-        else:
-            return False, "Unknown error"
+            parts = response.split()
+            for x in parts:
+                print(x)
+            if response == "done stop" or response == "Setup successfully updated":
+                self.is_logging = False
+                self.current_log_file = None
+                return True, "Successfully stopped logging"
+            elif response == "failed stop nofiles":
+                return False, "SD card not working"
+            elif response == "already stop":
+                return False, "Device is already not logging"
+            else:
+                return False, "Unknown error"
+        except OSError as e:
+            return False, f"Serial I/O error while stopping logging: {e}"
+        except Exception as e:
+            return False, f"Failed to stop logging: {e}"
     
     def get_files(self) -> Dict:
         """Get SD card memory info and list of files"""

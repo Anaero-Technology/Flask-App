@@ -1423,7 +1423,8 @@ const Database = ({ onViewPlot, initialParams }) => {
                                 canPerform('stop_test') && (
                                     <button
                                         onClick={async () => {
-                                            if (window.confirm(tPages('database.stop_confirmation'))) {
+                                            const stopWarningMessage = `${tPages('database.stop_confirmation')}\n\nStopping this test will stop logging on all devices associated with this test.`;
+                                            if (window.confirm(stopWarningMessage)) {
                                                 try {
                                                     const response = await authFetch(`/api/v1/tests/${test.id}/stop`, {
                                                         method: 'POST'

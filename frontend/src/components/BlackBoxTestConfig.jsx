@@ -112,10 +112,10 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
     const rowClass = isConfigured
         ? (isControl ? 'bg-yellow-50/60' : 'bg-green-50/60')
         : 'bg-white';
-    const selectionClass = isSelected ? 'ring-2 ring-blue-300/60 ring-inset' : '';
+    const selectionClass = isSelected ? 'ring-2 ring-blue-500/70 ring-inset' : '';
     const inactiveClass = !isActive ? 'opacity-70' : '';
-    const cellClass = isSelected ? 'bg-blue-50/40' : '';
-    const cellHoverClass = 'group-hover:bg-blue-50/20';
+    const cellClass = isSelected ? 'bg-blue-100/80' : '';
+    const cellHoverClass = isSelected ? 'group-hover:bg-blue-100/90' : 'group-hover:bg-blue-50/30';
 
     return (
         <React.Fragment>
@@ -442,6 +442,17 @@ function BlackBoxTestConfig({
         if (!persistExpandedState || embedded) return;
         setIsExpanded(readExpandedState(expandedStorageKey));
     }, [expandedStorageKey, persistExpandedState, embedded]);
+
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            setSelectedChannels([]);
+            skipRowClickRef.current = false;
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     useEffect(() => {
         if (!shouldPersistDrafts) {
