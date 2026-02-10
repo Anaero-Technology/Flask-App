@@ -4,7 +4,7 @@ import ActiveTestCard from '../components/ActiveTestCard'
 import TipNotification from '../components/TipNotification'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
-import { RefreshCw, Server, Activity, CheckCircle, FlaskConical } from 'lucide-react';
+import { RefreshCw, Server, Activity, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +18,88 @@ function Dashboard({ onViewPlot }) {
   const [recentEvents, setRecentEvents] = useState([])
   const [loading, setLoading] = useState(false)
   const [globalDeviceModel, setGlobalDeviceModel] = useState(null)
+  const [showFileManager, setShowFileManager] = useState(false)
+  const [selectedFileDevice, setSelectedFileDevice] = useState(null)
+  const [deviceFiles, setDeviceFiles] = useState([])
+  const [deviceMemoryInfo, setDeviceMemoryInfo] = useState(null)
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  const [filesCache, setFilesCache] = useState({})
+
+  const navigateToView = (view, params = null) => {
+    window.dispatchEvent(new CustomEvent('app:navigate', {
+      detail: { view, params }
+    }))
+  }
+
+  const getDeviceApiBase = (deviceType) => (
+    deviceType === 'black-box' ? '/api/v1/black_box' : '/api/v1/chimera'
+  )
+
+  const getFilesLocalePrefix = () => (
+    selectedFileDevice?.device_type === 'black-box' ? 'black_box' : 'chimera'
+  )
+
+  const normalizeMemoryInfo = (memory) => {
+    if (!memory || typeof memory !== 'object') return null
+    const total = Number(memory.total)
+    const used = Number(memory.used)
+    if (!Number.isFinite(total) || !Number.isFinite(used) || total <= 0) return null
+    return {
+      total,
+      used: Math.min(total, Math.max(0, used))
+    }
+  }
+
+  const normalizeFiles = (files) => (
+    Array.isArray(files)
+      ? files.map(file => ({
+          ...file,
+          size: Number.isFinite(Number(file?.size)) ? Number(file.size) : 0
+        }))
+      : []
+  )
+
+  const applyDeletedFileToMemory = (memory, deletedBytes) => {
+    const normalized = normalizeMemoryInfo(memory)
+    if (!normalized || deletedBytes <= 0) return normalized
+    return {
+      ...normalized,
+      used: Math.max(0, normalized.used - deletedBytes)
+    }
+  }
+
+  const fetchFilesForDevice = async (device, options = {}) => {
+    if (!device) return
+    const { silent = false } = options
+    if (!silent) setLoadingFiles(true)
+    try {
+      const response = await authFetch(`${getDeviceApiBase(device.device_type)}/${device.id}/files`)
+      if (response.ok) {
+        const data = await response.json()
+        const files = normalizeFiles(data.files)
+        const memory = normalizeMemoryInfo(data.memory)
+        setDeviceFiles(files)
+        setDeviceMemoryInfo(memory)
+        setFilesCache(prev => ({
+          ...prev,
+          [device.id]: {
+            files,
+            memory,
+            fetchedAt: Date.now()
+          }
+        }))
+      } else {
+        setDeviceFiles([])
+        setDeviceMemoryInfo(null)
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard files:', error)
+      setDeviceFiles([])
+      setDeviceMemoryInfo(null)
+    } finally {
+      if (!silent) setLoadingFiles(false)
+    }
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -142,6 +224,55 @@ function Dashboard({ onViewPlot }) {
     }
   };
 
+  const handleViewFiles = (deviceId) => {
+    const targetDevice = devices.find(device => device.id === deviceId)
+    if (!targetDevice) return
+    const cached = filesCache[targetDevice.id]
+    if (cached) {
+      setDeviceFiles(normalizeFiles(cached.files))
+      setDeviceMemoryInfo(normalizeMemoryInfo(cached.memory))
+      setLoadingFiles(false)
+    } else {
+      setDeviceFiles([])
+      setDeviceMemoryInfo(null)
+      setLoadingFiles(true)
+    }
+    setSelectedFileDevice(targetDevice)
+    setShowFileManager(true)
+    fetchFilesForDevice(targetDevice, { silent: Boolean(cached) })
+  }
+
+  const handleViewTest = (testId) => {
+    if (!testId) return
+    navigateToView('database', {
+      focusTestId: testId
+    })
+  }
+
+  const handleStartTestFromDevice = () => {
+    navigateToView('test')
+  }
+
+  const handleStopTestFromDevice = async (testId) => {
+    if (!testId) return
+    if (!window.confirm(tPages('database.stop_confirmation'))) return
+
+    try {
+      const response = await authFetch(`/api/v1/tests/${testId}/stop`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        await loadData()
+      } else {
+        alert(data.error || tPages('database.stop_failed'))
+      }
+    } catch (error) {
+      console.error('Failed to stop test from dashboard:', error)
+      alert(tPages('database.stop_error'))
+    }
+  }
+
   useEffect(() => {
     fetchGlobalDeviceModel();
 
@@ -206,6 +337,85 @@ function Dashboard({ onViewPlot }) {
 
   // Filter devices that are NOT in an active test
   const unassignedDevices = devices?.filter(d => !d.active_test_id) || [];
+  const filesLocalePrefix = getFilesLocalePrefix();
+  const normalizedMemoryInfo = normalizeMemoryInfo(deviceMemoryInfo)
+  const hasValidMemoryInfo = Boolean(
+    normalizedMemoryInfo
+    && Number.isFinite(normalizedMemoryInfo.total)
+    && Number.isFinite(normalizedMemoryInfo.used)
+    && normalizedMemoryInfo.total > 0
+  );
+  const usedPercent = hasValidMemoryInfo
+    ? Math.min(100, Math.max(0, (normalizedMemoryInfo.used / normalizedMemoryInfo.total) * 100))
+    : 0;
+  const usedPercentLabel = hasValidMemoryInfo ? usedPercent.toFixed(2) : '0.00'
+  const usedBarWidth = hasValidMemoryInfo
+    ? (usedPercent > 0 ? Math.max(usedPercent, 0.75) : 0)
+    : 0
+
+  const downloadFile = async (filename) => {
+    if (!selectedFileDevice) return;
+    try {
+      const response = await authFetch(`${getDeviceApiBase(selectedFileDevice.device_type)}/${selectedFileDevice.id}/download`, {
+        method: 'POST',
+        body: JSON.stringify({ filename })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          const fileContent = data.data.join('\n');
+          const blob = new Blob([fileContent], { type: 'text/plain' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+      }
+    } catch (error) {
+      console.error('Dashboard file download failed:', error);
+    }
+  };
+
+  const deleteFile = async (filename) => {
+    if (!selectedFileDevice) return;
+    if (!window.confirm(tPages(`${filesLocalePrefix}.delete_confirmation`, { filename }))) {
+      return;
+    }
+
+    try {
+      const response = await authFetch(`${getDeviceApiBase(selectedFileDevice.device_type)}/${selectedFileDevice.id}/delete_file`, {
+        method: 'POST',
+        body: JSON.stringify({ filename })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          const deletedSize = Number(deviceFiles.find(file => file.name === filename)?.size || 0)
+          const nextFiles = normalizeFiles(deviceFiles.filter(file => file.name !== filename))
+          const nextMemory = applyDeletedFileToMemory(deviceMemoryInfo, deletedSize)
+
+          setDeviceFiles(nextFiles)
+          setDeviceMemoryInfo(nextMemory)
+          setFilesCache(prev => ({
+            ...prev,
+            [selectedFileDevice.id]: {
+              files: nextFiles,
+              memory: nextMemory,
+              fetchedAt: Date.now()
+            }
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Dashboard file delete failed:', error);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -246,9 +456,25 @@ function Dashboard({ onViewPlot }) {
           <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
             <FlaskConical size={24} />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.running_tests')}</p>
-            <p className="text-2xl font-bold text-gray-900">{runningTests}</p>
+            {runningTests > 0 ? (
+              <div className="mt-1 space-y-1 max-h-20 overflow-y-auto pr-1">
+                {activeTests.map((test) => (
+                  <button
+                    key={test.id}
+                    type="button"
+                    onClick={() => handleViewTest(test.id)}
+                    className="block w-full text-left text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors"
+                    title={test.name || `Test ${test.id}`}
+                  >
+                    {test.name || `Test ${test.id}`}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">0</p>
+            )}
           </div>
         </div>
       </div>
@@ -256,7 +482,6 @@ function Dashboard({ onViewPlot }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
-
           {/* Active Devices Section */}
           {activeLogging > 0 && (
             <section>
@@ -281,6 +506,11 @@ function Dashboard({ onViewPlot }) {
                       testStartTime={device.test_start_time}
                       onNameUpdate={handleNameUpdate}
                       onViewPlot={onViewPlot}
+                      onViewFiles={handleViewFiles}
+                      onViewTest={handleViewTest}
+                      onStartTest={handleStartTestFromDevice}
+                      onStopTest={handleStopTestFromDevice}
+                      showDashboardActions={true}
                       globalDeviceModel={globalDeviceModel}
                       onCalibrateAction={handleCalibrateAction}
                     />
@@ -308,6 +538,11 @@ function Dashboard({ onViewPlot }) {
                     image={device.device_type === "black-box" ? GFM : Chimera}
                     onNameUpdate={handleNameUpdate}
                     onViewPlot={onViewPlot}
+                    onViewFiles={handleViewFiles}
+                    onViewTest={handleViewTest}
+                    onStartTest={handleStartTestFromDevice}
+                    onStopTest={handleStopTestFromDevice}
+                    showDashboardActions={true}
                     onCalibrateAction={handleCalibrateAction}
                     globalDeviceModel={globalDeviceModel}
                   />
@@ -378,6 +613,125 @@ function Dashboard({ onViewPlot }) {
           </div>
         </div>
       </div>
+
+      {/* File Manager Modal */}
+      {showFileManager && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-20 px-4">
+          <div className="w-full max-w-4xl bg-white rounded-lg p-6 max-h-[80vh] overflow-y-auto shadow-2xl border">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">
+                {tPages(`${filesLocalePrefix}.files_modal_title`, { device_name: selectedFileDevice?.name })}
+              </h2>
+              <button
+                onClick={() => setShowFileManager(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50">
+              <div className="flex items-start gap-2">
+                <TriangleAlert size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                <div className="text-sm text-amber-900">
+                  <div className="font-medium">Serial file downloads are slow and unprocessed.</div>
+                  <div className="mt-0.5">
+                    It is recommended to download processed files from the test view.
+                  </div>
+                  {selectedFileDevice?.active_test_id && (
+                    <button
+                      onClick={() => {
+                        setShowFileManager(false)
+                        handleViewTest(selectedFileDevice.active_test_id)
+                      }}
+                      className="mt-2 text-xs font-medium text-amber-900 underline hover:text-amber-950"
+                    >
+                      Open test view
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {loadingFiles ? (
+              <div className="py-10 flex flex-col items-center justify-center gap-3 text-gray-600">
+                <Loader2 size={24} className="animate-spin text-blue-600" />
+                <div className="text-sm font-medium">{tPages(`${filesLocalePrefix}.loading_files`)}</div>
+                <div className="text-xs text-gray-500">Reading file list over serial can take several seconds.</div>
+              </div>
+            ) : (
+              <div>
+                {hasValidMemoryInfo && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{tPages('chimera.sd_card_storage')}</span>
+                      <span className="font-medium">
+                        {(normalizedMemoryInfo.used / (1024 * 1024)).toFixed(1)} MB used
+                        <span className="text-gray-500 ml-1">
+                          {tPages('chimera.memory_of')} {(normalizedMemoryInfo.total / (1024 * 1024)).toFixed(1)} {tPages('chimera.memory_total')} ({usedPercentLabel}%)
+                        </span>
+                      </span>
+                    </div>
+                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
+                        style={{ width: `${usedBarWidth}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {deviceFiles.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    {tPages(`${filesLocalePrefix}.no_files`)}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {deviceFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded">
+                        <div>
+                          <span className="font-medium">{file.name}</span>
+                          <span className="text-gray-500 ml-2">
+                            ({(file.size / 1024).toFixed(1)} KB)
+                          </span>
+                          {file.created && (
+                            <span className="text-gray-400 ml-2 text-sm">
+                              {new Date(file.created * 1000).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => downloadFile(file.name)}
+                            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 font-medium"
+                          >
+                            {tPages(`${filesLocalePrefix}.download_button`)}
+                          </button>
+                          <button
+                            onClick={() => deleteFile(file.name)}
+                            className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 font-medium"
+                          >
+                            {tPages(`${filesLocalePrefix}.delete_button`)}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => fetchFilesForDevice(selectedFileDevice)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+                  >
+                    {tPages(`${filesLocalePrefix}.refresh_files_button`)}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 

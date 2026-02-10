@@ -447,7 +447,10 @@
     "operation_failed": "操作失败"
   },
   "device_card": {
+    "actions": "操作",
     "view_plot": "查看图表",
+    "view_files": "查看文件",
+    "view_test": "查看测试",
     "calibrate": "校准",
     "start": "开始",
     "cancel": "取消"

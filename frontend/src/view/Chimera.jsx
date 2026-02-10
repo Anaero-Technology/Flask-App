@@ -6,7 +6,7 @@ import refreshIcon from '../assets/refresh.svg';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
 
-function Chimera() {
+function Chimera({ initialParams }) {
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const toast = useToast();
@@ -18,6 +18,7 @@ function Chimera() {
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [showFileManager, setShowFileManager] = useState(false);
     const [loggingStates, setLoggingStates] = useState({});
+    const [initialFilesRequestHandled, setInitialFilesRequestHandled] = useState(false);
 
     const fetchChimeras = async () => {
         setLoading(true);
@@ -215,6 +216,22 @@ function Chimera() {
     useEffect(() => {
         fetchChimeras();
     }, []);
+
+    useEffect(() => {
+        setInitialFilesRequestHandled(false);
+    }, [initialParams?.openFiles, initialParams?.deviceId]);
+
+    useEffect(() => {
+        if (initialFilesRequestHandled) return;
+        if (!initialParams?.openFiles || !initialParams?.deviceId || showFileManager) return;
+        const targetId = Number(initialParams.deviceId);
+        if (!Number.isFinite(targetId)) return;
+        const targetDevice = chimeras.find(device => device.device_id === targetId);
+        if (targetDevice) {
+            handleFileView(targetDevice);
+            setInitialFilesRequestHandled(true);
+        }
+    }, [initialParams, chimeras, showFileManager, initialFilesRequestHandled]);
 
     return (
         <div className="space-y-4">

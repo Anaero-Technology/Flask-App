@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_sse import sse
 from flask_jwt_extended import jwt_required
 from datetime import datetime
+import time
 from device_manager import DeviceManager
 from database.models import *
 from utils.auth import require_role
@@ -286,6 +287,7 @@ def get_info(device_id):
 @jwt_required()
 def get_files(device_id):
     try:
+        started_at = time.perf_counter()
         # Get device from database
         device = Device.query.get(device_id)
         if not device or not device.connected:
@@ -297,6 +299,10 @@ def get_files(device_id):
             return jsonify({"error": "Device handler not found"}), 404
         
         files_info = handler.get_files()
+        elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+        if elapsed_ms > 1500:
+            file_count = len(files_info.get("files", []))
+            print(f"[BLACKBOX FILES] Slow file list: device_id={device_id} elapsed_ms={elapsed_ms:.1f} files={file_count}")
         
         return jsonify(files_info)
         

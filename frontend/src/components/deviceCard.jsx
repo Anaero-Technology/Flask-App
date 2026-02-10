@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity, MoreVertical, FolderOpen, FlaskConical, Play, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import CalibrationProgressBar from './CalibrationProgressBar';
 import ChimeraConfigTooltip from './ChimeraConfigTooltip';
@@ -22,6 +22,8 @@ function DeviceCard(props) {
     const [availableSensors, setAvailableSensors] = useState([]);
     const [borderProgress, setBorderProgress] = useState(0);
     const [duration, setDuration] = useState("0h 0m 0s");
+    const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+    const actionsMenuRef = useRef(null);
 
     // Use global calibration context for persistent state across page navigation
     const { subscribeToDevice, calibrationStates, chimeraStates } = useCalibration();
@@ -244,6 +246,22 @@ function DeviceCard(props) {
     };
 
     const isCompact = props.compact;
+    const supportsCalibration = props.deviceType === 'chimera' || props.deviceType === 'chimera-max';
+    const supportsFiles = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
+    const supportsTestControl = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
+    const showDashboardActionsMenu = Boolean(props.showDashboardActions) && !isCompact;
+
+    useEffect(() => {
+        if (!isActionsMenuOpen) return;
+        const handleOutsideClick = (event) => {
+            if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+                setIsActionsMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, [isActionsMenuOpen]);
 
     const getDeviceLabel = () => {
         switch (props.deviceType) {
@@ -352,7 +370,110 @@ function DeviceCard(props) {
                             <p className="text-xs text-gray-500 font-mono mt-0.5 truncate">{props.port}</p>
                         </div>
 
-                        {!isCompact && props.activeTestId && (
+                        {showDashboardActionsMenu && (
+                            <div className="relative shrink-0" ref={actionsMenuRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsActionsMenuOpen(prev => !prev)}
+                                    className="flex items-center justify-center w-9 h-9 text-gray-500 hover:text-gray-700 transition-colors"
+                                    aria-label={tPages('device_card.actions')}
+                                >
+                                    <MoreVertical size={16} />
+                                </button>
+
+                                {isActionsMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+                                        {supportsTestControl && !props.activeTestId && props.onStartTest && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    props.onStartTest(props.deviceId, props.deviceType);
+                                                    setIsActionsMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <Play size={14} />
+                                                <span>Start Test</span>
+                                            </button>
+                                        )}
+
+                                        {supportsTestControl && props.activeTestId && props.onStopTest && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    props.onStopTest(props.activeTestId);
+                                                    setIsActionsMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <Square size={14} />
+                                                <span>Stop Test</span>
+                                            </button>
+                                        )}
+
+                                        {supportsCalibration && !props.activeTestId && props.onCalibrateAction && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsCalibrating(true);
+                                                    setIsActionsMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <Settings size={14} />
+                                                <span>{tPages('device_card.calibrate')}</span>
+                                            </button>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            disabled={!props.activeTestId || !props.onViewPlot}
+                                            onClick={() => {
+                                                if (props.activeTestId && props.onViewPlot) {
+                                                    props.onViewPlot(props.activeTestId, props.deviceId);
+                                                }
+                                                setIsActionsMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                        >
+                                            <LineChart size={14} />
+                                            <span>{tPages('device_card.view_plot')}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            disabled={!props.activeTestId || !props.onViewTest}
+                                            onClick={() => {
+                                                if (props.activeTestId && props.onViewTest) {
+                                                    props.onViewTest(props.activeTestId, props.deviceId);
+                                                }
+                                                setIsActionsMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                        >
+                                            <FlaskConical size={14} />
+                                            <span>{tPages('device_card.view_test')}</span>
+                                        </button>
+
+                                        {supportsFiles && props.onViewFiles && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    props.onViewFiles(props.deviceId, props.deviceType);
+                                                    setIsActionsMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <FolderOpen size={14} />
+                                                <span>{tPages('device_card.view_files')}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {!showDashboardActionsMenu && !isCompact && props.activeTestId && (
                             <button
                                 onClick={() => props.onViewPlot && props.onViewPlot(props.activeTestId, props.deviceId)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-blue-600 transition-all shadow-sm shrink-0"
@@ -362,7 +483,7 @@ function DeviceCard(props) {
                             </button>
                         )}
 
-                        {!isCompact && !props.activeTestId && (props.deviceType === 'chimera' || props.deviceType === 'chimera-max') && props.onCalibrateAction && (
+                        {!isCompact && !props.activeTestId && supportsCalibration && props.onCalibrateAction && (
                             isCalibrating ? (
                                 <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-2 duration-200">
                                     {calibrationProgress ? (
@@ -425,6 +546,7 @@ function DeviceCard(props) {
                                     )}
                                 </div>
                             ) : (
+                                !showDashboardActionsMenu && (
                                 <button
                                     onClick={() => setIsCalibrating(true)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:text-orange-600 transition-all shadow-sm shrink-0"
@@ -432,6 +554,7 @@ function DeviceCard(props) {
                                     <Settings size={16} />
                                     <span>{tPages('device_card.calibrate')}</span>
                                 </button>
+                                )
                             )
                         )}
                     </div>

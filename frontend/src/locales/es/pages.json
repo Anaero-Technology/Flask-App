@@ -549,7 +549,10 @@
     "csv_upload_failed": "Error al cargar CSV: {{error}}"
   },
   "device_card": {
+    "actions": "Acciones",
     "view_plot": "Ver Gráfico",
+    "view_files": "Ver Archivos",
+    "view_test": "Ver Prueba",
     "calibrate": "Calibrar",
     "start": "Iniciar",
     "cancel": "Cancelar"

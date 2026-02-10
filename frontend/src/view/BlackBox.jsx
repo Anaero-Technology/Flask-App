@@ -6,7 +6,7 @@ import refreshIcon from '../assets/refresh.svg';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
 
-function BlackBox() {
+function BlackBox({ initialParams }) {
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const toast = useToast();
@@ -17,6 +17,7 @@ function BlackBox() {
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [showFileManager, setShowFileManager] = useState(false);
     const [loggingStates, setLoggingStates] = useState({});
+    const [initialFilesRequestHandled, setInitialFilesRequestHandled] = useState(false);
 
     const fetchBlackBoxes = async () => {
         setLoading(true);
@@ -213,6 +214,22 @@ function BlackBox() {
     useEffect(() => {
         fetchBlackBoxes();
     }, []);
+
+    useEffect(() => {
+        setInitialFilesRequestHandled(false);
+    }, [initialParams?.openFiles, initialParams?.deviceId]);
+
+    useEffect(() => {
+        if (initialFilesRequestHandled) return;
+        if (!initialParams?.openFiles || !initialParams?.deviceId || showFileManager) return;
+        const targetId = Number(initialParams.deviceId);
+        if (!Number.isFinite(targetId)) return;
+        const targetDevice = blackBoxes.find(device => device.device_id === targetId);
+        if (targetDevice) {
+            handleFileView(targetDevice);
+            setInitialFilesRequestHandled(true);
+        }
+    }, [initialParams, blackBoxes, showFileManager, initialFilesRequestHandled]);
 
     return (
         <div className="space-y-4">

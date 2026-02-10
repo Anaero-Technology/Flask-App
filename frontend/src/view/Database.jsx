@@ -12,7 +12,7 @@ import { useAuth } from '../components/AuthContext';
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import { useTranslation } from 'react-i18next';
 
-const Database = ({ onViewPlot }) => {
+const Database = ({ onViewPlot, initialParams }) => {
     const { authFetch, canPerform } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const [activeTable, setActiveTable] = useState('tests');
@@ -47,6 +47,13 @@ const Database = ({ onViewPlot }) => {
         }
         fetchData();
     }, [activeTable]);
+
+    useEffect(() => {
+        if (!initialParams?.focusTestId) return;
+        setActiveTable('tests');
+        setGlobalFilter(String(initialParams.focusTestId));
+        setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    }, [initialParams]);
 
     useEffect(() => {
         setPagination(paginationByTable[activeTable] || { pageIndex: 0, pageSize: 10 });

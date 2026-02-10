@@ -549,7 +549,10 @@
     "csv_upload_failed": "CSV-Datei hochladen fehlgeschlagen: {{error}}"
   },
   "device_card": {
+    "actions": "Aktionen",
     "view_plot": "Diagramm Anzeigen",
+    "view_files": "Dateien Anzeigen",
+    "view_test": "Test Anzeigen",
     "calibrate": "Kalibrieren",
     "start": "Starten",
     "cancel": "Abbrechen"

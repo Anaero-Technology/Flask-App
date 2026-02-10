@@ -462,7 +462,10 @@
     "operation_failed": "Operation failed"
   },
   "device_card": {
+    "actions": "Actions",
     "view_plot": "View Plot",
+    "view_files": "View Files",
+    "view_test": "View Test",
     "calibrate": "Calibrate",
     "start": "Start",
     "cancel": "Cancel"

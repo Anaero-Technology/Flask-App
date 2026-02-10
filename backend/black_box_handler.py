@@ -276,37 +276,48 @@ class BlackBoxHandler(SerialHandler):
         """Get SD card memory info and list of files"""
         self.clear_buffer()
         self.send_command_no_wait("files")
-        
-        # Read memory info
-        memory_line = self.read_line(timeout=5)
+
         memory_info = {"total": 0, "used": 0}
-        if memory_line and memory_line.startswith("memory"):
-            parts = memory_line.split()
-            if len(parts) >= 3:
-                memory_info["total"] = int(parts[1])
-                memory_info["used"] = int(parts[2])
-        
-        # Read files
         files = []
         files_started = False
-        
-        start_time = time.time()
-        while time.time() - start_time < 10:  # 10 second timeout
-            line = self.read_line(timeout=1)
+
+        # Allow a generous wait for the first response from firmware (can be slow),
+        # but once file listing has started, stop after a short idle period.
+        started_at = time.time()
+        last_activity = started_at
+        max_total_wait_seconds = 12.0
+        post_start_idle_seconds = 1.2
+
+        while (time.time() - started_at) < max_total_wait_seconds:
+            line = self.read_line(timeout=0.5)
             if not line:
+                if files_started and (time.time() - last_activity) >= post_start_idle_seconds:
+                    break
                 continue
-                
-            if line == "file start":
+
+            last_activity = time.time()
+            if line.startswith("memory"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    try:
+                        memory_info["total"] = int(parts[1])
+                        memory_info["used"] = int(parts[2])
+                    except ValueError:
+                        pass
+            elif line == "file start":
                 files_started = True
             elif line == "done files":
                 break
             elif files_started and line.startswith("file"):
                 parts = line.split()
                 if len(parts) >= 3:
-                    files.append({
-                        "name": parts[1],
-                        "size": int(parts[2])
-                    })
+                    try:
+                        files.append({
+                            "name": parts[1],
+                            "size": int(parts[2])
+                        })
+                    except ValueError:
+                        continue
         
         return {
             "memory": memory_info,

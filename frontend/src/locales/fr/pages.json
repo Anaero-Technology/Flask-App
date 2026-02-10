@@ -549,7 +549,10 @@
     "csv_upload_failed": "Impossible de télécharger le fichier CSV: {{error}}"
   },
   "device_card": {
+    "actions": "Actions",
     "view_plot": "Afficher le Graphique",
+    "view_files": "Voir les Fichiers",
+    "view_test": "Voir le Test",
     "calibrate": "Calibrer",
     "start": "Démarrer",
     "cancel": "Annuler"
