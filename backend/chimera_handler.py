@@ -33,6 +33,7 @@ class ChimeraHandler(SerialHandler):
         # IP monitoring daemon thread
         self.ip_monitor_thread = None
         self.ip_monitor_running = False
+        self.is_network_connected = False
         self.last_known_ip = None
         self.last_known_ssids = set()  # Track SSIDs we've already sent
 
@@ -1031,6 +1032,48 @@ class ChimeraHandler(SerialHandler):
         else:
             return False, f"Unexpected response: {response}"
 
+    def _sync_wifi_ssids_to_device(self, ssids: List[str]) -> None:
+        """Send SSID list to the Chimera only when it has changed."""
+        unique_ssids = [ssid for ssid in dict.fromkeys(ssids) if ssid]
+        current_ssids = set(unique_ssids)
+
+        if not current_ssids:
+            print("[CHIMERA IP MONITOR] No WiFi networks found")
+            return
+
+        if current_ssids == self.last_known_ssids:
+            return
+
+        if not (self.connection and self.connection.is_open):
+            print("[CHIMERA IP MONITOR] Connection not open, cannot sync ssidadd commands")
+            return
+
+        try:
+            response = self.send_command("clearssids", timeout=2.0)
+            if response != "done clearssids":
+                print(f"[CHIMERA IP MONITOR] clearssids unexpected response: {response}")
+                return
+        except Exception as e:
+            print(f"[CHIMERA IP MONITOR] Failed to clear SSIDs: {e}")
+            return
+
+        all_sent = True
+        for ssid in unique_ssids:
+            try:
+                response = self.send_command(f"ssidadd {ssid}", timeout=2.0)
+                if response != "done ssidadd":
+                    print(f"[CHIMERA IP MONITOR] ssidadd unexpected response: {response}")
+                    all_sent = False
+            except Exception as e:
+                print(f"[CHIMERA IP MONITOR] Failed to send ssidadd: {e}")
+                all_sent = False
+
+        if all_sent:
+            self.last_known_ssids = current_ssids
+            print(f"[CHIMERA IP MONITOR] Synced {len(unique_ssids)} WiFi networks")
+        else:
+            print("[CHIMERA IP MONITOR] SSID sync incomplete; will retry")
+
     def _ip_monitor_daemon(self):
         """Background daemon that monitors IP connection and sends ipset command to chimera"""
         print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
@@ -1041,6 +1084,9 @@ class ChimeraHandler(SerialHandler):
                 current_ip = self._get_local_ip()
 
                 if current_ip:
+                    just_reconnected = not self.is_network_connected
+                    self.is_network_connected = True
+
                     # Only send ipset command if IP has changed or this is the first check
                     if current_ip != self.last_known_ip:
                         print(f"[CHIMERA IP MONITOR] IP detected: {current_ip}")
@@ -1059,39 +1105,17 @@ class ChimeraHandler(SerialHandler):
                         else:
                             print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
 
-                    # Clear and resend all WiFi SSIDs every cycle
-                    ssids = self._get_wifi_ssids()
-                    if ssids:
-                        print(f"[CHIMERA IP MONITOR] Found {len(ssids)} WiFi networks")
-
-                        if self.connection and self.connection.is_open:
-                            # Clear old SSIDs first
-                            try:
-                                response = self.send_command("clearssids", timeout=2.0)
-                                if response == "done clearssids":
-                                    print(f"[CHIMERA IP MONITOR] Cleared SSIDs")
-                                else:
-                                    print(f"[CHIMERA IP MONITOR] clearssids unexpected response: {response}")
-                            except Exception as e:
-                                print(f"[CHIMERA IP MONITOR] Failed to clear SSIDs: {e}")
-
-                            # Send all current SSIDs
-                            for ssid in ssids:
-                                try:
-                                    response = self.send_command(f"ssidadd {ssid}", timeout=2.0)
-                                    if response != "done ssidadd":
-                                        print(f"[CHIMERA IP MONITOR] ssidadd unexpected response: {response}")
-                                except Exception as e:
-                                    print(f"[CHIMERA IP MONITOR] Failed to send ssidadd: {e}")
-                        else:
-                            print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ssidadd commands")
-                    else:
-                        print(f"[CHIMERA IP MONITOR] No WiFi networks found")
+                    # Scan/sync SSIDs only when reconnected or when we have no cache yet.
+                    if just_reconnected or not self.last_known_ssids:
+                        ssids = self._get_wifi_ssids()
+                        self._sync_wifi_ssids_to_device(ssids)
 
                 else:
-                    if self.last_known_ip is not None:
+                    if self.is_network_connected:
                         print(f"[CHIMERA IP MONITOR] No connection detected")
+                        self.is_network_connected = False
                         self.last_known_ip = None
+                        self.last_known_ssids.clear()
 
             except Exception as e:
                 print(f"[CHIMERA IP MONITOR] Error in monitoring loop: {e}")
@@ -1120,6 +1144,7 @@ class ChimeraHandler(SerialHandler):
             if self.ip_monitor_thread:
                 self.ip_monitor_thread.join(timeout=2)
             # Reset tracking when stopping
+            self.is_network_connected = False
             self.last_known_ip = None
             self.last_known_ssids.clear()
             print(f"[CHIMERA IP MONITOR] IP monitoring stopped for {self.device_name}")
