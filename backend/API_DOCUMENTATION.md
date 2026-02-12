@@ -1,444 +1,176 @@
-# Flask Device Management API Documentation
+# FlaskApp API Documentation
 
 ## Base URL
-All endpoints are prefixed with: `http://localhost:6000`
+- Local development: `http://localhost:6000`
+- API prefix: `/api/v1`
 
-## General Device Management
+## Authentication and Authorization
+- Auth is JWT-based.
+- Send access token in `Authorization: Bearer <token>`.
+- Refresh token endpoint: `POST /api/v1/auth/refresh`.
+- Role hierarchy: `admin > operator > technician > viewer`.
+- Most protected endpoints return:
+  - `401` when token is missing/invalid.
+  - `403` when role is insufficient.
 
-### List Available Serial Ports
-```
-GET /api/v1/ports
-```
-Returns a list of available serial ports on the system.
+## Common Response Shape
+- Success: endpoint-specific JSON payload.
+- Error:
 
-**Response:**
-```json
-[
-  {
-    "name": "COM3",
-    "device": "/dev/ttyUSB0",
-    "description": "USB Serial Port"
-  }
-]
-```
-
-### List All Devices
-```
-GET /api/v1/devices
-```
-Returns all registered devices in the database.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "MyBlackBox",
-    "device_type": "black_box",
-    "serial_port": "/dev/ttyUSB0",
-    "mac_address": "AA:BB:CC:DD:EE:FF",
-    "logging": false,
-    "connected": false
-  }
-]
-```
-
-### Register New Device
-```
-POST /api/v1/devices
-```
-Register a new device by connecting to it and calling the info command. This automatically determines the device type and retrieves the MAC address.
-
-**Request Body:**
 ```json
 {
-  "serial_port": "/dev/ttyUSB0",  // Required\
-  "device_type": "black_box",      // Optional: "black_box" or "chimera"
-  "name": "MyDevice"              // Optional: custom name (if not provided, must be available from device)
+  "error": "Human-readable message"
 }
 ```
 
-**Response:** Same as device object above with status 201
+## Auth Endpoints
+- `POST /api/v1/auth/login` - Login and return access/refresh tokens.
+- `POST /api/v1/auth/refresh` - Issue a new access token from refresh token.
+- `GET /api/v1/auth/me` - Get current authenticated user.
+- `POST /api/v1/auth/verify-password` - Verify current user password.
+- `POST /api/v1/auth/change-password` - Change current user password.
+- `POST /api/v1/auth/logout` - Logout (token-side behavior handled by backend policy).
 
-**Notes:**
-- The system automatically connects to the device and calls the info command
-- Device type is determined automatically (currently only supports black_box)
-- MAC address is automatically retrieved from the device
-- If no name is provided in the request AND the device doesn't provide a name, registration fails
+## User and Role Endpoints
+- `GET /api/v1/users/me` - Get current user profile.
+- `GET /api/v1/users` - List users (`admin`).
+- `POST /api/v1/users` - Create user (`admin`).
+- `GET /api/v1/users/<int:user_id>` - Get user by ID (`admin`).
+- `PUT /api/v1/users/<int:user_id>` - Update user (`admin`).
+- `DELETE /api/v1/users/<int:user_id>` - Delete user (`admin`).
+- `POST /api/v1/users/<int:user_id>/reset-password` - Reset user password (`admin`).
+- `GET /api/v1/roles` - List valid roles (`admin`).
+- `PUT /api/v1/user/preferences` - Update current user preferences.
 
-### Get Device by ID
-```
-GET /api/v1/devices/<device_id>
-```
-Get details of a specific device.
+## App Settings and Profile Pictures
+- `GET /api/v1/app-settings` - Public app settings (company name + logo URL).
+- `PUT /api/v1/app-settings` - Update app settings (`admin`).
+- `POST /api/v1/app-settings/logo` - Upload logo (`admin`).
+- `GET /api/v1/app-settings/logo` - Download current logo.
+- `DELETE /api/v1/app-settings/logo` - Delete current logo (`admin`).
+- `POST /api/v1/users/<int:user_id>/profile-picture` - Upload profile picture (self or `admin`).
+- `GET /api/v1/users/<int:user_id>/profile-picture` - Fetch profile picture.
+- `DELETE /api/v1/users/<int:user_id>/profile-picture` - Delete profile picture (self or `admin`).
 
-**Response:** Single device object
+## Device and Test Orchestration
+- `GET /api/v1/ports` - List serial ports.
+- `GET /api/v1/devices` - List devices.
+- `GET /api/v1/devices/<int:device_id>` - Get device details.
+- `PUT /api/v1/devices/<int:device_id>` - Update device (`admin`, `operator`).
+- `DELETE /api/v1/devices/<int:device_id>` - Delete disconnected device (`admin`, `operator`).
+- `GET /api/v1/devices/by_mac/<mac_address>` - Find device by MAC.
+- `GET /api/v1/devices/discover` - Discover valid devices (`admin`, `operator`).
+- `POST /api/v1/devices/discover` - Discover single port/device (`admin`, `operator`).
+- `POST /api/v1/devices/connect` - Connect device (`admin`, `operator`).
+- `POST /api/v1/devices/disconnect/<string:port>` - Disconnect by port (`admin`, `operator`).
+- `POST /api/v1/devices/<int:device_id>/disconnect` - Disconnect by device ID (`admin`, `operator`).
+- `GET /api/v1/devices/connected` - List connected handlers.
 
-### Update Device
-```
-PUT /api/v1/devices/<device_id>
-```
-Update device information.
+### Sample Endpoints
+- `POST /api/v1/samples` - Create sample.
+- `GET /api/v1/samples` - List substrate samples.
+- `GET /api/v1/inoculum` - List inoculum samples.
+- `PUT /api/v1/samples/<int:sample_id>` - Update sample.
+- `DELETE /api/v1/samples/<int:sample_id>` - Delete sample.
 
-**Request Body:**
-```json
-{
-  "name": "NewName",              // Optional
-  "serial_port": "/dev/ttyUSB1"   // Optional: update port if device moved
-}
-```
+### Test Endpoints
+- `POST /api/v1/tests` - Create test.
+- `GET /api/v1/tests` - List tests.
+- `GET /api/v1/tests/<int:test_id>` - Get test details.
+- `PUT /api/v1/tests/<int:test_id>` - Update test.
+- `DELETE /api/v1/tests/<int:test_id>` - Delete test.
+- `POST /api/v1/tests/<int:test_id>/start` - Start test (starts all associated devices).
+- `POST /api/v1/tests/<int:test_id>/stop` - Stop test (stops all associated devices).
+- `POST /api/v1/tests/<int:test_id>/configurations` - Create/update BlackBox channel configurations.
+- `GET /api/v1/tests/<int:test_id>/chimera-configuration` - Get Chimera config rows for test.
+- `POST /api/v1/tests/<int:test_id>/chimera-configuration` - Create Chimera config rows.
+- `GET /api/v1/tests/<int:test_id>/blackbox-configuration/<int:device_id>` - Get BlackBox config for device/test.
+- `POST /api/v1/tests/upload-csv` - Upload CSV to bulk-create configurations.
+- `GET /api/v1/tests/<int:test_id>/download` - Download test data (CSV/ZIP).
 
-### Delete Device
-```
-DELETE /api/v1/devices/<device_id>
-```
-Delete a device (must be disconnected first).
+## Black Box Endpoints
+- `GET /api/v1/black_box/connected` - List connected BlackBox handlers.
+- `POST /api/v1/black_box/<int:device_id>/connect` - Connect BlackBox by device ID.
+- `POST /api/v1/black_box/<int:device_id>/disconnect` - Disconnect BlackBox.
+- `GET /api/v1/black_box/<int:device_id>/info` - Fetch device info.
+- `POST /api/v1/black_box/<int:device_id>/start_logging` - Start on-device logging.
+- `POST /api/v1/black_box/<int:device_id>/stop_logging` - Stop on-device logging.
+- `GET /api/v1/black_box/<int:device_id>/files` - List SD files + memory.
+- `POST /api/v1/black_box/<int:device_id>/download` - Download SD file.
+- `POST /api/v1/black_box/<int:device_id>/download_from` - Download SD file from byte offset.
+- `POST /api/v1/black_box/<int:device_id>/delete_file` - Delete SD file.
+- `GET /api/v1/black_box/<int:device_id>/time` - Read RTC time.
+- `POST /api/v1/black_box/<int:device_id>/time` - Set RTC time.
+- `POST /api/v1/black_box/<int:device_id>/name` - Set device name.
+- `GET /api/v1/black_box/<int:device_id>/hourly_tips` - Read hourly tip counters.
+- `POST /api/v1/black_box/<int:device_id>/send_command` - Send raw serial command.
+- `GET /api/v1/black_box/<int:device_id>/stream` - SSE stream for tip events.
 
-**Response:**
-```json
-{
-  "message": "Device deleted successfully"
-}
-```
+## Chimera Endpoints
+- `GET /api/v1/chimera/config/model` - Get global Chimera model config.
+- `GET /api/v1/chimera/<int:device_id>/config` - Get per-device Chimera config.
+- `POST /api/v1/chimera/<int:device_id>/config/model` - Set device model.
+- `GET /api/v1/chimera/connected` - List connected Chimera handlers.
+- `POST /api/v1/chimera/<int:device_id>/connect` - Connect Chimera.
+- `POST /api/v1/chimera/<int:device_id>/disconnect` - Disconnect Chimera.
+- `GET /api/v1/chimera/<int:device_id>/info` - Fetch Chimera info.
+- `POST /api/v1/chimera/<int:device_id>/start_logging` - Start Chimera logging.
+- `POST /api/v1/chimera/<int:device_id>/stop_logging` - Stop Chimera logging.
+- `GET /api/v1/chimera/<int:device_id>/files` - List files + memory.
+- `POST /api/v1/chimera/<int:device_id>/download` - Download file.
+- `POST /api/v1/chimera/<int:device_id>/delete_file` - Delete file.
+- `GET /api/v1/chimera/<int:device_id>/time` - Read RTC time.
+- `POST /api/v1/chimera/<int:device_id>/time` - Set RTC time.
+- `POST /api/v1/chimera/<int:device_id>/calibrate` - Trigger calibration.
+- `GET /api/v1/chimera/<int:device_id>/timing` - Read timing settings.
+- `POST /api/v1/chimera/<int:device_id>/timing` - Update timing settings.
+- `GET /api/v1/chimera/<int:device_id>/service` - Read service interval.
+- `POST /api/v1/chimera/<int:device_id>/service` - Update service interval.
+- `GET /api/v1/chimera/<int:device_id>/past_values` - Read past sensor values.
+- `GET /api/v1/chimera/<int:device_id>/sensor_info` - Read sensor metadata.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/enable` - Enable recirculation.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/disable` - Disable recirculation.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/delay` - Set recirculation delay.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/mode` - Set recirculation mode.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/flag` - Set recirculation flag.
+- `GET /api/v1/chimera/<int:device_id>/recirculation/info` - Get recirculation status.
+- `POST /api/v1/chimera/<int:device_id>/name` - Set device name.
+- `POST /api/v1/chimera/<int:device_id>/send_command` - Send raw serial command.
+- `GET /api/v1/chimera/<int:device_id>/stream` - SSE stream for processed events.
+- `GET /api/v1/chimera/<int:device_id>/data_stream` - Data stream metadata.
 
-### Find Device by MAC Address
-```
-GET /api/v1/devices/by_mac/<mac_address>
-```
-Find a device using its MAC address.
+## Data and Outlier Endpoints
+- `GET /api/v1/tests/<int:test_id>/device/<int:device_id>/data` - Get time-series data.
+  - Query params: `type`, `aggregation`, `start_time`, `end_time`, `limit`.
+- `GET /api/v1/tests/<int:test_id>/devices` - Get devices/channels associated with a test.
+- `GET /api/v1/events/recent` - Get recent events feed.
+- `DELETE /api/v1/tests/<int:test_id>/device/<int:device_id>/data` - Delete device data for test.
+- `GET /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - List outlier labels.
+- `POST /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - Add outlier labels.
+- `DELETE /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - Remove outlier labels.
 
-### List Connected Devices
-```
-GET /api/v1/devices/connected
-```
-Get status of all currently connected devices from DeviceManager.
+## Wi-Fi Endpoints
+- `GET /api/v1/wifi/scan` - Scan available Wi-Fi networks.
+- `POST /api/v1/wifi/connect` - Connect host machine to a Wi-Fi SSID.
 
-**Response:**
-```json
-{
-  "black_boxes": [
-    {
-      "device_id": 1,
-      "port": "/dev/ttyUSB0",
-      "name": "BlackBox1",
-      "serial": "12345",
-      "status": "idle"
-    }
-  ],
-  "chimeras": []
-}
-```
+## System and Audit Endpoints
+- `GET /api/v1/system/serial-log` - Download serial log file.
+- `DELETE /api/v1/system/serial-log` - Clear serial log (`admin`).
+- `GET /api/v1/system/serial-log/info` - Get serial log metadata.
+- `GET /api/v1/system/database/download` - Download SQLite DB (`admin`).
+- `POST /api/v1/system/database/transfer` - Replace SQLite DB (`admin`).
+- `DELETE /api/v1/system/database` - Clear DB while preserving admins (`admin`).
+- `POST /api/v1/system/git-pull` - `git pull origin master` on server (`admin`).
+- `GET /api/v1/audit-logs` - Query audit logs (`admin`).
+  - Query params: `limit`, `offset`, `action`, `target_type`, `user_id`.
+- `GET /api/v1/audit-logs/download` - Export audit logs CSV (`admin`).
 
-### Discover Device
-```
-POST /api/v1/devices/discover
-```
-Test connection to a device without registering it. Useful for checking what's connected to a port.
+## Streaming
+- `GET /api/v1/black_box/<int:device_id>/stream` - BlackBox event SSE.
+- `GET /api/v1/chimera/<int:device_id>/stream` - Chimera event SSE.
+- `GET /stream` - Flask-SSE blueprint endpoint (internal event bus transport).
 
-**Request Body:**
-```json
-{
-  "device_type": "black_box",     // Required for now
-  "serial_port": "/dev/ttyUSB0"   // Required
-}
-```
-
-**Response:**
-```json
-{
-  "device_type": "black_box",
-  "port": "/dev/ttyUSB0",
-  "device_name": "BlackBox1",
-  "mac_address": "AA:BB:CC:DD:EE:FF",
-  "is_logging": false,
-  "current_log_file": null
-}
-```
-
-## Black Box Specific Endpoints
-
-### Connect to Black Box
-```
-POST /api/v1/black_box/<device_id>/connect
-```
-Connect to a registered black box device.
-
-**Response:**
-```json
-{
-  "success": true,
-  "device_id": 1,
-  "device_name": "BlackBox1",
-  "mac_address": "AA:BB:CC:DD:EE:FF",
-  "is_logging": false,
-  "current_log_file": null
-}
-```
-
-### Disconnect from Black Box
-```
-POST /api/v1/black_box/<device_id>/disconnect
-```
-Disconnect from a black box device.
-
-### Get Device Info
-```
-GET /api/v1/black_box/<device_id>/info
-```
-Get current device information.
-
-**Response:**
-```json
-{
-  "device_name": "BlackBox1",
-  "mac_address": "AA:BB:CC:DD:EE:FF",
-  "is_logging": false,
-  "current_log_file": null,
-  "port": "/dev/ttyUSB0"
-}
-```
-
-### Start Logging
-```
-POST /api/v1/black_box/<device_id>/start_logging
-```
-Start logging data to SD card. Automatically creates or links to a test for data tracking.
-
-**Request Body:**
-```json
-{
-  "filename": "log_20240115.txt",           // Required: log file name
-  "test_id": 123,                          // Optional: link to existing test
-  "test_name": "My Experiment",            // Optional: name for new test (if no test_id)
-  "test_description": "Description",       // Optional: description for new test
-  "created_by": "researcher_name"          // Optional: who created the test
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Successfully started logging",
-  "filename": "log_20240115.txt",
-  "test_id": 123,
-  "test_name": "My Experiment"
-}
-```
-
-**Notes:**
-- If `test_id` is provided, links logging to existing test
-- If no `test_id`, automatically creates a new test
-- All tip data is automatically saved to database during logging
-- Test status is set to 'running' when logging starts
-
-### Stop Logging
-```
-POST /api/v1/black_box/<device_id>/stop_logging
-```
-Stop current logging session and complete the associated test.
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Successfully stopped logging"
-}
-```
-
-**Notes:**
-- Automatically sets test status to 'completed' and records end time
-- Clears active test ID from device and handler
-
-### List Files
-```
-GET /api/v1/black_box/<device_id>/files
-```
-Get SD card memory info and list of files.
-
-**Response:**
-```json
-{
-  "memory": {
-    "total": 16000000000,
-    "used": 1234567
-  },
-  "files": [
-    {
-      "name": "log_20240115.txt",
-      "size": 123456
-    }
-  ]
-}
-```
-
-### Download File
-```
-POST /api/v1/black_box/<device_id>/download
-```
-Download a file from the SD card.
-
-**Request Body:**
-```json
-{
-  "filename": "log_20240115.txt",
-  "max_bytes": 1000000  // Optional: limit download size
-}
-```
-
-### Download File From Byte
-```
-POST /api/v1/black_box/<device_id>/download_from
-```
-Download file starting from specific byte position.
-
-**Request Body:**
-```json
-{
-  "filename": "log_20240115.txt",
-  "byte_from": 1000
-}
-```
-
-### Delete File
-```
-POST /api/v1/black_box/<device_id>/delete_file
-```
-Delete a file from SD card.
-
-**Request Body:**
-```json
-{
-  "filename": "log_20240115.txt"
-}
-```
-
-### Get Device Time
-```
-GET /api/v1/black_box/<device_id>/time
-```
-Get current time from device RTC.
-
-**Response:**
-```json
-{
-  "timestamp": "2024 01 15 14 30 45",
-  "success": true
-}
-```
-
-### Set Device Time
-```
-POST /api/v1/black_box/<device_id>/time
-```
-Set device RTC time.
-
-
-**Request Body:**
-```json
-{
-  "timestamp": "2024,01,15,14,30,45"
-}
-```
-
-### Set Device Name
-```
-POST /api/v1/black_box/<device_id>/name
-```
-Change the device name.
-
-**Request Body:**
-```json
-{
-  "name": "NewDeviceName"
-}
-```
-
-### Get Hourly Tips
-```
-GET /api/v1/black_box/<device_id>/hourly_tips
-```
-Get hourly tip count data.
-
-### Send Raw Command
-```
-POST /api/v1/black_box/<device_id>/send_command
-```
-Send a raw command to the device.
-
-**Request Body:**
-```json
-{
-  "command": "info"
-}
-```
-
-### Real-time Data Stream
-```
-GET /api/v1/black_box/<device_id>/stream
-```
-Server-Sent Events (SSE) endpoint for real-time tip notifications.
-
-**Response:** Continuous SSE stream with events:
-```
-event: tip
-data: {
-  "type": "tip_event",
-  "device_name": "BlackBox1",
-  "port": "/dev/ttyUSB0",
-  "tip_data": {
-    "tip_number": 42,
-    "timestamp": "2024-01-15_14:30:45",
-    "seconds_elapsed": 3600,
-    "channel_number": 1,
-    "temperature": 37.5,
-    "pressure": 14.7
-  }
-}
-```
-
-**Notes:**
-- Requires device to be connected and active
-- Automatically saves tip data to database if test is active
-- Tip data includes sequential tip_number for gap detection
-
-## Database Models
-
-### BlackboxRawData Table
-Stores all tip data from BlackBox devices during logging sessions:
-
-```sql
-blackboxRawData:
-- id (Integer, Primary Key)
-- test_id (Integer, Foreign Key to tests.id)
-- device_id (Integer, Foreign Key to devices.id)
-- channel_number (Integer)
-- tip_number (Integer)           -- Sequential tip number for gap detection
-- timestamp (Integer)            -- Unix timestamp when recorded
-- seconds_elapsed (Integer)      -- Seconds since logging started
-- temperature (Float, nullable)  -- Temperature reading (null if N/A)
-- pressure (Float, nullable)     -- Pressure reading
-```
-
-### Test Management
-- Tests are automatically created when logging starts (if no test_id provided)
-- Test status: 'setup' → 'running' → 'completed'
-- All tip data is linked to the active test during logging
-- Missing tips are automatically detected and recovered using tip_number sequence
-
-## Error Responses
-
-All endpoints may return error responses in the format:
-```json
-{
-  "error": "Error description"
-}
-```
-
-Common HTTP status codes:
-- 200: Success
-- 201: Created
-- 400: Bad Request
-- 404: Not Found
-- 409: Conflict (e.g., port already in use)
-- 500: Internal Server Error
+## Notes
+- Device/file operations are serial-link dependent and can be slow with large on-device file counts.
+- Stopping a test stops logging for all devices associated with that test.
+- Most mutable endpoints write audit records for admin visibility.
