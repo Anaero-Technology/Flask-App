@@ -15,7 +15,6 @@ import {
   PlusCircle,
   User,
   Users,
-  Cpu,
   X,
   LogOut,
   Shield,
@@ -49,10 +48,6 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
     { id: 'database', labelKey: 'database', icon: Database },
     { id: 'plot', labelKey: 'plot', icon: LineChart },
     { id: 'upload', labelKey: 'upload_data', icon: Upload, permission: 'modify_test' },
-  ];
-
-  const secondaryItems = [
-    { id: 'plc', labelKey: 'plc', icon: Cpu },
     { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
 
@@ -216,11 +211,6 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
         <div className="px-6 py-2 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{tSidebar('main')}</div>
         <ul>
           {filterItems(menuItems).map(item => <NavItem key={item.id} item={item} />)}
-        </ul>
-
-        <div className="px-6 py-2 mt-4 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{tSidebar('tools')}</div>
-        <ul>
-          {filterItems(secondaryItems).map(item => <NavItem key={item.id} item={item} />)}
         </ul>
 
         {/* Admin Section - Only show if user has admin permissions */}
