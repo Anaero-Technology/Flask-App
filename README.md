@@ -50,6 +50,23 @@ The frontend script will automatically:
 npm run dev
 ```
 
+### 5. Network Setup (Raspberry Pi)
+```bash
+bash setup_ethernet.sh
+sudo reboot
+```
+
+This configures:
+- **mDNS hostname** (`chimera.local`) via Avahi so devices can be accessed without knowing the IP
+- **Ethernet direct-connection** for cable-only access (DHCP with link-local fallback at `169.254.50.1`)
+- **Avahi safety settings** to prevent IPv6-related hostname conflicts
+
+After reboot, access the app from any device on the network at `http://chimera.local:5173`.
+
+To use a custom hostname: `bash setup_ethernet.sh myhostname` (default is `chimera`).
+
+The hostname can also be changed at runtime from **Settings > Network** in the web UI (admin only).
+
 ## Configuration
 
 ### Environment Variables
@@ -61,8 +78,8 @@ Edit `backend/.env` to configure:
 
 ### First Run
 1. Connect your BlackBox/Chimera devices via USB/Serial
-2. Navigate to `http://localhost:5173` (frontend)
-3. The backend API runs on `http://localhost:6000`
+2. Navigate to `http://chimera.local:5173` (or `http://localhost:5173` if not on a Pi)
+3. The backend API runs on port 6000
 
 ## Features
 

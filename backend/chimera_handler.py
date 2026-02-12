@@ -949,17 +949,6 @@ class ChimeraHandler(SerialHandler):
         except Exception as e:
             return False, str(e)
 
-    def _get_local_ip(self) -> Optional[str]:
-        """Get the local IP address by attempting to connect to an external server"""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-            return local_ip
-        except Exception:
-            return None
-
     def _get_wifi_ssids(self) -> List[str]:
         """Get list of available WiFi SSIDs"""
         try:
@@ -1006,7 +995,7 @@ class ChimeraHandler(SerialHandler):
                     ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
                     capture_output=True,
                     text=True,
-                    timeout=10
+                    timeout=5
                 )
 
                 if result.returncode == 0:
@@ -1018,6 +1007,7 @@ class ChimeraHandler(SerialHandler):
                             ssids.append(ssid)
                     return ssids
 
+                # No WiFi adapter or nmcli error — fail silently
                 return []
 
             else:
@@ -1079,36 +1069,67 @@ class ChimeraHandler(SerialHandler):
         else:
             print("[CHIMERA IP MONITOR] SSID sync incomplete; will retry")
 
+    @staticmethod
+    def _get_interface_addresses():
+        """Detect active IPv4 addresses grouped by interface type."""
+        try:
+            result = subprocess.run(
+                ["ip", "-4", "-j", "addr", "show"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                return {}
+            interfaces = json.loads(result.stdout)
+        except Exception:
+            return {}
+
+        addrs = {}
+        for iface in interfaces:
+            name = iface.get("ifname", "")
+            addr_info = iface.get("addr_info", [])
+            if not addr_info or name == "lo":
+                continue
+            ip = addr_info[0].get("local", "")
+            if not ip or ip.startswith("127."):
+                continue
+            if name.startswith(("wlan", "wlp")) and "wifi" not in addrs:
+                addrs["wifi"] = {"iface": name, "ip": ip}
+            elif name.startswith(("eth", "enp")) and "eth" not in addrs:
+                addrs["eth"] = {"iface": name, "ip": ip}
+        return addrs
+
     def _ip_monitor_daemon(self):
-        """Background daemon that monitors IP connection and sends ipset command to chimera"""
+        """Background daemon that monitors network and sends ipset."""
         print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
+        ipset_sent = False
+        last_addrs = {}
 
         while self.ip_monitor_running:
             try:
-                # Check for IP connection
-                current_ip = self._get_local_ip()
+                addrs = self._get_interface_addresses()
+                network_up = bool(addrs)
 
-                if current_ip:
+                if network_up:
                     just_reconnected = not self.is_network_connected
                     self.is_network_connected = True
 
-                    # Only send ipset command if IP has changed or this is the first check
-                    if current_ip != self.last_known_ip:
-                        print(f"[CHIMERA IP MONITOR] IP detected: {current_ip}")
+                    # Re-send ipset when addresses change
+                    if addrs != last_addrs:
+                        last_addrs = addrs.copy()
+                        ipset_sent = False
 
-                        # Send ipset command to chimera
-                        if self.connection and self.connection.is_open:
-                            try:
-                                response = self.send_command(f"ipset http://{current_ip}:5173", timeout=2.0)
-                                if response == "done ipset":
-                                    print(f"[CHIMERA IP MONITOR] ipset successful")
-                                    self.last_known_ip = current_ip
-                                else:
-                                    print(f"[CHIMERA IP MONITOR] ipset unexpected response: {response}")
-                            except Exception as e:
-                                print(f"[CHIMERA IP MONITOR] Failed to send ipset command: {e}")
-                        else:
-                            print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
+                    # Send ipset once on connect (prefers wifi URL for QR display)
+                    if not ipset_sent and self.connection and self.connection.is_open:
+                        display_url = f"http://{socket.gethostname()}.local:5173"
+                        try:
+                            response = self.send_command(f"ipset {display_url}", timeout=2.0)
+                            if response == "done ipset":
+                                ipset_sent = True
+                                print(f"[CHIMERA IP MONITOR] ipset sent: {display_url}")
+                            else:
+                                print(f"[CHIMERA IP MONITOR] ipset unexpected response: {response}")
+                        except Exception as e:
+                            print(f"[CHIMERA IP MONITOR] Failed to send ipset command: {e}")
 
                     # Scan/sync SSIDs only when reconnected or when we have no cache yet.
                     if just_reconnected or not self.last_known_ssids:
@@ -1119,8 +1140,9 @@ class ChimeraHandler(SerialHandler):
                     if self.is_network_connected:
                         print(f"[CHIMERA IP MONITOR] No connection detected")
                         self.is_network_connected = False
-                        self.last_known_ip = None
                         self.last_known_ssids.clear()
+                        ipset_sent = False
+                        last_addrs = {}
 
             except Exception as e:
                 print(f"[CHIMERA IP MONITOR] Error in monitoring loop: {e}")

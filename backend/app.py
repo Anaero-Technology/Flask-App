@@ -11,6 +11,8 @@ import atexit
 import threading
 import os
 import re
+import socket
+import subprocess
 from werkzeug.utils import secure_filename
 from sqlalchemy.engine import make_url
 from sqlalchemy import text, or_
@@ -2375,6 +2377,122 @@ def git_pull():
 
     except subprocess.TimeoutExpired:
         return jsonify({"error": "Git pull timed out"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _ensure_avahi_config():
+    """Ensure critical avahi settings haven't been reverted by package upgrades."""
+    AVAHI_CONF = '/etc/avahi/avahi-daemon.conf'
+    try:
+        with open(AVAHI_CONF, 'r') as f:
+            conf = f.read()
+        fixes = [
+            ('use-ipv6=yes', 'use-ipv6=no'),
+            ('#publish-aaaa-on-ipv4=yes', 'publish-aaaa-on-ipv4=no'),
+        ]
+        changed = False
+        for old, new in fixes:
+            if old in conf:
+                conf = conf.replace(old, new)
+                changed = True
+        if changed:
+            subprocess.run(
+                ['sudo', 'tee', AVAHI_CONF],
+                input=conf, capture_output=True, text=True, timeout=5,
+            )
+            print(f"[HOSTNAME] Re-applied avahi safety settings")
+    except Exception as e:
+        print(f"[HOSTNAME] Warning: could not verify avahi config: {e}")
+
+
+@app.route("/api/v1/system/hostname", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def get_hostname():
+    """Get the current system hostname and active mDNS URLs (admin only)"""
+    hostname = socket.gethostname()
+    return jsonify({
+        "hostname": hostname,
+        "url": f"http://{hostname}.local:5173",
+    })
+
+
+@app.route("/api/v1/system/hostname", methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def set_hostname():
+    """Set the system hostname and restart Avahi (admin only)"""
+
+    data = request.get_json()
+    hostname = data.get('hostname', '').strip() if data else ''
+
+    # Validate: lowercase letters, numbers, hyphens; 1-63 chars; no leading/trailing hyphen
+    if not hostname or not re.match(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', hostname):
+        return jsonify({
+            "error": "Invalid hostname. Use only lowercase letters, numbers, and hyphens (max 63 characters, cannot start or end with a hyphen)."
+        }), 400
+
+    try:
+        old_hostname = socket.gethostname()
+
+        result = subprocess.run(
+            ['sudo', 'hostnamectl', 'set-hostname', hostname],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return jsonify({"error": result.stderr.strip() or "Failed to set hostname"}), 500
+
+        # Update /etc/hosts — replace existing 127.0.1.1 line, or append one
+        try:
+            with open('/etc/hosts', 'r') as f:
+                hosts_content = f.read()
+
+            if '127.0.1.1' in hosts_content:
+                new_hosts = re.sub(
+                    r'^127\.0\.1\.1\s+.*$',
+                    f'127.0.1.1\t{hostname}',
+                    hosts_content,
+                    flags=re.MULTILINE,
+                )
+            else:
+                new_hosts = hosts_content.rstrip('\n') + f'\n127.0.1.1\t{hostname}\n'
+
+            subprocess.run(
+                ['sudo', 'tee', '/etc/hosts'],
+                input=new_hosts, capture_output=True, text=True, timeout=5,
+            )
+        except Exception as e:
+            print(f"[HOSTNAME] Warning: failed to update /etc/hosts: {e}")
+
+        # Ensure avahi safety settings survive package upgrades
+        _ensure_avahi_config()
+
+        # Restart avahi-daemon so it broadcasts the new base name
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'avahi-daemon'],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            print(f"[HOSTNAME] avahi-daemon restart failed: {result.stderr}")
+
+        # Send updated ipset to all connected Chimera devices
+        from chimera_handler import ChimeraHandler
+        display_url = f"http://{hostname}.local:5173"
+        for handler in device_manager._active_handlers.values():
+            if isinstance(handler, ChimeraHandler) and handler.connection and handler.connection.is_open:
+                try:
+                    handler.send_command(f"ipset {display_url}", timeout=2.0)
+                except Exception:
+                    pass
+
+        return jsonify({
+            "hostname": hostname,
+            "url": f"http://{hostname}.local:5173",
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Hostname change timed out"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

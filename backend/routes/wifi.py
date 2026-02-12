@@ -95,14 +95,14 @@ def get_wifi_networks_macos():
         return []
 
 def get_wifi_networks_linux():
-    """Scan for WiFi networks on Linux"""
+    """Scan for WiFi networks on Linux. Returns (networks, error_message) tuple."""
     try:
         # Try nmcli first (NetworkManager)
         result = subprocess.run(
             ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=5
         )
 
         if result.returncode == 0:
@@ -123,14 +123,19 @@ def get_wifi_networks_linux():
                             'security': security
                         })
 
-            return networks
+            return networks, None
+
+        # Check if the error is due to missing WiFi adapter
+        stderr = result.stderr.strip().lower() if result.stderr else ''
+        if 'no wi-fi device' in stderr or 'wifi' in stderr and 'not found' in stderr:
+            return [], "No WiFi adapter found"
 
         # Fallback to iwlist
         result = subprocess.run(
             ['sudo', 'iwlist', 'wlan0', 'scan'],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=5
         )
 
         if result.returncode == 0:
@@ -161,12 +166,14 @@ def get_wifi_networks_linux():
                         networks.append(current_network.copy())
                     current_network = {}
 
-            return networks
+            return networks, None
 
-        return []
+        return [], None
+    except subprocess.TimeoutExpired:
+        return [], "WiFi scan timed out"
     except Exception as e:
         print(f"Error scanning WiFi networks on Linux: {e}")
-        return []
+        return [], None
 
 def connect_to_wifi_macos(ssid, password):
     """Connect to WiFi network on macOS"""
@@ -210,13 +217,17 @@ def scan_wifi():
     """Scan for available WiFi networks"""
     try:
         system = platform.system()
+        adapter_error = None
 
         if system == 'Darwin':  # macOS
             networks = get_wifi_networks_macos()
         elif system == 'Linux':
-            networks = get_wifi_networks_linux()
+            networks, adapter_error = get_wifi_networks_linux()
         else:
             return jsonify({'error': 'Unsupported operating system'}), 400
+
+        if adapter_error:
+            return jsonify({'error': adapter_error, 'networks': []})
 
         # Remove duplicates by SSID
         seen_ssids = set()
