@@ -7,7 +7,7 @@ import { ChimeraProvider } from './components/ChimeraContext'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { I18nProvider } from './components/i18nContext'
 import { ThemeProvider } from './components/ThemeContext'
-import { AppSettingsProvider } from './components/AppSettingsContext'
+import { AppSettingsProvider, useAppSettings } from './components/AppSettingsContext'
 import Dashboard from './view/dashboard'
 import SampleForm from './view/SampleForm'
 import Database from './view/Database'
@@ -20,11 +20,50 @@ import './App.css'
 import Plot from './view/Plot'
 import { Loader2 } from 'lucide-react'
 
+const DEFAULT_FAVICON = '/anaero-logo.png'
+
 function AppContent() {
   const { isAuthenticated, loading, canPerform } = useAuth()
+  const { logoUrl } = useAppSettings()
   const [currentView, setCurrentView] = useState('dashboard')
   const [plotParams, setPlotParams] = useState(null)
   const [viewParams, setViewParams] = useState(null)
+
+  useEffect(() => {
+    document.title = 'Data Digester'
+  }, [])
+
+  useEffect(() => {
+    const setFavicon = (href) => {
+      let favicon = document.querySelector("link[rel='icon']")
+
+      if (!favicon) {
+        favicon = document.createElement('link')
+        favicon.setAttribute('rel', 'icon')
+        document.head.appendChild(favicon)
+      }
+
+      favicon.setAttribute('type', 'image/png')
+      favicon.setAttribute('href', href)
+    }
+
+    // Always start from the static fallback logo in public/.
+    setFavicon(DEFAULT_FAVICON)
+
+    // If a custom logo exists, only apply it if it resolves successfully.
+    if (!logoUrl) return
+
+    const cacheBustedUrl = `${logoUrl}${logoUrl.includes('?') ? '&' : '?'}t=${Date.now()}`
+    const img = new Image()
+    img.onload = () => setFavicon(cacheBustedUrl)
+    img.onerror = () => setFavicon(DEFAULT_FAVICON)
+    img.src = cacheBustedUrl
+
+    return () => {
+      img.onload = null
+      img.onerror = null
+    }
+  }, [logoUrl])
 
   const handleNavigate = useCallback((view, params = null) => {
     // Check permissions for protected views
