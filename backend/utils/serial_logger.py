@@ -36,6 +36,7 @@ class SerialLogger:
 
         self._log_file = os.path.join(self._log_dir, 'serial_messages.log')
         self._enabled = True
+        self._max_size = 25 * 1024 * 1024  # 25 MB
 
     @property
     def log_file_path(self) -> str:
@@ -65,7 +66,7 @@ class SerialLogger:
         self._write_log('TX', port, message)
 
     def _write_log(self, direction: str, port: str, message: str):
-        """Write a log entry to the file."""
+        """Write a log entry to the file. Keeps the most recent half when the 25 MB limit is reached."""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         # Extract just the port name (e.g., /dev/ttyUSB0 -> ttyUSB0)
         port_name = os.path.basename(port) if port else 'unknown'
@@ -73,6 +74,15 @@ class SerialLogger:
 
         with self._write_lock:
             try:
+                # Rotate when file exceeds the size limit: keep the newest half
+                if self.get_log_size() >= self._max_size:
+                    with open(self._log_file, 'r', encoding='utf-8') as f:
+                        f.seek(self._max_size // 2)
+                        f.readline()  # skip partial line
+                        recent_data = f.read()
+                    with open(self._log_file, 'w', encoding='utf-8') as f:
+                        f.write(recent_data)
+
                 with open(self._log_file, 'a', encoding='utf-8') as f:
                     f.write(log_entry)
             except Exception as e:
