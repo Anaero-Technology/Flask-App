@@ -58,10 +58,6 @@ function Settings() {
   const [brandingLogoPreview, setBrandingLogoPreview] = useState(logoUrl)
   const [savingBranding, setSavingBranding] = useState(false)
   const [brandingMessage, setBrandingMessage] = useState({ text: '', type: '' })
-  const [hostnameData, setHostnameData] = useState({ hostname: '' })
-  const [hostnameInput, setHostnameInput] = useState('')
-  const [savingHostname, setSavingHostname] = useState(false)
-  const [hostnameMessage, setHostnameMessage] = useState({ text: '', type: '' })
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -72,10 +68,8 @@ function Settings() {
       const data = await response.json()
 
       if (response.ok) {
-        setNetworks(data.networks || [])
-        if (data.error) {
-          setMessage({ text: data.error, type: 'error' })
-        }
+        setNetworks(data.networks)
+        setMessage({ text: 'Networks scanned successfully', type: 'success' })
       } else {
         setMessage({ text: data.error || 'Failed to scan networks', type: 'error' })
       }
@@ -595,43 +589,6 @@ function Settings() {
     }
   }
 
-  const fetchHostname = async () => {
-    try {
-      const response = await authFetch('/api/v1/system/hostname')
-      if (response.ok) {
-        const data = await response.json()
-        setHostnameData(data)
-        setHostnameInput(data.hostname)
-      }
-    } catch (error) {
-      // Silently fail — non-admin users won't have access
-    }
-  }
-
-  const saveHostname = async () => {
-    setSavingHostname(true)
-    setHostnameMessage({ text: '', type: '' })
-
-    try {
-      const response = await authFetch('/api/v1/system/hostname', {
-        method: 'POST',
-        body: JSON.stringify({ hostname: hostnameInput })
-      })
-      const data = await response.json()
-
-      if (response.ok) {
-        setHostnameData(data)
-        setHostnameMessage({ text: 'Hostname updated successfully', type: 'success' })
-      } else {
-        setHostnameMessage({ text: data.error || 'Failed to update hostname', type: 'error' })
-      }
-    } catch (error) {
-      setHostnameMessage({ text: 'Error updating hostname: ' + error.message, type: 'error' })
-    } finally {
-      setSavingHostname(false)
-    }
-  }
-
   useEffect(() => {
     // Sync branding state with context
     setBrandingCompanyName(companyName)
@@ -643,9 +600,6 @@ function Settings() {
     scanNetworks()
     fetchSerialLogInfo()
     loadUserPreferences()
-    if (canPerform('system_settings')) {
-      fetchHostname()
-    }
   }, [])
 
   const getMessageClasses = (type) => (
@@ -751,7 +705,7 @@ function Settings() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">Network</h2>
+          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.wifi')}</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
@@ -859,55 +813,11 @@ function Settings() {
                 })
               )}
             </div>
-
-            {canPerform('system_settings') && (
-              <div className="grid grid-cols-1 gap-4 border-t border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">System Hostname</h3>
-                  <p className="mt-0.5 text-[13px] text-gray-500">
-                    The hostname used for mDNS (.local) network discovery.
-                  </p>
-                  {hostnameData.url && (
-                    <p className="mt-0.5 text-[13px] text-gray-500">
-                      URL: <span className="font-medium text-gray-700">{hostnameData.url}</span>
-                    </p>
-                  )}
-                </div>
-                <div className="flex w-full max-w-md flex-wrap items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
-                    <span className="whitespace-nowrap pl-2.5 text-xs text-gray-400">http://</span>
-                    <input
-                      type="text"
-                      value={hostnameInput}
-                      onChange={(e) => {
-                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
-                        if (val.length <= 63) setHostnameInput(val)
-                      }}
-                      className="min-w-0 flex-1 border-none bg-transparent px-1 py-1.5 text-xs focus:outline-none"
-                      placeholder="chimera"
-                    />
-                    <span className="whitespace-nowrap pr-2.5 text-xs text-gray-400">.local:5173</span>
-                  </div>
-                  <button
-                    onClick={saveHostname}
-                    disabled={savingHostname || !hostnameInput || hostnameInput === hostnameData.hostname}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                  >
-                    {savingHostname ? <Loader2 size={14} className="animate-spin" /> : 'Update'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {message.text && (
             <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(message.type)}`}>
               {message.text}
-            </div>
-          )}
-          {hostnameMessage.text && (
-            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(hostnameMessage.type)}`}>
-              {hostnameMessage.text}
             </div>
           )}
         </section>
