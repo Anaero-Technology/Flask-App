@@ -1,124 +1,171 @@
 # Flask Device Management Application
 
-A full-stack application for managing and monitoring BlackBox and Chimera devices with real-time data streaming.
+Full-stack app for managing and monitoring device tests (Flask backend + React/Vite frontend).
 
-## System Requirements
+## Requirements
 
-- **Operating System**: Ubuntu/Debian Linux (or WSL on Windows)
-- **Python**: 3.8 or higher
-- **Node.js**: 20.x LTS (automatically installed)
-- **Redis**: Required for real-time SSE streaming
-- **Hardware**: Serial port access for device communication
+- Debian/Ubuntu (Raspberry Pi OS supported)
+- Python 3.8+
+- Node.js 20+
+- Redis
+- USB/serial access for connected devices
 
-## Installation Instructions
+## Install (Steps 1 to 7)
 
-### 1. Clone Repository
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/Anaero-Technology/Flask-App.git
 cd Flask-App
 ```
 
-### 2. Backend Setup
+### 2. Set up backend (creates venv, installs deps, prepares `.env`)
+
 ```bash
 cd backend
 chmod +x start.sh
 ./start.sh
 ```
 
-The backend script will automatically:
-- Create Python virtual environment
-- Install Python dependencies
-- Install and configure Redis server
-- Copy .env.example to .env (if needed)
-- Initialize database tables
-- Start the Flask server on port 6000
+`start.sh` ends by starting Gunicorn. After you confirm it starts, stop it with `Ctrl+C`.
 
-### 3. Frontend Setup
+### 3. Set up frontend dependencies
+
 ```bash
 cd ../frontend
 chmod +x install.sh
 ./install.sh
 ```
 
-The frontend script will automatically:
-- Install Node.js 20.x LTS
-- Install project dependencies
-- Install Vite build tool
+### 4. Create the first admin user
 
-### 4. Start Frontend Development Server
 ```bash
-npm run dev
+cd ../backend
+source venv/bin/activate
+flask create-admin
 ```
 
-### 5. Network Setup (Raspberry Pi)
+### 5. Configure networking on Raspberry Pi
+
+No-mDNS option (recommended if you want to avoid Avahi/mDNS):
+
+```bash
+cd ..
+bash setup_ethernet_no_mdns.sh
+```
+
+mDNS option (`chimera.local`):
+
 ```bash
 bash setup_ethernet.sh
-sudo reboot
 ```
 
-This configures:
-- **mDNS hostname** (`chimera.local`) via Avahi so devices can be accessed without knowing the IP
-- **Ethernet direct-connection** for cable-only access (DHCP with link-local fallback at `169.254.50.1`)
-- **Avahi safety settings** to prevent IPv6-related hostname conflicts
+### 6. Create systemd services (backend + frontend)
 
-After reboot, access the app from any device on the network at `http://chimera.local:5173`.
+Replace paths/usernames below if your install path is different.
 
-To use a custom hostname: `bash setup_ethernet.sh myhostname` (default is `chimera`).
+#### Backend service
 
-The hostname can also be changed at runtime from **Settings > Network** in the web UI (admin only).
+Create `/etc/systemd/system/flaskapp-backend.service`:
 
-### 5b. Ethernet Setup Without mDNS (recommended if you want to avoid Avahi)
+```ini
+[Unit]
+Description=Flaskapp Backend
+After=network-online.target redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=anaero
+Group=anaero
+WorkingDirectory=/home/anaero/Flask-App/backend
+Environment=PATH=/home/anaero/Flask-App/backend/venv/bin
+ExecStart=/home/anaero/Flask-App/backend/venv/bin/gunicorn --worker-class gevent --worker-connections 1000 --timeout 30 -w 1 -b 0.0.0.0:6000 app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+#### Frontend service
+
+Create `/etc/systemd/system/flaskapp-frontend.service`:
+
+```ini
+[Unit]
+Description=Flaskapp Frontend (Vite)
+After=network-online.target flaskapp-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=anaero
+Group=anaero
+WorkingDirectory=/home/anaero/Flask-App/frontend
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5173
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Load and start services:
+
 ```bash
-bash setup_ethernet_no_mdns.sh
+sudo systemctl enable --now redis-server
+sudo systemctl daemon-reload
+sudo systemctl enable flaskapp-backend flaskapp-frontend
+sudo systemctl restart flaskapp-backend flaskapp-frontend
+```
+
+### 7. Reboot and verify
+
+```bash
 sudo reboot
 ```
 
-This configures Ethernet DHCP with link-local fallback and does **not** change Avahi/mDNS.
-Use the Ethernet IP directly (for direct cable fallback, `169.254.50.1`).
+After reboot:
 
-## Configuration
+```bash
+systemctl status flaskapp-backend --no-pager
+systemctl status flaskapp-frontend --no-pager
+journalctl -u flaskapp-backend -n 80 --no-pager
+journalctl -u flaskapp-frontend -n 80 --no-pager
+```
 
-### Environment Variables
-Edit `backend/.env` to configure:
-- Database settings
-- Redis connection
-- Serial port preferences
-- API keys (if needed)
+Access the app:
 
-### First Run
-1. Connect your BlackBox/Chimera devices via USB/Serial
-2. Navigate to `http://chimera.local:5173` (or `http://localhost:5173` if not on a Pi)
-3. The backend API runs on port 6000
+- Local device: `http://localhost:5173`
+- Wi-Fi/LAN: `http://<pi_wifi_ip>:5173`
+- Ethernet fallback (if using `setup_ethernet_no_mdns.sh`): `http://169.254.50.1:5173`
+- mDNS mode (if using `setup_ethernet.sh`): `http://chimera.local:5173`
 
-## Features
+## API docs
 
-- **Device Management**: Auto-discovery and registration of BlackBox/Chimera devices
-- **Real-time Monitoring**: Live tip/datapoint streaming via Server-Sent Events
-- **Test Management**: Automatic test creation and data logging
-- **Data Recovery**: Automatic detection and recovery of missing tip data
-- **Database Storage**: All device data stored with full traceability
-
-## API Documentation
-
-See `backend/API_DOCUMENTATION.md` for complete API reference.
+See `backend/API_DOCUMENTATION.md`.
 
 ## Troubleshooting
 
-### Redis Issues
-If Redis fails to start:
+### `status=200/CHDIR` in backend service
+
+This means the `WorkingDirectory` or `ExecStart` path in the service file does not exist for that user.
+
+Quick checks:
+
 ```bash
-sudo systemctl status redis-server
-sudo systemctl restart redis-server
+ls -la /home/anaero/Flask-App/backend
+ls -la /home/anaero/Flask-App/backend/venv/bin/gunicorn
+sudo systemctl cat flaskapp-backend
 ```
 
-### Database Issues
-To reset database:
+If your repo directory is `FlaskApp` (no hyphen) instead of `Flask-App`, update both `WorkingDirectory` and `ExecStart` in the service file to match exactly.
+
+### Frontend service cannot find `npm`
+
 ```bash
-cd backend
-rm -f instance/database.db  # SQLite database
-./start.sh  # Will recreate tables
+which npm
 ```
 
-### Port Conflicts
-- Frontend (default 5173): Change in `vite.config.js`
-- Backend (default 6000): Change in `start.sh` gunicorn command
+If it is not `/usr/bin/npm`, update `ExecStart` in `flaskapp-frontend.service` to the correct absolute path.
