@@ -67,10 +67,11 @@
 - `GET /api/v1/devices/connected` - List connected handlers.
 
 ### Sample Endpoints
-- `POST /api/v1/samples` - Create sample.
+- `POST /api/v1/samples` - Create sample (JSON or `multipart/form-data`; optional `image` upload, max 2 MB).
 - `GET /api/v1/samples` - List substrate samples.
 - `GET /api/v1/inoculum` - List inoculum samples.
-- `PUT /api/v1/samples/<int:sample_id>` - Update sample.
+- `GET /api/v1/samples/<int:sample_id>/image` - Download sample image.
+- `PUT /api/v1/samples/<int:sample_id>` - Update sample (JSON or `multipart/form-data`; supports replacing/clearing image).
 - `DELETE /api/v1/samples/<int:sample_id>` - Delete sample.
 
 ### Test Endpoints

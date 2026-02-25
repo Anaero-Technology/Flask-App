@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Save, FlaskConical, Tag, Scale, Atom, ArrowLeft } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 
 function SampleForm({ returnView }) {
+    const MAX_SAMPLE_IMAGE_BYTES = 2 * 1024 * 1024;
+    const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
     const { authFetch } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const toast = useToast();
     const [loading, setLoading] = useState(false);
+    const [sampleImageFile, setSampleImageFile] = useState(null);
+    const [sampleImagePreviewUrl, setSampleImagePreviewUrl] = useState('');
+    const [sampleImageError, setSampleImageError] = useState('');
+    const [fileInputKey, setFileInputKey] = useState(0);
     const [formData, setFormData] = useState({
         sample_name: '',
         substrate_source: '',
@@ -31,13 +38,79 @@ function SampleForm({ returnView }) {
         }));
     };
 
+    useEffect(() => {
+        return () => {
+            if (sampleImagePreviewUrl) {
+                URL.revokeObjectURL(sampleImagePreviewUrl);
+            }
+        };
+    }, [sampleImagePreviewUrl]);
+
+    const clearSelectedImage = () => {
+        if (sampleImagePreviewUrl) {
+            URL.revokeObjectURL(sampleImagePreviewUrl);
+        }
+        setSampleImageFile(null);
+        setSampleImagePreviewUrl('');
+        setSampleImageError('');
+        setFileInputKey(prev => prev + 1);
+    };
+
+    const handleImageChange = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            clearSelectedImage();
+            return;
+        }
+
+        if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.type)) {
+            if (sampleImagePreviewUrl) {
+                URL.revokeObjectURL(sampleImagePreviewUrl);
+            }
+            setSampleImageFile(null);
+            setSampleImagePreviewUrl('');
+            setSampleImageError('Unsupported image format. Use JPG, PNG, WEBP, or GIF.');
+            setFileInputKey(prev => prev + 1);
+            return;
+        }
+
+        if (file.size > MAX_SAMPLE_IMAGE_BYTES) {
+            if (sampleImagePreviewUrl) {
+                URL.revokeObjectURL(sampleImagePreviewUrl);
+            }
+            setSampleImageFile(null);
+            setSampleImagePreviewUrl('');
+            setSampleImageError('Image exceeds 2 MB size limit.');
+            setFileInputKey(prev => prev + 1);
+            return;
+        }
+
+        if (sampleImagePreviewUrl) {
+            URL.revokeObjectURL(sampleImagePreviewUrl);
+        }
+
+        setSampleImageError('');
+        setSampleImageFile(file);
+        setSampleImagePreviewUrl(URL.createObjectURL(file));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
+            let requestBody = JSON.stringify(formData);
+            if (sampleImageFile) {
+                const formPayload = new FormData();
+                Object.entries(formData).forEach(([key, value]) => {
+                    formPayload.append(key, typeof value === 'boolean' ? String(value) : value);
+                });
+                formPayload.append('image', sampleImageFile);
+                requestBody = formPayload;
+            }
+
             const response = await authFetch('/api/v1/samples', {
                 method: 'POST',
-                body: JSON.stringify(formData)
+                body: requestBody
             });
 
             if (response.ok) {
@@ -48,6 +121,7 @@ function SampleForm({ returnView }) {
                     ash_content: '', c_content: '', n_content: '',
                     substrate_percent_ts: '', substrate_percent_vs: ''
                 });
+                clearSelectedImage();
             } else {
                 const error = await response.json();
                 toast.error(error.error || tPages('sample_form.sample_creation_failed'));
@@ -156,6 +230,43 @@ function SampleForm({ returnView }) {
 
                                         />
                                     </div>
+                                </div>
+
+                                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Sample Image</label>
+                                        <input
+                                            key={fileInputKey}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp,image/gif"
+                                            onChange={handleImageChange}
+                                            className="block w-full text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                        />
+                                        <p className="mt-1 text-[11px] text-gray-500">Maximum size: 2 MB.</p>
+                                    </div>
+
+                                    {sampleImageError && (
+                                        <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                                            {sampleImageError}
+                                        </div>
+                                    )}
+
+                                    {sampleImagePreviewUrl && (
+                                        <div className="space-y-2">
+                                            <img
+                                                src={sampleImagePreviewUrl}
+                                                alt="Sample preview"
+                                                className="h-28 w-full rounded-lg border border-gray-200 object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={clearSelectedImage}
+                                                className="text-xs font-semibold text-red-600 hover:text-red-700"
+                                            >
+                                                Remove image
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

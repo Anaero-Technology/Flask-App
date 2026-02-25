@@ -13,6 +13,9 @@ import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import { useTranslation } from 'react-i18next';
 
 const Database = ({ onViewPlot, initialParams }) => {
+    const MAX_SAMPLE_IMAGE_BYTES = 2 * 1024 * 1024;
+    const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
     const { authFetch, canPerform } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const [activeTable, setActiveTable] = useState('tests');
@@ -31,6 +34,7 @@ const Database = ({ onViewPlot, initialParams }) => {
     const [pendingTestId, setPendingTestId] = useState(null);
     const [editingSampleId, setEditingSampleId] = useState(null);
     const [sampleDrafts, setSampleDrafts] = useState({});
+    const [sampleImageDrafts, setSampleImageDrafts] = useState({});
     const [savingSampleId, setSavingSampleId] = useState(null);
     const [editingTestId, setEditingTestId] = useState(null);
     const [testDrafts, setTestDrafts] = useState({});
@@ -40,6 +44,21 @@ const Database = ({ onViewPlot, initialParams }) => {
         samples: { pageIndex: 0, pageSize: 10 },
         tests: { pageIndex: 0, pageSize: 10 }
     });
+    const sampleImageDraftsRef = useRef(sampleImageDrafts);
+
+    useEffect(() => {
+        sampleImageDraftsRef.current = sampleImageDrafts;
+    }, [sampleImageDrafts]);
+
+    useEffect(() => {
+        return () => {
+            Object.values(sampleImageDraftsRef.current).forEach((draft) => {
+                if (draft?.previewUrl) {
+                    URL.revokeObjectURL(draft.previewUrl);
+                }
+            });
+        };
+    }, []);
 
     useEffect(() => {
         if (activeTable === 'inoculums') {
@@ -458,9 +477,29 @@ const Database = ({ onViewPlot, initialParams }) => {
                 ash_content: sample.ash_content ?? ''
             }
         }));
+        setSampleImageDrafts(prev => {
+            const next = { ...prev };
+            const existingDraft = next[sample.id];
+            if (existingDraft?.previewUrl) {
+                URL.revokeObjectURL(existingDraft.previewUrl);
+            }
+            delete next[sample.id];
+            return next;
+        });
     };
 
     const cancelEditingSample = () => {
+        if (editingSampleId) {
+            setSampleImageDrafts(prev => {
+                const next = { ...prev };
+                const existingDraft = next[editingSampleId];
+                if (existingDraft?.previewUrl) {
+                    URL.revokeObjectURL(existingDraft.previewUrl);
+                }
+                delete next[editingSampleId];
+                return next;
+            });
+        }
         setEditingSampleId(null);
     };
 
@@ -472,6 +511,68 @@ const Database = ({ onViewPlot, initialParams }) => {
                 [field]: value
             }
         }));
+    };
+
+    const updateSampleImageDraft = (sampleId, updater) => {
+        setSampleImageDrafts(prev => {
+            const current = prev[sampleId];
+            const nextValue = typeof updater === 'function' ? updater(current) : updater;
+            if (current?.previewUrl && current.previewUrl !== nextValue?.previewUrl) {
+                URL.revokeObjectURL(current.previewUrl);
+            }
+            const next = { ...prev };
+            if (nextValue) {
+                next[sampleId] = nextValue;
+            } else {
+                delete next[sampleId];
+            }
+            return next;
+        });
+    };
+
+    const handleSampleImageChange = (sample, file) => {
+        if (!file) {
+            updateSampleImageDraft(sample.id, null);
+            return;
+        }
+
+        if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.type)) {
+            updateSampleImageDraft(sample.id, prev => ({
+                ...(prev || {}),
+                file: null,
+                previewUrl: '',
+                clearImage: false,
+                error: 'Unsupported image format. Use JPG, PNG, WEBP, or GIF.'
+            }));
+            return;
+        }
+
+        if (file.size > MAX_SAMPLE_IMAGE_BYTES) {
+            updateSampleImageDraft(sample.id, prev => ({
+                ...(prev || {}),
+                file: null,
+                previewUrl: '',
+                clearImage: false,
+                error: 'Image exceeds 2 MB size limit.'
+            }));
+            return;
+        }
+
+        updateSampleImageDraft(sample.id, {
+            file,
+            previewUrl: URL.createObjectURL(file),
+            clearImage: false,
+            error: ''
+        });
+    };
+
+    const handleRemoveSampleImage = (sampleId) => {
+        updateSampleImageDraft(sampleId, {
+            file: null,
+            previewUrl: '',
+            clearImage: true,
+            error: ''
+        });
     };
 
     const testDraftsRef = useRef(testDrafts);
@@ -540,22 +641,49 @@ const Database = ({ onViewPlot, initialParams }) => {
     const saveSample = async (sampleId) => {
         const draft = sampleDrafts[sampleId];
         if (!draft) return;
+        const imageDraft = sampleImageDrafts[sampleId];
         setSavingSampleId(sampleId);
         try {
+            const needsMultipart = Boolean(imageDraft?.file) || Boolean(imageDraft?.clearImage);
+            let body = JSON.stringify(draft);
+
+            if (needsMultipart) {
+                const formPayload = new FormData();
+                Object.entries(draft).forEach(([key, value]) => {
+                    formPayload.append(key, value ?? '');
+                });
+                if (imageDraft?.file) {
+                    formPayload.append('image', imageDraft.file);
+                } else if (imageDraft?.clearImage) {
+                    formPayload.append('clear_image', 'true');
+                }
+                body = formPayload;
+            }
+
             const response = await authFetch(`/api/v1/samples/${sampleId}`, {
                 method: 'PUT',
-                body: JSON.stringify(draft)
+                body
             });
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || tPages('database.update_failed'));
             }
 
+            const imageWasUpdated = Boolean(imageDraft?.file) || Boolean(imageDraft?.clearImage);
             setData(prev => prev.map(sample => (
                 sample.id === sampleId
-                    ? { ...sample, ...draft }
+                    ? {
+                        ...sample,
+                        ...draft,
+                        ...(imageWasUpdated ? {
+                            has_image: Boolean(imageDraft?.file),
+                            sample_image_url: imageDraft?.file ? `/api/v1/samples/${sampleId}/image` : null,
+                            image_updated_at: Date.now()
+                        } : {})
+                    }
                     : sample
             )));
+            updateSampleImageDraft(sampleId, null);
             setEditingSampleId(null);
         } catch (error) {
             alert(error.message || tPages('database.update_failed'));
@@ -936,6 +1064,10 @@ const Database = ({ onViewPlot, initialParams }) => {
 
     const renderSampleDetails = (sample) => {
         const isEditing = editingSampleId === sample.id;
+        const imageDraft = sampleImageDrafts[sample.id];
+        const imageEndpoint = sample.image_updated_at
+            ? `/api/v1/samples/${sample.id}/image?t=${sample.image_updated_at}`
+            : `/api/v1/samples/${sample.id}/image`;
         const draft = sampleDrafts[sample.id] || {
             sample_name: sample.sample_name || '',
             substrate_source: sample.substrate_source || '',
@@ -1043,6 +1175,54 @@ const Database = ({ onViewPlot, initialParams }) => {
                                     ) : (
                                         <span>{getDisplayValue([sample.substrate_type, sample.substrate_subtype].filter(Boolean).join(' / '))}</span>
                                     )}
+                                </div>
+                                <div>
+                                    <span className="text-xs uppercase text-gray-400 block">Sample Image</span>
+                                    <div className="mt-1 space-y-2">
+                                        {imageDraft?.previewUrl ? (
+                                            <img
+                                                src={imageDraft.previewUrl}
+                                                alt="Sample preview"
+                                                className="h-28 w-44 rounded-lg border border-gray-200 object-cover"
+                                            />
+                                        ) : sample.has_image ? (
+                                            <AuthImage
+                                                key={`${sample.id}-${sample.image_updated_at || 0}`}
+                                                endpoint={imageEndpoint}
+                                                authFetch={authFetch}
+                                                alt={`${sample.sample_name} sample`}
+                                                className="h-28 w-44 rounded-lg border border-gray-200 object-cover"
+                                                placeholderClassName="h-28 w-44 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-500 flex items-center justify-center"
+                                            />
+                                        ) : (
+                                            <span className="text-sm text-gray-500">{tPages('database.na')}</span>
+                                        )}
+
+                                        {isEditing && (
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="file"
+                                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                                    onChange={(event) => handleSampleImageChange(sample, event.target.files?.[0] || null)}
+                                                    className="block w-full text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                                />
+                                                <p className="text-[11px] text-gray-500">Maximum size: 2 MB.</p>
+                                                {imageDraft?.error && (
+                                                    <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                                                        {imageDraft.error}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveSampleImage(sample.id)}
+                                                    disabled={!sample.has_image && !imageDraft?.previewUrl && !imageDraft?.file}
+                                                    className="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    Remove image
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1726,6 +1906,44 @@ const Database = ({ onViewPlot, initialParams }) => {
             </div>
         </div>
     );
+}
+
+function AuthImage({ endpoint, authFetch, alt, className, placeholderClassName }) {
+    const [imageUrl, setImageUrl] = useState('');
+
+    useEffect(() => {
+        let mounted = true;
+        let objectUrl = '';
+
+        const loadImage = async () => {
+            try {
+                const response = await authFetch(endpoint);
+                if (!response.ok) return;
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                if (mounted) {
+                    setImageUrl(objectUrl);
+                }
+            } catch (error) {
+                // Keep placeholder on error.
+            }
+        };
+
+        loadImage();
+
+        return () => {
+            mounted = false;
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [endpoint, authFetch]);
+
+    if (!imageUrl) {
+        return <div className={placeholderClassName}>Image</div>;
+    }
+
+    return <img src={imageUrl} alt={alt} className={className} />;
 }
 
 export default Database;

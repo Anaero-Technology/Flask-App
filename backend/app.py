@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sse import sse
 from flask_jwt_extended import JWTManager
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from database.models import db, Device
 from device_manager import DeviceManager
 from config import Config
@@ -40,6 +40,29 @@ register_cli(app)
 
 with app.app_context():
     db.create_all()
+
+    # Lightweight schema patching for deployments without alembic migrations.
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table('samples'):
+            existing_columns = {column['name'] for column in inspector.get_columns('samples')}
+            dialect_name = db.engine.dialect.name
+            binary_type = 'BYTEA' if dialect_name == 'postgresql' else 'BLOB'
+            migration_statements = []
+
+            if 'sample_image_data' not in existing_columns:
+                migration_statements.append(f"ALTER TABLE samples ADD COLUMN sample_image_data {binary_type}")
+            if 'sample_image_mime_type' not in existing_columns:
+                migration_statements.append("ALTER TABLE samples ADD COLUMN sample_image_mime_type VARCHAR(100)")
+            if 'sample_image_filename' not in existing_columns:
+                migration_statements.append("ALTER TABLE samples ADD COLUMN sample_image_filename VARCHAR(255)")
+
+            if migration_statements:
+                with db.engine.begin() as connection:
+                    for statement in migration_statements:
+                        connection.execute(text(statement))
+    except Exception as exc:
+        print(f"[DB MIGRATION] Failed to patch samples schema: {exc}")
 
 def auto_connect_devices():
     """Auto-scan and connect to devices on startup until a Chimera is found."""

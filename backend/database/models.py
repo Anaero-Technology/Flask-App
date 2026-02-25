@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime, ForeignKey, LargeBinary
 from sqlalchemy.orm import DeclarativeBase
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -141,6 +141,9 @@ class Sample(db.Model):
    substrate_percent_vs = Column(Float)
    author = Column(String)
    is_inoculum = Column(Boolean, default=False)  # True if this sample can be used as an inoculum (bacteria source)
+   sample_image_data = Column(LargeBinary)
+   sample_image_mime_type = Column(String(100))
+   sample_image_filename = Column(String(255))
 
 class Test(db.Model):
    __tablename__ = "tests"

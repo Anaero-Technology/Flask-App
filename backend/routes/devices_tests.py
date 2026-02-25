@@ -4,6 +4,8 @@ from sqlalchemy import or_
 from database.models import *
 from utils.auth import require_role, log_audit
 from device_manager import DeviceManager
+from werkzeug.utils import secure_filename
+import io
 import serial.tools.list_ports
 
 
@@ -362,6 +364,76 @@ def discover_device():
 
 
 # Sample Management Endpoints
+MAX_SAMPLE_IMAGE_BYTES = 2 * 1024 * 1024
+ALLOWED_SAMPLE_IMAGE_MIME_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+}
+
+
+def _parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _parse_optional_float(value):
+    if value is None or value == '':
+        return None
+    return float(value)
+
+
+def _parse_sample_request_data():
+    content_type = request.content_type or ''
+    if content_type.startswith('multipart/form-data'):
+        return request.form.to_dict()
+    return request.get_json(silent=True) or {}
+
+
+def _extract_sample_image():
+    uploaded_image = request.files.get('image')
+    if not uploaded_image or not uploaded_image.filename:
+        return None, None, None, None
+
+    if uploaded_image.mimetype not in ALLOWED_SAMPLE_IMAGE_MIME_TYPES:
+        return None, None, None, "Unsupported image format. Use JPG, PNG, WEBP, or GIF."
+
+    image_data = uploaded_image.read()
+    if not image_data:
+        return None, None, None, "Uploaded image is empty."
+
+    if len(image_data) > MAX_SAMPLE_IMAGE_BYTES:
+        return None, None, None, "Image exceeds 2 MB size limit."
+
+    safe_filename = secure_filename(uploaded_image.filename)[:255]
+    return image_data, uploaded_image.mimetype, safe_filename or None, None
+
+
+def _sample_to_dict(sample):
+    return {
+        "id": sample.id,
+        "sample_name": sample.sample_name,
+        "substrate_source": sample.substrate_source,
+        "description": sample.description,
+        "substrate_type": sample.substrate_type,
+        "substrate_subtype": sample.substrate_subtype,
+        "ash_content": sample.ash_content,
+        "c_content": sample.c_content,
+        "n_content": sample.n_content,
+        "substrate_percent_ts": sample.substrate_percent_ts,
+        "substrate_percent_vs": sample.substrate_percent_vs,
+        "author": sample.author,
+        "date_created": sample.date_created.isoformat() if sample.date_created else None,
+        "is_inoculum": sample.is_inoculum,
+        "has_image": bool(sample.sample_image_data),
+        "sample_image_url": f"/api/v1/samples/{sample.id}/image" if sample.sample_image_data else None
+    }
+
+
 @devices_tests_bp.route("/api/v1/samples", methods=['POST'])
 @jwt_required()
 @require_role(['admin', 'operator'])
@@ -369,7 +441,15 @@ def create_sample():
     """Create a new sample"""
     try:
         from datetime import datetime
-        data = request.get_json()
+        data = _parse_sample_request_data()
+        if not data.get('sample_name'):
+            return jsonify({"error": "sample_name is required"}), 400
+        if not data.get('substrate_source'):
+            return jsonify({"error": "substrate_source is required"}), 400
+
+        image_data, image_mime_type, image_filename, image_error = _extract_sample_image()
+        if image_error:
+            return jsonify({"error": image_error}), 400
 
         # Get current user from JWT token
         user_id = get_jwt_identity()
@@ -383,13 +463,16 @@ def create_sample():
             description=data.get('description'),
             substrate_type=data.get('substrate_type'),
             substrate_subtype=data.get('substrate_subtype'),
-            ash_content=float(data.get('ash_content')) if data.get('ash_content') else None,
-            c_content=float(data.get('c_content')) if data.get('c_content') else None,
-            n_content=float(data.get('n_content')) if data.get('n_content') else None,
-            substrate_percent_ts=float(data.get('substrate_percent_ts')) if data.get('substrate_percent_ts') else None,
-            substrate_percent_vs=float(data.get('substrate_percent_vs')) if data.get('substrate_percent_vs') else None,
+            ash_content=_parse_optional_float(data.get('ash_content')),
+            c_content=_parse_optional_float(data.get('c_content')),
+            n_content=_parse_optional_float(data.get('n_content')),
+            substrate_percent_ts=_parse_optional_float(data.get('substrate_percent_ts')),
+            substrate_percent_vs=_parse_optional_float(data.get('substrate_percent_vs')),
             author=author,
-            is_inoculum=data.get('is_inoculum', False),
+            is_inoculum=_parse_bool(data.get('is_inoculum', False)),
+            sample_image_data=image_data,
+            sample_image_mime_type=image_mime_type,
+            sample_image_filename=image_filename,
             date_created=datetime.now()
         )
 
@@ -416,22 +499,7 @@ def list_substrate_samples():
         if not include_inoculum:
             query = query.filter_by(is_inoculum=False)
         samples = query.all()
-        return jsonify([{
-            "id": sample.id,
-            "sample_name": sample.sample_name,
-            "substrate_source": sample.substrate_source,
-            "description": sample.description,
-            "substrate_type": sample.substrate_type,
-            "substrate_subtype": sample.substrate_subtype,
-            "ash_content": sample.ash_content,
-            "c_content": sample.c_content,
-            "n_content": sample.n_content,
-            "substrate_percent_ts": sample.substrate_percent_ts,
-            "substrate_percent_vs": sample.substrate_percent_vs,
-            "author": sample.author,
-            "date_created": sample.date_created.isoformat() if sample.date_created else None,
-            "is_inoculum": sample.is_inoculum
-        } for sample in samples])
+        return jsonify([_sample_to_dict(sample) for sample in samples])
     except Exception as e:
         db.session.rollback()
         print(f"Error fetching samples: {e}")
@@ -449,11 +517,34 @@ def list_inoculum_samples():
             "inoculum_source": sample.substrate_source,  # Display as inoculum_source for compatibility
             "sample_name": sample.sample_name,
             "description": sample.description,
-            "date_created": sample.date_created.isoformat() if sample.date_created else None
+            "date_created": sample.date_created.isoformat() if sample.date_created else None,
+            "has_image": bool(sample.sample_image_data),
+            "sample_image_url": f"/api/v1/samples/{sample.id}/image" if sample.sample_image_data else None
         } for sample in inoculums])
     except Exception as e:
         db.session.rollback()
         print(f"Error fetching inoculums: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@devices_tests_bp.route("/api/v1/samples/<int:sample_id>/image", methods=['GET'])
+@jwt_required()
+def get_sample_image(sample_id):
+    """Download a sample image."""
+    try:
+        sample = Sample.query.get(sample_id)
+        if not sample:
+            return jsonify({"error": "Sample not found"}), 404
+        if not sample.sample_image_data:
+            return jsonify({"error": "Sample image not found"}), 404
+
+        return send_file(
+            io.BytesIO(sample.sample_image_data),
+            mimetype=sample.sample_image_mime_type or 'application/octet-stream',
+            as_attachment=False,
+            download_name=sample.sample_image_filename or f"sample-{sample_id}.bin"
+        )
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
@@ -467,7 +558,14 @@ def update_sample(sample_id):
         if not sample:
             return jsonify({"error": "Sample not found"}), 404
 
-        data = request.get_json()
+        data = _parse_sample_request_data()
+        if data is None:
+            return jsonify({"error": "Invalid request payload"}), 400
+
+        image_data, image_mime_type, image_filename, image_error = _extract_sample_image()
+        if image_error:
+            return jsonify({"error": image_error}), 400
+        clear_image = _parse_bool(data.get('clear_image')) if 'clear_image' in data else False
         
         # Update fields
         if 'sample_name' in data:
@@ -481,17 +579,29 @@ def update_sample(sample_id):
         if 'substrate_subtype' in data:
             sample.substrate_subtype = data['substrate_subtype']
         if 'ash_content' in data:
-            sample.ash_content = float(data['ash_content']) if data['ash_content'] else None
+            sample.ash_content = _parse_optional_float(data['ash_content'])
         if 'c_content' in data:
-            sample.c_content = float(data['c_content']) if data['c_content'] else None
+            sample.c_content = _parse_optional_float(data['c_content'])
         if 'n_content' in data:
-            sample.n_content = float(data['n_content']) if data['n_content'] else None
+            sample.n_content = _parse_optional_float(data['n_content'])
         if 'substrate_percent_ts' in data:
-            sample.substrate_percent_ts = float(data['substrate_percent_ts']) if data['substrate_percent_ts'] else None
+            sample.substrate_percent_ts = _parse_optional_float(data['substrate_percent_ts'])
         if 'substrate_percent_vs' in data:
-            sample.substrate_percent_vs = float(data['substrate_percent_vs']) if data['substrate_percent_vs'] else None
+            sample.substrate_percent_vs = _parse_optional_float(data['substrate_percent_vs'])
         if 'author' in data:
             sample.author = data['author']
+        if 'is_inoculum' in data:
+            sample.is_inoculum = _parse_bool(data['is_inoculum'])
+
+        if image_data is not None:
+            sample.sample_image_data = image_data
+            sample.sample_image_mime_type = image_mime_type
+            sample.sample_image_filename = image_filename
+        elif clear_image:
+            sample.sample_image_data = None
+            sample.sample_image_mime_type = None
+            sample.sample_image_filename = None
+
         if 'other' in data:
             sample.other = data['other']
         if 'reactor' in data:
