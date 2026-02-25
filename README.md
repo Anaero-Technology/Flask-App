@@ -67,6 +67,15 @@ To use a custom hostname: `bash setup_ethernet.sh myhostname` (default is `chime
 
 The hostname can also be changed at runtime from **Settings > Network** in the web UI (admin only).
 
+### 5b. Ethernet Setup Without mDNS (recommended if you want to avoid Avahi)
+```bash
+bash setup_ethernet_no_mdns.sh
+sudo reboot
+```
+
+This configures Ethernet DHCP with link-local fallback and does **not** change Avahi/mDNS.
+Use the Ethernet IP directly (for direct cable fallback, `169.254.50.1`).
+
 ## Configuration
 
 ### Environment Variables
