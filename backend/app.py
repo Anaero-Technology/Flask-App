@@ -10,6 +10,7 @@ import serial.tools.list_ports
 import atexit
 import threading
 import os
+import sys
 
 
 app = Flask(__name__)
@@ -121,8 +122,24 @@ def auto_connect_devices():
     print('[AUTO-CONNECT] Device scan complete')
 
 
-auto_connect_thread = threading.Thread(target=auto_connect_devices, daemon=True)
-auto_connect_thread.start()
+def _should_start_auto_connect():
+    """Skip startup auto-connect for Flask CLI utility commands."""
+    if os.environ.get("DISABLE_AUTO_CONNECT") == "1":
+        return False
+
+    argv = [arg.lower() for arg in sys.argv]
+    executable = os.path.basename(argv[0]) if argv else ""
+
+    # For `flask <command>` usage, only allow `flask run` to auto-connect.
+    if executable == "flask" and len(argv) > 1 and argv[1] != "run":
+        return False
+
+    return True
+
+
+if _should_start_auto_connect():
+    auto_connect_thread = threading.Thread(target=auto_connect_devices, daemon=True)
+    auto_connect_thread.start()
 
 
 @atexit.register
