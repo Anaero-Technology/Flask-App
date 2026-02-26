@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
 import { useAppSettings } from './AppSettingsContext';
@@ -12,10 +12,34 @@ const Layout = ({ children, currentView, onNavigate }) => {
     setSidebarOpen(false); // Close sidebar on mobile after navigation
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const isMobileViewport = window.innerWidth < 1024;
+    if (!isMobileViewport) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = sidebarOpen ? 'hidden' : previousOverflow;
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 font-sans">
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 dark:bg-slate-900 dark:border-slate-800 flex items-center px-4 z-40">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 dark:bg-slate-900 dark:border-slate-800 flex items-center px-4 z-30">
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
@@ -29,7 +53,7 @@ const Layout = ({ children, currentView, onNavigate }) => {
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+          className="lg:hidden fixed inset-0 bg-slate-900/35 backdrop-blur-[1px] z-40"
           onClick={() => setSidebarOpen(false)}
         />
       )}

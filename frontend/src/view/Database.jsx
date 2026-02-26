@@ -1713,14 +1713,14 @@ const Database = ({ onViewPlot, initialParams }) => {
         <div className="space-y-4">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('database.title')}</h1>
 
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
                 {/* Table Selection */}
                 <div className="mb-6">
-                    <div className="flex space-x-4 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-4">
                         <button
                             onClick={() => setActiveTable('samples')}
-                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'samples'
-                                ? '!border-blue-600 !bg-white !text-black'
+                            className={`flex-1 min-w-[8rem] px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${activeTable === 'samples'
+                                ? '!border-blue-600 !bg-blue-50 !text-blue-700'
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
                         >
@@ -1728,8 +1728,8 @@ const Database = ({ onViewPlot, initialParams }) => {
                         </button>
                         <button
                             onClick={() => setActiveTable('tests')}
-                            className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'tests'
-                                ? '!border-blue-600 !bg-white !text-black'
+                            className={`flex-1 min-w-[8rem] px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${activeTable === 'tests'
+                                ? '!border-blue-600 !bg-blue-50 !text-blue-700'
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
                         >
@@ -1738,17 +1738,17 @@ const Database = ({ onViewPlot, initialParams }) => {
                     </div>
 
                     {/* Search and Refresh */}
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                         <input
                             type="text"
                             placeholder={tPages('database.search_placeholder')}
                             value={globalFilter ?? ''}
                             onChange={e => setGlobalFilter(e.target.value)}
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                         <button
                             onClick={fetchData}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                         >
                             {tPages('database.refresh')}
                         </button>
@@ -1763,7 +1763,11 @@ const Database = ({ onViewPlot, initialParams }) => {
                 ) : (
                     <>
                         <div className="overflow-hidden border border-gray-200 rounded-lg">
-                            <table className="w-full divide-y divide-gray-200">
+                            <div className="px-3 py-2 text-[11px] text-gray-500 bg-gray-50 border-b border-gray-200 sm:hidden">
+                                Swipe left/right to view all columns.
+                            </div>
+                            <div className="overflow-x-auto">
+                            <table className="min-w-[760px] w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     {table.getHeaderGroups().map(headerGroup => (
                                         <tr key={headerGroup.id}>
@@ -1834,12 +1838,13 @@ const Database = ({ onViewPlot, initialParams }) => {
                                     })}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
 
                         {/* Pagination */}
-                        <div className="flex items-center justify-between mt-4">
+                        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-700">
+                                <span className="text-xs sm:text-sm text-gray-700">
                                     {tPages('database.showing')} {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} {tPages('database.to')}{' '}
                                     {Math.min(
                                         (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
@@ -1849,42 +1854,42 @@ const Database = ({ onViewPlot, initialParams }) => {
                                 </span>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => table.setPageIndex(0)}
                                     disabled={!table.getCanPreviousPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {'<<'}
                                 </button>
                                 <button
                                     onClick={() => table.previousPage()}
                                     disabled={!table.getCanPreviousPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {'<'}
                                 </button>
-                                <span className="text-sm text-gray-700">
+                                <span className="text-xs sm:text-sm text-gray-700">
                                     {tPages('database.page')} {table.getState().pagination.pageIndex + 1} {tPages('database.of')} {table.getPageCount()}
                                 </span>
                                 <button
                                     onClick={() => table.nextPage()}
                                     disabled={!table.getCanNextPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {'>'}
                                 </button>
                                 <button
                                     onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                                     disabled={!table.getCanNextPage()}
-                                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {'>>'}
                                 </button>
                                 <select
                                     value={table.getState().pagination.pageSize}
                                     onChange={e => table.setPageSize(Number(e.target.value))}
-                                    className="ml-2 px-2 py-1 border border-gray-300 rounded"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded"
                                 >
                                     {[10, 20, 50, 100].map(pageSize => (
                                         <option key={pageSize} value={pageSize}>

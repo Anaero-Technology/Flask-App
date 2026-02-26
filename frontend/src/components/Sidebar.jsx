@@ -144,7 +144,10 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
             ? 'bg-blue-50 text-blue-700 shadow-sm dark:bg-blue-500/10 dark:text-blue-200'
             : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'}
         `}
-        onClick={() => onNavigate(item.id)}
+        onClick={() => {
+          onNavigate(item.id);
+          onClose?.();
+        }}
       >
         <Icon size={20} className={`mr-3 ${isActive ? 'text-blue-600 dark:text-blue-300' : 'text-gray-400 group-hover:text-gray-600 dark:text-slate-500 dark:group-hover:text-slate-200'}`} />
         <span className="text-sm font-medium">{tSidebar(item.labelKey)}</span>

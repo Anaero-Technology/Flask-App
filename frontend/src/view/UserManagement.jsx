@@ -232,18 +232,18 @@ function UserManagement() {
     return (
         <div className="space-y-4 max-w-6xl">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('user_management.title')}</h1>
                         <p className="text-gray-500 text-xs">{users.length} {tPages('user_management.users_total')}</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <button
                         onClick={handleDownloadAuditLog}
                         disabled={downloadingAuditLog}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors w-full sm:w-auto justify-center"
                         title={tPages('user_management.download_audit_log_tooltip')}
                     >
                         {downloadingAuditLog ? (
@@ -258,7 +258,7 @@ function UserManagement() {
                             setFormData({ username: '', email: '', password: '', role: 'viewer' });
                             setShowCreateModal(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
                     >
                         <UserPlus size={14} />
                         {tPages('user_management.add_user')}
@@ -268,7 +268,11 @@ function UserManagement() {
 
             {/* Users Table */}
             <div className="overflow-hidden border border-gray-200 rounded-lg">
-                <table className="w-full divide-y divide-gray-200">
+                <div className="px-3 py-2 text-[11px] text-gray-500 bg-gray-50 border-b border-gray-200 sm:hidden">
+                    Swipe left/right to view all columns.
+                </div>
+                <div className="overflow-x-auto">
+                <table className="min-w-[720px] w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tPages('user_management.user_header')}</th>
@@ -349,6 +353,7 @@ function UserManagement() {
                         })}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Create User Modal */}

@@ -1137,7 +1137,7 @@ function Plot({ initialParams, onNavigate }) {
                 {/* Mobile Settings Panel Overlay */}
                 {settingsPanelOpen && (
                     <div
-                        className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+                        className="lg:hidden fixed inset-0 bg-slate-900/30 backdrop-blur-[1px] z-40"
                         onClick={() => setSettingsPanelOpen(false)}
                     />
                 )}
