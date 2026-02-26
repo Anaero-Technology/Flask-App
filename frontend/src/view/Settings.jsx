@@ -861,7 +861,7 @@ function Settings() {
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
                 <h3 className="text-sm font-bold text-gray-900">Update Software</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Please reboot after update to ensure stable operation.</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Please reboot after update for a stable run.</p>
                 {runningTestsCount > 0 && (
                   <p className="mt-1 text-[12px] text-amber-600">
                     Update disabled while {runningTestsCount} test{runningTestsCount === 1 ? '' : 's'} {runningTestsCount === 1 ? 'is' : 'are'} running.

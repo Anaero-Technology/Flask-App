@@ -234,38 +234,86 @@ def delete_database():
 @jwt_required()
 @require_role(['admin'])
 def git_pull():
-    """Pull latest changes from GitHub repository"""
+    """Safely update software from GitHub with dependency sync and rollback."""
     import subprocess
     import os
 
-    try:
-        # Get the project root directory (parent of backend)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    def tail_text(value, max_lines=40):
+        lines = [line for line in (value or '').splitlines() if line.strip()]
+        if not lines:
+            return ""
+        return "\n".join(lines[-max_lines:])
 
-        # Run git pull origin master
+    try:
+        running_tests = Test.query.filter_by(status='running').count()
+        if running_tests > 0:
+            return jsonify({
+                "success": False,
+                "error": "Cannot update while tests are running. Stop all running tests first."
+            }), 409
+
+        # Parent of backend/
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        updater_script = os.path.join(project_root, 'backend', 'scripts', 'safe_git_update.sh')
+
+        if not os.path.isfile(updater_script):
+            return jsonify({
+                "success": False,
+                "error": "Updater script not found"
+            }), 500
+
+        if not os.access(updater_script, os.X_OK):
+            return jsonify({
+                "success": False,
+                "error": "Updater script is not executable"
+            }), 500
+
         result = subprocess.run(
-            ['git', 'pull', 'origin', 'master'],
+            [updater_script],
             cwd=project_root,
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=1800
         )
 
         if result.returncode == 0:
+            output = tail_text(result.stdout)
             return jsonify({
                 "success": True,
-                "message": result.stdout.strip() or "Already up to date"
+                "message": output or "Update completed. Please reboot after update for a stable run."
             }), 200
-        else:
+
+        output = tail_text(result.stdout)
+        error = tail_text(result.stderr)
+        details = error or output or "Software update failed"
+
+        if result.returncode == 42:
             return jsonify({
                 "success": False,
-                "error": result.stderr.strip() or "Git pull failed"
+                "error": "Another update is already running."
+            }), 409
+
+        if result.returncode == 3:
+            return jsonify({
+                "success": False,
+                "error": "Cannot update because local tracked changes exist in this installation."
+            }), 409
+
+        return jsonify({
+                "success": False,
+                "error": details
             }), 500
 
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "Git pull timed out"}), 500
+        return jsonify({
+            "success": False,
+            "error": "Software update timed out"
+        }), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 @system_bp.route("/api/v1/audit-logs", methods=['GET'])

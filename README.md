@@ -35,6 +35,7 @@ chmod +x start.sh
 cd ../frontend
 chmod +x install.sh
 ./install.sh
+npm run build
 ```
 
 ### 4. Create the first admin user
@@ -103,7 +104,7 @@ Type=simple
 User=anaero
 Group=anaero
 WorkingDirectory=/home/anaero/Flask-App/frontend
-ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5173
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 5173
 Restart=always
 RestartSec=3
 
