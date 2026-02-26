@@ -7,6 +7,55 @@ from utils.auth import require_role
 
 wifi_bp = Blueprint('wifi', __name__)
 
+def get_connected_ssid_linux():
+    """Get currently connected WiFi SSID on Linux."""
+    try:
+        result = subprocess.run(
+            ['iwgetid', '-r'],
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
+        if result.returncode == 0:
+            ssid = result.stdout.strip()
+            return ssid if ssid else None
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if line.startswith('yes:'):
+                    return line.split(':', 1)[1].strip() or None
+    except Exception:
+        pass
+
+    return None
+
+def get_connected_ssid_macos():
+    """Get currently connected WiFi SSID on macOS."""
+    try:
+        result = subprocess.run(
+            ['networksetup', '-getairportnetwork', 'en0'],
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
+        if result.returncode == 0:
+            # Example output: "Current Wi-Fi Network: MyNetwork"
+            if ':' in result.stdout:
+                ssid = result.stdout.split(':', 1)[1].strip()
+                return ssid if ssid else None
+    except Exception:
+        pass
+    return None
+
 def get_wifi_networks_macos():
     """Scan for WiFi networks on macOS"""
     try:
@@ -82,6 +131,10 @@ def get_wifi_networks_macos():
                 continue
             filtered_networks.append(net)
 
+        connected_ssid = get_connected_ssid_macos()
+        for net in filtered_networks:
+            net['connected'] = connected_ssid is not None and net.get('ssid') == connected_ssid
+
         print(f"Found {len(filtered_networks)} WiFi networks on macOS")
         return filtered_networks
 
@@ -97,9 +150,11 @@ def get_wifi_networks_macos():
 def get_wifi_networks_linux():
     """Scan for WiFi networks on Linux. Returns (networks, error_message) tuple."""
     try:
+        connected_ssid = get_connected_ssid_linux()
+
         # Try nmcli first (NetworkManager)
         result = subprocess.run(
-            ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+            ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
             capture_output=True,
             text=True,
             timeout=5
@@ -112,15 +167,17 @@ def get_wifi_networks_linux():
             for line in lines:
                 if line.strip():
                     parts = line.split(':')
-                    if len(parts) >= 2:
-                        ssid = parts[0]
-                        signal = parts[1] if len(parts) > 1 else 'N/A'
-                        security = parts[2] if len(parts) > 2 else 'Open'
+                    if len(parts) >= 4:
+                        in_use = parts[0].strip() == '*'
+                        ssid = parts[1]
+                        signal = parts[2] if len(parts) > 2 else 'N/A'
+                        security = ':'.join(parts[3:]) if len(parts) > 3 else 'Open'
 
                         networks.append({
                             'ssid': ssid,
                             'signal': signal,
-                            'security': security
+                            'security': security,
+                            'connected': in_use or (connected_ssid is not None and ssid == connected_ssid)
                         })
 
             return networks, None
@@ -163,6 +220,10 @@ def get_wifi_networks_linux():
 
                     # End of network info, add to list
                     if 'ssid' in current_network:
+                        current_network['connected'] = (
+                            connected_ssid is not None
+                            and current_network.get('ssid') == connected_ssid
+                        )
                         networks.append(current_network.copy())
                     current_network = {}
 

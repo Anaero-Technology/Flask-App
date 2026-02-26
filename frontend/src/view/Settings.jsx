@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast';
 import { useTheme } from '../components/ThemeContext';
 import {
   Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
-  Lock, Search, Download, Trash2, GitBranch, ShieldAlert,
+  Lock, Search, Download, Trash2, ShieldAlert,
   Sun, Moon, Monitor
 } from 'lucide-react';
 
@@ -31,6 +31,7 @@ function Settings() {
   const [message, setMessage] = useState({ text: '', type: '' })
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
+  const [runningTestsCount, setRunningTestsCount] = useState(0)
   const [serialLogInfo, setSerialLogInfo] = useState(null)
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
   const [downloadingLog, setDownloadingLog] = useState(false)
@@ -81,6 +82,10 @@ function Settings() {
   }
 
   const handleNetworkSelect = (network, index) => {
+    if (network?.connected) {
+      return
+    }
+
     // If clicking the same network, collapse it
     if (selectedNetworkIndex === index) {
       setSelectedNetworkIndex(null)
@@ -170,6 +175,11 @@ function Settings() {
   }
 
   const pullFromGithub = async () => {
+    if (runningTestsCount > 0) {
+      setPullMessage({ text: 'Cannot update while tests are running. Stop all running tests first.', type: 'error' })
+      return
+    }
+
     setPulling(true)
     setPullMessage({ text: '', type: '' })
 
@@ -188,6 +198,17 @@ function Settings() {
       setPullMessage({ text: 'Error pulling from GitHub: ' + error.message, type: 'error' })
     } finally {
       setPulling(false)
+    }
+  }
+
+  const fetchRunningTestsCount = async () => {
+    try {
+      const response = await authFetch('/api/v1/tests?status=running')
+      if (!response.ok) return
+      const data = await response.json()
+      setRunningTestsCount(Array.isArray(data) ? data.length : 0)
+    } catch (error) {
+      console.error('Error fetching running tests count:', error)
     }
   }
 
@@ -600,6 +621,10 @@ function Settings() {
     scanNetworks()
     fetchSerialLogInfo()
     loadUserPreferences()
+    fetchRunningTestsCount()
+
+    const runningTestsInterval = setInterval(fetchRunningTestsCount, 10000)
+    return () => clearInterval(runningTestsInterval)
   }, [])
 
   const getMessageClasses = (type) => (
@@ -735,18 +760,24 @@ function Settings() {
               ) : (
                 networks.map((network, index) => {
                   const isSelected = selectedNetworkIndex === index
+                  const isConnected = Boolean(network.connected)
                   const needsPassword = network.security !== 'None' && network.security !== 'Open' && network.security !== ''
 
                   return (
                     <div key={index} className="border-b border-gray-200 last:border-b-0">
                       <div
-                        className={`grid cursor-pointer grid-cols-1 gap-4 px-4 py-2.5 transition-colors sm:grid-cols-[1fr_auto] sm:px-5 ${isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
+                        className={`grid cursor-pointer grid-cols-1 gap-4 px-4 py-2.5 transition-colors sm:grid-cols-[1fr_auto] sm:px-5 ${isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-50'} ${isConnected ? 'bg-green-50/40' : ''}`}
                         onClick={() => handleNetworkSelect(network, index)}
                       >
                         <div>
                           <div className="flex items-center gap-2">
                             {getSignalIcon(network.signal)}
                             <span className="text-sm font-bold text-gray-900">{network.ssid}</span>
+                            {isConnected && (
+                              <span className="rounded-full border border-green-200 bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                                Connected
+                              </span>
+                            )}
                             {needsPassword && <Lock size={14} className="text-gray-400" />}
                           </div>
                           <p className="mt-0.5 text-[13px] text-gray-500">
@@ -755,13 +786,15 @@ function Settings() {
                         </div>
                         <div className="flex items-center">
                           <button
-                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                             onClick={(e) => {
                               e.stopPropagation()
+                              if (isConnected) return
                               handleNetworkSelect(network, index)
                             }}
+                            disabled={isConnected}
                           >
-                            {isSelected ? tPages('settings.hide') : tPages('settings.connect')}
+                            {isConnected ? 'Connected' : isSelected ? tPages('settings.hide') : tPages('settings.connect')}
                           </button>
                         </div>
                       </div>
@@ -828,16 +861,21 @@ function Settings() {
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
                 <h3 className="text-sm font-bold text-gray-900">Update Software</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Pull latest changes from GitHub repository.</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Please reboot after update to ensure stable operation.</p>
+                {runningTestsCount > 0 && (
+                  <p className="mt-1 text-[12px] text-amber-600">
+                    Update disabled while {runningTestsCount} test{runningTestsCount === 1 ? '' : 's'} {runningTestsCount === 1 ? 'is' : 'are'} running.
+                  </p>
+                )}
               </div>
               <div className="flex items-center">
                 <button
                   onClick={pullFromGithub}
-                  disabled={pulling}
+                  disabled={pulling || runningTestsCount > 0}
                   className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {pulling ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
-                  {pulling ? 'Pulling...' : 'Pull from GitHub'}
+                  {pulling && <Loader2 size={14} className="animate-spin" />}
+                  {pulling ? 'Updating...' : 'Update'}
                 </button>
               </div>
             </div>
