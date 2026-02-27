@@ -1716,10 +1716,10 @@ const Database = ({ onViewPlot, initialParams }) => {
             <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
                 {/* Table Selection */}
                 <div className="mb-6">
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:gap-4">
                         <button
                             onClick={() => setActiveTable('samples')}
-                            className={`flex-1 min-w-[8rem] px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${activeTable === 'samples'
+                            className={`w-full sm:w-auto px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'samples'
                                 ? '!border-blue-600 !bg-blue-50 !text-blue-700'
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}
@@ -1728,7 +1728,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                         </button>
                         <button
                             onClick={() => setActiveTable('tests')}
-                            className={`flex-1 min-w-[8rem] px-3 py-2 rounded-lg text-sm font-medium border-2 transition-all ${activeTable === 'tests'
+                            className={`w-full sm:w-auto px-4 py-2 rounded-lg font-medium border-2 transition-all ${activeTable === 'tests'
                                 ? '!border-blue-600 !bg-blue-50 !text-blue-700'
                                 : '!border-gray-300 !bg-gray-100 !text-gray-700'
                                 } hover:!bg-gray-200`}

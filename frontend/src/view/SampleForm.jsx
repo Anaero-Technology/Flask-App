@@ -167,7 +167,7 @@ function SampleForm({ returnView }) {
             <form onSubmit={handleSubmit} className="flex-1 flex flex-col gap-6 min-h-0">
 
                 {/* --- Main Content Grid --- */}
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-y-auto pr-1 pb-4">
 
                     {/* LEFT COLUMN: Identity (4 cols) */}
                     <div className="lg:col-span-4 flex flex-col gap-6">
@@ -252,7 +252,7 @@ function SampleForm({ returnView }) {
                                     )}
 
                                     {sampleImagePreviewUrl && (
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 relative z-10">
                                             <img
                                                 src={sampleImagePreviewUrl}
                                                 alt="Sample preview"

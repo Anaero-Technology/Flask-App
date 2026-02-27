@@ -91,8 +91,6 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
     channelNumber,
     config,
     error,
-    isConfigured,
-    isControl,
     isSelected,
     isActive,
     disableActiveToggle,
@@ -109,18 +107,15 @@ const BlackBoxChannelRow = React.memo(function BlackBoxChannelRow({
     onAttemptSave,
     columnCount
 }) {
-    const rowClass = isConfigured
-        ? (isControl ? 'bg-yellow-50/60' : 'bg-green-50/60')
-        : 'bg-white';
+    const rowClass = 'bg-white';
     const selectionClass = isSelected ? 'ring-2 ring-blue-500/70 ring-inset' : '';
-    const inactiveClass = !isActive ? 'opacity-70' : '';
     const cellClass = isSelected ? 'bg-blue-100/80' : '';
     const cellHoverClass = isSelected ? 'group-hover:bg-blue-100/90' : 'group-hover:bg-blue-50/30';
 
     return (
         <React.Fragment>
             <tr
-                className={`group border-b border-gray-100 ${rowClass} ${selectionClass} ${inactiveClass}`}
+                className={`group border-b border-gray-100 ${rowClass} ${selectionClass}`}
                 onMouseDown={(event) => {
                     if (!isReadOnly) {
                         onRowMouseDown(channelNumber, event);
@@ -1033,8 +1028,6 @@ function BlackBoxTestConfig({
                                 channelNumber={channelNumber}
                                 config={getDraftConfig(channelNumber)}
                                 error={channelErrors[channelNumber]}
-                                isConfigured={getChannelConfig(channelNumber) !== null}
-                                isControl={(getChannelConfig(channelNumber)?.substrate_weight_grams ?? null) === 0}
                                 isSelected={selectedChannels.includes(channelNumber)}
                                 isActive={isChannelActive(channelNumber)}
                                 disableActiveToggle={disableActiveToggle}
