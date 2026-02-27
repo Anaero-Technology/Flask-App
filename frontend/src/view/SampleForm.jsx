@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Save, FlaskConical, Tag, Scale, Atom, ArrowLeft } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../components/AuthContext';
@@ -16,6 +16,7 @@ function SampleForm({ returnView }) {
     const [sampleImagePreviewUrl, setSampleImagePreviewUrl] = useState('');
     const [sampleImageError, setSampleImageError] = useState('');
     const [fileInputKey, setFileInputKey] = useState(0);
+    const sampleImageInputRef = useRef(null);
     const [formData, setFormData] = useState({
         sample_name: '',
         substrate_source: '',
@@ -69,7 +70,7 @@ function SampleForm({ returnView }) {
             }
             setSampleImageFile(null);
             setSampleImagePreviewUrl('');
-            setSampleImageError('Unsupported image format. Use JPG, PNG, WEBP, or GIF.');
+            setSampleImageError(tPages('sample_form.image_format_error'));
             setFileInputKey(prev => prev + 1);
             return;
         }
@@ -80,7 +81,7 @@ function SampleForm({ returnView }) {
             }
             setSampleImageFile(null);
             setSampleImagePreviewUrl('');
-            setSampleImageError('Image exceeds 2 MB size limit.');
+            setSampleImageError(tPages('sample_form.image_size_error'));
             setFileInputKey(prev => prev + 1);
             return;
         }
@@ -234,15 +235,28 @@ function SampleForm({ returnView }) {
 
                                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                                     <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Sample Image</label>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{tPages('sample_form.sample_image')}</label>
                                         <input
+                                            ref={sampleImageInputRef}
                                             key={fileInputKey}
                                             type="file"
                                             accept="image/jpeg,image/png,image/webp,image/gif"
                                             onChange={handleImageChange}
-                                            className="block w-full text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                            className="hidden"
                                         />
-                                        <p className="mt-1 text-[11px] text-gray-500">Maximum size: 2 MB.</p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => sampleImageInputRef.current?.click()}
+                                                className="rounded-md bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                            >
+                                                {tPages('sample_form.choose_file')}
+                                            </button>
+                                            <span className="min-w-0 truncate text-xs text-gray-600">
+                                                {sampleImageFile?.name || tPages('sample_form.no_file_selected')}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-[11px] text-gray-500">{tPages('sample_form.image_max_size')}</p>
                                     </div>
 
                                     {sampleImageError && (
@@ -263,7 +277,7 @@ function SampleForm({ returnView }) {
                                                 onClick={clearSelectedImage}
                                                 className="text-xs font-semibold text-red-600 hover:text-red-700"
                                             >
-                                                Remove image
+                                                {tPages('sample_form.remove_image')}
                                             </button>
                                         </div>
                                     )}

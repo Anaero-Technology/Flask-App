@@ -1177,7 +1177,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                                     )}
                                 </div>
                                 <div>
-                                    <span className="text-xs uppercase text-gray-400 block">Sample Image</span>
+                                    <span className="text-xs uppercase text-gray-400 block">{tPages('sample_form.sample_image')}</span>
                                     <div className="mt-1 space-y-2">
                                         {imageDraft?.previewUrl ? (
                                             <img
@@ -1206,7 +1206,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                                                     onChange={(event) => handleSampleImageChange(sample, event.target.files?.[0] || null)}
                                                     className="block w-full text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
                                                 />
-                                                <p className="text-[11px] text-gray-500">Maximum size: 2 MB.</p>
+                                                <p className="text-[11px] text-gray-500">{tPages('sample_form.image_max_size')}</p>
                                                 {imageDraft?.error && (
                                                     <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
                                                         {imageDraft.error}
@@ -1218,7 +1218,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                                                     disabled={!sample.has_image && !imageDraft?.previewUrl && !imageDraft?.file}
                                                     className="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed"
                                                 >
-                                                    Remove image
+                                                    {tPages('sample_form.remove_image')}
                                                 </button>
                                             </div>
                                         )}
@@ -1922,7 +1922,7 @@ function AuthImage({ endpoint, authFetch, alt, className, placeholderClassName }
 
         const loadImage = async () => {
             try {
-                const response = await authFetch(endpoint);
+                const response = await authFetch(endpoint, { cache: 'no-store' });
                 if (!response.ok) return;
                 const blob = await response.blob();
                 objectUrl = URL.createObjectURL(blob);

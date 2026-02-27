@@ -72,12 +72,12 @@ function Settings() {
 
       if (response.ok) {
         setNetworks(data.networks)
-        setMessage({ text: 'Networks scanned successfully', type: 'success' })
+        setMessage({ text: tPages('settings.networks_scanned_success'), type: 'success' })
       } else {
-        setMessage({ text: data.error || 'Failed to scan networks', type: 'error' })
+        setMessage({ text: data.error || tPages('settings.failed_scan_networks'), type: 'error' })
       }
     } catch (error) {
-      setMessage({ text: 'Error scanning networks: ' + error.message, type: 'error' })
+      setMessage({ text: `${tPages('settings.error_scanning_networks')}: ${error.message}`, type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -127,14 +127,14 @@ function Settings() {
       const data = await response.json()
 
       if (response.ok) {
-        setMessage({ text: 'Successfully connected to ' + ssid, type: 'success' })
+        setMessage({ text: tPages('settings.connected', { ssid }), type: 'success' })
         setSelectedNetworkIndex(null)
         setPassword('')
       } else {
-        setMessage({ text: data.error || 'Failed to connect', type: 'error' })
+        setMessage({ text: data.error || tPages('settings.connection_failed'), type: 'error' })
       }
     } catch (error) {
-      setMessage({ text: 'Error connecting: ' + error.message, type: 'error' })
+      setMessage({ text: `${tPages('settings.error_connecting')}: ${error.message}`, type: 'error' })
     } finally {
       setConnecting(false)
     }
@@ -716,7 +716,7 @@ function Settings() {
     <div className="mx-auto max-w-3xl space-y-8">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('settings.title')}</h1>
-          <p className="text-sm text-gray-500">Manage preferences, connectivity, and system maintenance.</p>
+          <p className="text-sm text-gray-500">{tPages('settings.subtitle')}</p>
         </div>
 
         <section className="space-y-3">
@@ -724,14 +724,14 @@ function Settings() {
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tCommon('Theme') || 'Theme'}</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Choose light, dark, or follow your system setting.</p>
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.theme')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.theme_help')}</p>
               </div>
               <div className="flex items-center gap-1">
                 {[
-                  { value: 'light', icon: Sun, label: tCommon('light') || 'Light' },
-                  { value: 'dark', icon: Moon, label: tCommon('dark') || 'Dark' },
-                  { value: 'system', icon: Monitor, label: tCommon('system') || 'System' },
+                  { value: 'light', icon: Sun, label: tPages('settings.theme_light') },
+                  { value: 'dark', icon: Moon, label: tPages('settings.theme_dark') },
+                  { value: 'system', icon: Monitor, label: tPages('settings.theme_system') },
                 ].map(({ value, icon: Icon, label }) => (
                   <button
                     key={value}
@@ -752,7 +752,7 @@ function Settings() {
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
                 <h3 className="text-sm font-bold text-gray-900">{tCommon('language')}</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Choose your preferred display language.</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.language_help')}</p>
               </div>
               <div className="flex items-center">
                 <select
@@ -790,7 +790,7 @@ function Settings() {
                   disabled={savingDelimiter}
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {savingDelimiter ? 'Saving...' : tCommon('save')}
+                  {savingDelimiter ? tPages('settings.saving') : tCommon('save')}
                 </button>
               </div>
             </div>
@@ -813,8 +813,8 @@ function Settings() {
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">Available Networks</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Scan and connect to available wireless networks.</p>
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.available_networks')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.scan_connect_networks')}</p>
               </div>
               <div className="flex items-center">
                 <button
@@ -854,13 +854,13 @@ function Settings() {
                             <span className="text-sm font-bold text-gray-900">{network.ssid}</span>
                             {isConnected && (
                               <span className="rounded-full border border-green-200 bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                                Connected
+                                {tPages('settings.connected_badge')}
                               </span>
                             )}
                             {needsPassword && <Lock size={14} className="text-gray-400" />}
                           </div>
                           <p className="mt-0.5 text-[13px] text-gray-500">
-                            Signal: <span className={getSignalColor(network.signal)}>{getSignalStrength(network.signal)}</span> ({network.signal}) • {network.security}
+                            {tPages('settings.signal')}: <span className={getSignalColor(network.signal)}>{getSignalStrength(network.signal)}</span> ({network.signal}) • {network.security}
                           </p>
                         </div>
                         <div className="flex items-center">
@@ -873,7 +873,7 @@ function Settings() {
                             }}
                             disabled={isConnected}
                           >
-                            {isConnected ? 'Connected' : isSelected ? tPages('settings.hide') : tPages('settings.connect')}
+                            {isConnected ? tPages('settings.connected_badge') : isSelected ? tPages('settings.hide') : tPages('settings.connect')}
                           </button>
                         </div>
                       </div>
@@ -936,15 +936,15 @@ function Settings() {
 
         {isSystemAdmin && (
         <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">System Tools</h2>
+          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.system_tools')}</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">Update Software</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">Please reboot after update for a stable run.</p>
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.update_software')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.reboot_after_update')}</p>
                 {runningTestsCount > 0 && (
                   <p className="mt-1 text-[12px] text-amber-600">
-                    Update disabled while {runningTestsCount} test{runningTestsCount === 1 ? '' : 's'} {runningTestsCount === 1 ? 'is' : 'are'} running.
+                    {tPages('settings.update_disabled_running', { count: runningTestsCount })}
                   </p>
                 )}
               </div>
@@ -955,16 +955,16 @@ function Settings() {
                   className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {pulling && <Loader2 size={14} className="animate-spin" />}
-                  {pulling ? 'Updating...' : 'Update'}
+                  {pulling ? tPages('settings.updating') : tPages('settings.update')}
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">Serial Communication Log</h3>
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.serial_log')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">
-                  Download all serial messages received from devices
+                  {tPages('settings.download_all_serial')}
                   {serialLogInfo?.exists && (
                     <span className="ml-1">({serialLogInfo.size_formatted})</span>
                   )}
@@ -977,7 +977,7 @@ function Settings() {
                   className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   <Trash2 size={14} />
-                  {clearingLog ? 'Clearing...' : 'Clear Log'}
+                  {clearingLog ? tPages('settings.clearing') : tPages('settings.clear_log')}
                 </button>
                 <button
                   onClick={downloadSerialLog}
@@ -985,7 +985,7 @@ function Settings() {
                   className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   <Download size={14} />
-                  {downloadingLog ? 'Downloading...' : 'Download Log'}
+                  {downloadingLog ? tPages('settings.downloading') : tPages('settings.download_serial_log')}
                 </button>
               </div>
             </div>
@@ -1092,7 +1092,7 @@ function Settings() {
                     value={brandingCompanyName}
                     onChange={(e) => setBrandingCompanyName(e.target.value)}
                     className="min-w-56 flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter company name"
+                    placeholder={tPages('settings.branding_company_placeholder')}
                   />
                   <button
                     onClick={saveCompanyName}
@@ -1118,7 +1118,7 @@ function Settings() {
                         className="max-h-16 max-w-full object-contain"
                       />
                     ) : (
-                      <span className="text-sm text-gray-400">No logo uploaded</span>
+                      <span className="text-sm text-gray-400">{tPages('settings.branding_no_logo')}</span>
                     )}
                   </div>
                   <div className="flex flex-col gap-2">

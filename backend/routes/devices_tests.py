@@ -538,12 +538,16 @@ def get_sample_image(sample_id):
         if not sample.sample_image_data:
             return jsonify({"error": "Sample image not found"}), 404
 
-        return send_file(
+        response = send_file(
             io.BytesIO(sample.sample_image_data),
             mimetype=sample.sample_image_mime_type or 'application/octet-stream',
             as_attachment=False,
             download_name=sample.sample_image_filename or f"sample-{sample_id}.bin"
         )
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
