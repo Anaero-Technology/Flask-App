@@ -61,7 +61,7 @@ mDNS option (`chimera.local`):
 bash setup_ethernet.sh
 ```
 
-### 6. Create systemd services (backend + frontend)
+### 6. Create systemd services (backend + frontend + updater)
 
 Replace paths/usernames below if your install path is different.
 
@@ -110,6 +110,36 @@ RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
+```
+
+#### Updater service
+
+Create `/etc/systemd/system/flaskapp-updater.service`:
+
+```ini
+[Unit]
+Description=Flaskapp Safe Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/anaero/Flask-App
+Environment=FLASKAPP_USER=anaero
+ExecStart=/bin/bash /home/anaero/Flask-App/backend/scripts/system_update_orchestrator.sh
+```
+
+Allow the backend service user to start (but not edit) the updater service without a password:
+
+```bash
+sudo visudo -f /etc/sudoers.d/flaskapp-updater
+```
+
+Add this line:
+
+```text
+anaero ALL=(root) NOPASSWD: /bin/systemctl start flaskapp-updater.service, /bin/systemctl is-active --quiet flaskapp-updater.service
 ```
 
 Load and start services:

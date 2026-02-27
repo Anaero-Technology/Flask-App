@@ -155,13 +155,13 @@
 - `POST /api/v1/wifi/connect` - Connect host machine to a Wi-Fi SSID.
 
 ## System and Audit Endpoints
-- `GET /api/v1/system/serial-log` - Download serial log file.
+- `GET /api/v1/system/serial-log` - Download serial log file (`admin`).
 - `DELETE /api/v1/system/serial-log` - Clear serial log (`admin`).
-- `GET /api/v1/system/serial-log/info` - Get serial log metadata.
+- `GET /api/v1/system/serial-log/info` - Get serial log metadata (`admin`).
 - `GET /api/v1/system/database/download` - Download SQLite DB (`admin`).
 - `POST /api/v1/system/database/transfer` - Replace SQLite DB (`admin`).
 - `DELETE /api/v1/system/database` - Clear DB while preserving admins (`admin`).
-- `POST /api/v1/system/git-pull` - `git pull origin master` on server (`admin`).
+- `POST /api/v1/system/git-pull` - Start `flaskapp-updater.service` (`admin`).
 - `GET /api/v1/audit-logs` - Query audit logs (`admin`).
   - Query params: `limit`, `offset`, `action`, `target_type`, `user_id`.
 - `GET /api/v1/audit-logs/download` - Export audit logs CSV (`admin`).

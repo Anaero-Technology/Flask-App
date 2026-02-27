@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
 FRONTEND_DIR="${PROJECT_ROOT}/frontend"
-LOCK_FILE="/tmp/flaskapp_update.lock"
+LOCK_DIR="/tmp/flaskapp_update.lock.d"
 LOG_DIR="${BACKEND_DIR}/logs"
 LOG_FILE="${LOG_DIR}/update.log"
 
@@ -59,15 +59,14 @@ rollback() {
 }
 
 main() {
-  exec 9>"${LOCK_FILE}"
-  if ! flock -n 9; then
+  if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
     log "Another update is already running"
     exit 42
   fi
+  trap 'rmdir "${LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
 
   require_cmd git
   require_cmd npm
-  require_cmd flock
 
   if [[ ! -x "${BACKEND_DIR}/venv/bin/pip" ]]; then
     log "ERROR: backend virtualenv not found at ${BACKEND_DIR}/venv"

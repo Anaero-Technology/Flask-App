@@ -236,15 +236,9 @@ def delete_database():
 @jwt_required()
 @require_role(['admin'])
 def git_pull():
-    """Safely update software from GitHub with dependency sync and rollback."""
+    """Start software update via systemd updater service."""
     import subprocess
     import os
-
-    def tail_text(value, max_lines=40):
-        lines = [line for line in (value or '').splitlines() if line.strip()]
-        if not lines:
-            return ""
-        return "\n".join(lines[-max_lines:])
 
     try:
         running_tests = Test.query.filter_by(status='running').count()
@@ -254,59 +248,56 @@ def git_pull():
                 "error": "Cannot update while tests are running. Stop all running tests first."
             }), 409
 
-        # Parent of backend/
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        updater_script = os.path.join(project_root, 'backend', 'scripts', 'safe_git_update.sh')
+        service_name = os.environ.get('FLASKAPP_UPDATE_SERVICE', 'flaskapp-updater.service')
         runtime_env = os.environ.copy()
         runtime_env.setdefault('PATH', '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
 
-        if not os.path.isfile(updater_script):
-            return jsonify({
-                "success": False,
-                "error": "Updater script not found"
-            }), 500
-
-        result = subprocess.run(
-            ['/bin/bash', updater_script],
-            cwd=project_root,
-            env=runtime_env,
-            capture_output=True,
-            text=True,
-            timeout=1800
+        # Check if an update is already running.
+        is_active = subprocess.run(
+            ['/bin/systemctl', 'is-active', '--quiet', service_name],
+            env=runtime_env
         )
-
-        if result.returncode == 0:
-            output = tail_text(result.stdout)
-            return jsonify({
-                "success": True,
-                "message": output or "Update completed. Please reboot after update for a stable run."
-            }), 200
-
-        output = tail_text(result.stdout)
-        error = tail_text(result.stderr)
-        details = error or output or "Software update failed"
-
-        if result.returncode == 42:
+        if is_active.returncode == 0:
             return jsonify({
                 "success": False,
                 "error": "Another update is already running."
             }), 409
 
-        if result.returncode == 3:
-            return jsonify({
-                "success": False,
-                "error": "Cannot update because local tracked changes exist in this installation."
-            }), 409
+        # Try direct systemctl first; if backend user lacks privileges, try passwordless sudo.
+        start_attempts = [
+            ['/bin/systemctl', 'start', service_name],
+            ['/usr/bin/sudo', '-n', '/bin/systemctl', 'start', service_name]
+        ]
 
-        return jsonify({
-                "success": False,
-                "error": details
-            }), 500
+        last_error = ""
+        for cmd in start_attempts:
+            try:
+                result = subprocess.run(
+                    cmd,
+                    env=runtime_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=20
+                )
+            except subprocess.TimeoutExpired:
+                continue
 
-    except subprocess.TimeoutExpired:
+            if result.returncode == 0:
+                return jsonify({
+                    "success": True,
+                    "message": "Update started. Services will restart during update. Wait ~1-2 minutes, then refresh."
+                }), 202
+
+            err_text = (result.stderr or result.stdout or "").strip()
+            if err_text:
+                last_error = err_text
+
         return jsonify({
             "success": False,
-            "error": "Software update timed out"
+            "error": (
+                "Failed to start updater service. Ensure systemd unit '"
+                f"{service_name}' exists and backend can start it. {last_error}"
+            ).strip()
         }), 500
     except Exception as e:
         return jsonify({
