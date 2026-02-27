@@ -82,12 +82,19 @@ main() {
     exit 3
   fi
 
-  local old_commit new_commit
+  local old_commit new_commit remote_commit
   old_commit="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
   log "Starting update from commit ${old_commit}"
 
+  retry 3 git -C "${PROJECT_ROOT}" fetch --prune origin
+  remote_commit="$(git -C "${PROJECT_ROOT}" rev-parse "${TARGET_REF}")"
+
+  if [[ "${old_commit}" == "${remote_commit}" ]]; then
+    log "Already up to date (${old_commit}). Skipping dependency sync and frontend build."
+    exit 0
+  fi
+
   if ! (
-    retry 3 git -C "${PROJECT_ROOT}" fetch --prune origin
     git -C "${PROJECT_ROOT}" reset --hard "${TARGET_REF}"
     new_commit="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
     log "Checked out ${new_commit}"
