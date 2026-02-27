@@ -264,14 +264,8 @@ def git_pull():
                 "error": "Updater script not found"
             }), 500
 
-        if not os.access(updater_script, os.X_OK):
-            return jsonify({
-                "success": False,
-                "error": "Updater script is not executable"
-            }), 500
-
         result = subprocess.run(
-            [updater_script],
+            ['/bin/bash', updater_script],
             cwd=project_root,
             capture_output=True,
             text=True,
