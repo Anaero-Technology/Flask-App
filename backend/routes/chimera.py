@@ -398,6 +398,7 @@ def stop_logging(device_id):
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/files', methods=['GET'])
 @jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def get_files(device_id):
     try:
         # Get device from database
@@ -424,6 +425,7 @@ def get_files(device_id):
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/download', methods=['POST'])
 @jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def download_file(device_id):
     try:
         # Get device from database

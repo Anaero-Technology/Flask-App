@@ -285,6 +285,7 @@ def get_info(device_id):
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/files', methods=['GET'])
 @jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def get_files(device_id):
     try:
         started_at = time.perf_counter()
@@ -312,6 +313,7 @@ def get_files(device_id):
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/download', methods=['POST'])
 @jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def download_file(device_id):
     try:
         # Get device from database
@@ -346,6 +348,7 @@ def download_file(device_id):
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/download_from', methods=['POST'])
 @jwt_required()
+@require_role(['admin', 'operator', 'technician'])
 def download_file_from(device_id):
     try:
         # Get device from database

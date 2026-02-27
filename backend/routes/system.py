@@ -10,6 +10,7 @@ system_bp = Blueprint('system', __name__)
 
 @system_bp.route("/api/v1/system/serial-log", methods=['GET'])
 @jwt_required()
+@require_role(['admin'])
 def download_serial_log():
     """Download the serial communication log file"""
     from flask import send_file
@@ -49,6 +50,7 @@ def clear_serial_log():
 
 @system_bp.route("/api/v1/system/serial-log/info", methods=['GET'])
 @jwt_required()
+@require_role(['admin'])
 def serial_log_info():
     """Get information about the serial log file"""
     from utils.serial_logger import serial_logger

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 
 function Dashboard({ onViewPlot }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const { t: tPages } = useTranslation('pages');
   const [devices, setDevices] = useState([])
   const [activeTests, setActiveTests] = useState([])
@@ -22,6 +22,7 @@ function Dashboard({ onViewPlot }) {
   const [deviceMemoryInfo, setDeviceMemoryInfo] = useState(null)
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [filesCache, setFilesCache] = useState({})
+  const dashboardActionsLocked = user?.role === 'viewer'
 
   const navigateToView = (view, params = null) => {
     window.dispatchEvent(new CustomEvent('app:navigate', {
@@ -353,6 +354,7 @@ function Dashboard({ onViewPlot }) {
     : 0
 
   const downloadFile = async (filename) => {
+    if (dashboardActionsLocked) return
     if (!selectedFileDevice) return;
     try {
       const response = await authFetch(`${getDeviceApiBase(selectedFileDevice.device_type)}/${selectedFileDevice.id}/download`, {
@@ -381,6 +383,7 @@ function Dashboard({ onViewPlot }) {
   };
 
   const deleteFile = async (filename) => {
+    if (dashboardActionsLocked) return
     if (!selectedFileDevice) return;
     if (!window.confirm(tPages(`${filesLocalePrefix}.delete_confirmation`, { filename }))) {
       return;
@@ -510,6 +513,7 @@ function Dashboard({ onViewPlot }) {
                       onStartTest={handleStartTestFromDevice}
                       onStopTest={handleStopTestFromDevice}
                       showDashboardActions={true}
+                      actionsDisabled={dashboardActionsLocked}
                       globalDeviceModel={globalDeviceModel}
                       onCalibrateAction={handleCalibrateAction}
                     />
@@ -542,6 +546,7 @@ function Dashboard({ onViewPlot }) {
                     onStartTest={handleStartTestFromDevice}
                     onStopTest={handleStopTestFromDevice}
                     showDashboardActions={true}
+                    actionsDisabled={dashboardActionsLocked}
                     onCalibrateAction={handleCalibrateAction}
                     globalDeviceModel={globalDeviceModel}
                   />
@@ -702,13 +707,15 @@ function Dashboard({ onViewPlot }) {
                         <div className="flex gap-2">
                           <button
                             onClick={() => downloadFile(file.name)}
-                            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 font-medium"
+                            disabled={dashboardActionsLocked}
+                            className={`px-3 py-1 text-sm rounded font-medium ${dashboardActionsLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
                           >
                             {tPages(`${filesLocalePrefix}.download_button`)}
                           </button>
                           <button
                             onClick={() => deleteFile(file.name)}
-                            className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 font-medium"
+                            disabled={dashboardActionsLocked}
+                            className={`px-3 py-1 text-sm rounded font-medium ${dashboardActionsLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
                           >
                             {tPages(`${filesLocalePrefix}.delete_button`)}
                           </button>
@@ -721,7 +728,8 @@ function Dashboard({ onViewPlot }) {
                 <div className="mt-6 flex justify-end">
                   <button
                     onClick={() => fetchFilesForDevice(selectedFileDevice)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+                    disabled={dashboardActionsLocked}
+                    className={`px-4 py-2 rounded font-medium ${dashboardActionsLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                   >
                     {tPages(`${filesLocalePrefix}.refresh_files_button`)}
                   </button>

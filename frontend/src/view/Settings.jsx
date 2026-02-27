@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 function Settings() {
-  const { authFetch, user, canPerform } = useAuth();
+  const { authFetch, canPerform } = useAuth();
   const { changeLanguage, currentLanguage } = useI18n();
   const { t: tCommon } = useTranslation('common');
   const { t: tPages } = useTranslation('pages');
@@ -59,6 +59,7 @@ function Settings() {
   const [brandingLogoPreview, setBrandingLogoPreview] = useState(logoUrl)
   const [savingBranding, setSavingBranding] = useState(false)
   const [brandingMessage, setBrandingMessage] = useState({ text: '', type: '' })
+  const isSystemAdmin = canPerform('system_settings')
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -175,6 +176,11 @@ function Settings() {
   }
 
   const pullFromGithub = async () => {
+    if (!isSystemAdmin) {
+      setPullMessage({ text: 'Only admins can update software.', type: 'error' })
+      return
+    }
+
     if (runningTestsCount > 0) {
       setPullMessage({ text: 'Cannot update while tests are running. Stop all running tests first.', type: 'error' })
       return
@@ -225,6 +231,11 @@ function Settings() {
   }
 
   const downloadSerialLog = async () => {
+    if (!isSystemAdmin) {
+      setSerialLogMessage({ text: 'Only admins can download serial logs.', type: 'error' })
+      return
+    }
+
     setDownloadingLog(true)
     setSerialLogMessage({ text: '', type: '' })
 
@@ -254,6 +265,11 @@ function Settings() {
   }
 
   const clearSerialLog = async () => {
+    if (!isSystemAdmin) {
+      setSerialLogMessage({ text: 'Only admins can clear serial logs.', type: 'error' })
+      return
+    }
+
     if (!confirm('Are you sure you want to clear the serial log?')) {
       return
     }
@@ -619,13 +635,21 @@ function Settings() {
   useEffect(() => {
     // Auto-scan on component mount
     scanNetworks()
-    fetchSerialLogInfo()
     loadUserPreferences()
-    fetchRunningTestsCount()
+  }, [])
 
+  useEffect(() => {
+    if (!isSystemAdmin) {
+      setRunningTestsCount(0)
+      setSerialLogInfo(null)
+      return
+    }
+
+    fetchSerialLogInfo()
+    fetchRunningTestsCount()
     const runningTestsInterval = setInterval(fetchRunningTestsCount, 10000)
     return () => clearInterval(runningTestsInterval)
-  }, [])
+  }, [isSystemAdmin])
 
   const getMessageClasses = (type) => (
     type === 'success'
@@ -855,6 +879,7 @@ function Settings() {
           )}
         </section>
 
+        {isSystemAdmin && (
         <section className="space-y-3">
           <h2 className="text-lg font-bold text-gray-900">System Tools</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -995,6 +1020,7 @@ function Settings() {
             </div>
           )}
         </section>
+        )}
 
         {canPerform('system_settings') && (
           <section className="space-y-3">

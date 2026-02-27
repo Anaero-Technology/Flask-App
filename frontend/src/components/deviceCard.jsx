@@ -250,6 +250,12 @@ function DeviceCard(props) {
     const supportsFiles = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
     const supportsTestControl = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
     const showDashboardActionsMenu = Boolean(props.showDashboardActions) && !isCompact;
+    const actionsDisabled = Boolean(props.actionsDisabled);
+    const getMenuItemClass = (disabled) => (
+        `w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${disabled
+            ? 'text-gray-400 bg-gray-50/70 cursor-not-allowed'
+            : 'text-gray-700 hover:bg-gray-50'}`
+    );
 
     useEffect(() => {
         if (!isActionsMenuOpen) return;
@@ -386,11 +392,13 @@ function DeviceCard(props) {
                                         {supportsTestControl && !props.activeTestId && props.onStartTest && (
                                             <button
                                                 type="button"
+                                                disabled={actionsDisabled}
                                                 onClick={() => {
+                                                    if (actionsDisabled) return;
                                                     props.onStartTest(props.deviceId, props.deviceType);
                                                     setIsActionsMenuOpen(false);
                                                 }}
-                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                className={getMenuItemClass(actionsDisabled)}
                                             >
                                                 <Play size={14} />
                                                 <span>Start Test</span>
@@ -400,11 +408,13 @@ function DeviceCard(props) {
                                         {supportsTestControl && props.activeTestId && props.onStopTest && (
                                             <button
                                                 type="button"
+                                                disabled={actionsDisabled}
                                                 onClick={() => {
+                                                    if (actionsDisabled) return;
                                                     props.onStopTest(props.activeTestId);
                                                     setIsActionsMenuOpen(false);
                                                 }}
-                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                className={getMenuItemClass(actionsDisabled)}
                                             >
                                                 <Square size={14} />
                                                 <span>Stop Test</span>
@@ -414,11 +424,13 @@ function DeviceCard(props) {
                                         {supportsCalibration && !props.activeTestId && props.onCalibrateAction && (
                                             <button
                                                 type="button"
+                                                disabled={actionsDisabled}
                                                 onClick={() => {
+                                                    if (actionsDisabled) return;
                                                     setIsCalibrating(true);
                                                     setIsActionsMenuOpen(false);
                                                 }}
-                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                className={getMenuItemClass(actionsDisabled)}
                                             >
                                                 <Settings size={14} />
                                                 <span>{tPages('device_card.calibrate')}</span>
@@ -427,14 +439,15 @@ function DeviceCard(props) {
 
                                         <button
                                             type="button"
-                                            disabled={!props.activeTestId || !props.onViewPlot}
+                                            disabled={actionsDisabled || !props.activeTestId || !props.onViewPlot}
                                             onClick={() => {
+                                                if (actionsDisabled) return;
                                                 if (props.activeTestId && props.onViewPlot) {
                                                     props.onViewPlot(props.activeTestId, props.deviceId);
                                                 }
                                                 setIsActionsMenuOpen(false);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                            className={getMenuItemClass(actionsDisabled || !props.activeTestId || !props.onViewPlot)}
                                         >
                                             <LineChart size={14} />
                                             <span>{tPages('device_card.view_plot')}</span>
@@ -442,14 +455,15 @@ function DeviceCard(props) {
 
                                         <button
                                             type="button"
-                                            disabled={!props.activeTestId || !props.onViewTest}
+                                            disabled={actionsDisabled || !props.activeTestId || !props.onViewTest}
                                             onClick={() => {
+                                                if (actionsDisabled) return;
                                                 if (props.activeTestId && props.onViewTest) {
                                                     props.onViewTest(props.activeTestId, props.deviceId);
                                                 }
                                                 setIsActionsMenuOpen(false);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                            className={getMenuItemClass(actionsDisabled || !props.activeTestId || !props.onViewTest)}
                                         >
                                             <FlaskConical size={14} />
                                             <span>{tPages('device_card.view_test')}</span>
@@ -458,11 +472,13 @@ function DeviceCard(props) {
                                         {supportsFiles && props.onViewFiles && (
                                             <button
                                                 type="button"
+                                                disabled={actionsDisabled}
                                                 onClick={() => {
+                                                    if (actionsDisabled) return;
                                                     props.onViewFiles(props.deviceId, props.deviceType);
                                                     setIsActionsMenuOpen(false);
                                                 }}
-                                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                className={getMenuItemClass(actionsDisabled)}
                                             >
                                                 <FolderOpen size={14} />
                                                 <span>{tPages('device_card.view_files')}</span>
