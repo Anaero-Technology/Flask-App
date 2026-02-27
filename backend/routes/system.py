@@ -257,6 +257,8 @@ def git_pull():
         # Parent of backend/
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         updater_script = os.path.join(project_root, 'backend', 'scripts', 'safe_git_update.sh')
+        runtime_env = os.environ.copy()
+        runtime_env.setdefault('PATH', '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
 
         if not os.path.isfile(updater_script):
             return jsonify({
@@ -267,6 +269,7 @@ def git_pull():
         result = subprocess.run(
             ['/bin/bash', updater_script],
             cwd=project_root,
+            env=runtime_env,
             capture_output=True,
             text=True,
             timeout=1800
