@@ -80,7 +80,7 @@ Type=simple
 User=anaero
 Group=anaero
 WorkingDirectory=/home/anaero/Flask-App/backend
-Environment=PATH=/home/anaero/Flask-App/backend/venv/bin
+Environment=PATH=/home/anaero/Flask-App/backend/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/home/anaero/Flask-App/backend/venv/bin/gunicorn --worker-class gevent --worker-connections 1000 --timeout 30 -w 1 -b 0.0.0.0:6000 app:app
 Restart=always
 RestartSec=3
