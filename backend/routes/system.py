@@ -252,12 +252,15 @@ def git_pull():
         runtime_env = os.environ.copy()
         runtime_env.setdefault('PATH', '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
 
-        # Check if an update is already running.
+        # Check if an update is already running (active or activating).
         is_active = subprocess.run(
-            ['/bin/systemctl', 'is-active', '--quiet', service_name],
-            env=runtime_env
+            ['/bin/systemctl', 'show', '--property=ActiveState', '--value', service_name],
+            env=runtime_env,
+            capture_output=True,
+            text=True
         )
-        if is_active.returncode == 0:
+        state = (is_active.stdout or '').strip()
+        if state in ('active', 'activating'):
             return jsonify({
                 "success": False,
                 "error": "Another update is already running."
@@ -265,8 +268,8 @@ def git_pull():
 
         # Try direct systemctl first; if backend user lacks privileges, try passwordless sudo.
         start_attempts = [
-            ['/bin/systemctl', 'start', service_name],
-            ['/usr/bin/sudo', '-n', '/bin/systemctl', 'start', service_name]
+            ['/bin/systemctl', 'start', '--no-block', service_name],
+            ['/usr/bin/sudo', '-n', '/bin/systemctl', 'start', '--no-block', service_name]
         ]
 
         last_error = ""
@@ -304,6 +307,130 @@ def git_pull():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@system_bp.route("/api/v1/system/update-status", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def update_status():
+    """Return the result of the most recent software update."""
+    import re
+    from datetime import datetime
+
+    log_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'logs', 'update.log'
+    )
+
+    empty_result = {
+        "status": "unknown",
+        "message": "No update history available",
+        "old_commit": None,
+        "new_commit": None,
+        "timestamp": None
+    }
+
+    if not os.path.isfile(log_path):
+        return jsonify(empty_result), 200
+
+    try:
+        with open(log_path, 'r') as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 4096))
+            if size > 4096:
+                f.readline()
+            lines = f.readlines()
+    except OSError:
+        return jsonify(empty_result), 200
+
+    if not lines:
+        return jsonify(empty_result), 200
+
+    ts_pat = r'\[([^\]]+)\]'
+    patterns = [
+        (re.compile(ts_pat + r' Update finished successfully \((\w+) -> (\w+)\)'),
+         lambda m: {
+             "status": "success",
+             "message": f"Update successful ({m.group(2)[:8]} \u2192 {m.group(3)[:8]})",
+             "old_commit": m.group(2), "new_commit": m.group(3),
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' Already up to date \((\w+)\)'),
+         lambda m: {
+             "status": "success",
+             "message": "Already up to date",
+             "old_commit": m.group(2), "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' ERROR: Refusing update because tracked local changes'),
+         lambda m: {
+             "status": "error",
+             "message": "Update failed: tracked local changes exist in repository",
+             "old_commit": None, "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' Update failed\. Attempting rollback'),
+         lambda m: {
+             "status": "error",
+             "message": "Update failed and was rolled back",
+             "old_commit": None, "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' Another update is already running'),
+         lambda m: {
+             "status": "error",
+             "message": "Another update was already running",
+             "old_commit": None, "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' ERROR: (.+)'),
+         lambda m: {
+             "status": "error",
+             "message": f"Update failed: {m.group(2)}",
+             "old_commit": None, "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+        (re.compile(ts_pat + r' Starting update from commit (\w+)'),
+         lambda m: {
+             "status": "in_progress",
+             "message": "Update is in progress...",
+             "old_commit": m.group(2), "new_commit": None,
+             "timestamp": m.group(1)
+         }),
+    ]
+
+    result = None
+    for line in reversed(lines):
+        line = line.rstrip()
+        for pat, builder in patterns:
+            m = pat.search(line)
+            if m:
+                result = builder(m)
+                break
+        if result:
+            break
+
+    if result is None:
+        return jsonify(empty_result), 200
+
+    triggered_at = request.args.get('triggered_at')
+    if triggered_at and result["status"] not in ("in_progress",):
+        try:
+            trigger_time = datetime.fromisoformat(triggered_at.replace('Z', '+00:00'))
+            if result["timestamp"]:
+                log_time = datetime.strptime(result["timestamp"], "%Y-%m-%dT%H:%M:%S%z")
+                if log_time < trigger_time:
+                    result = {
+                        "status": "in_progress",
+                        "message": "Update is in progress...",
+                        "old_commit": None, "new_commit": None,
+                        "timestamp": None
+                    }
+        except (ValueError, TypeError):
+            pass
+
+    return jsonify(result), 200
 
 
 @system_bp.route("/api/v1/audit-logs", methods=['GET'])

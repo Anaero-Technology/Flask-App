@@ -49,6 +49,7 @@ function Settings() {
     loading: false
   })
   const passwordResolveRef = useRef(null)
+  const updatePollRef = useRef(null)
   const [csvDelimiter, setCsvDelimiter] = useState(',')
   const [savingDelimiter, setSavingDelimiter] = useState(false)
   const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
@@ -175,6 +176,51 @@ function Settings() {
     return 'text-red-600'
   }
 
+  const pollUpdateStatus = (triggeredAt) => {
+    const startTime = Date.now()
+    const TIMEOUT_MS = 180000
+    const POLL_INTERVAL_MS = 3000
+
+    setPullMessage({ text: 'Update started. Waiting for backend to restart...', type: 'info' })
+
+    updatePollRef.current = setInterval(async () => {
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        clearInterval(updatePollRef.current)
+        updatePollRef.current = null
+        setPulling(false)
+        setPullMessage({
+          text: 'Update timed out. The backend may still be updating. Try refreshing the page.',
+          type: 'error'
+        })
+        return
+      }
+
+      try {
+        const response = await authFetch(
+          `/api/v1/system/update-status?triggered_at=${encodeURIComponent(triggeredAt)}`
+        )
+        if (!response.ok) return
+
+        const data = await response.json()
+
+        if (data.status === 'in_progress') {
+          setPullMessage({ text: data.message, type: 'info' })
+          return
+        }
+
+        clearInterval(updatePollRef.current)
+        updatePollRef.current = null
+        setPulling(false)
+        setPullMessage({
+          text: data.message,
+          type: data.status === 'success' ? 'success' : 'error'
+        })
+      } catch {
+        // Network error — backend still down, keep polling
+      }
+    }, POLL_INTERVAL_MS)
+  }
+
   const pullFromGithub = async () => {
     if (!isSystemAdmin) {
       setPullMessage({ text: 'Only admins can update software.', type: 'error' })
@@ -196,14 +242,14 @@ function Settings() {
       const data = await response.json()
 
       if (response.ok) {
-        setPullMessage({ text: data.message || 'Successfully pulled from GitHub', type: 'success' })
+        pollUpdateStatus(new Date().toISOString())
       } else {
-        setPullMessage({ text: data.error || 'Failed to pull from GitHub', type: 'error' })
+        setPulling(false)
+        setPullMessage({ text: data.error || 'Failed to start update', type: 'error' })
       }
     } catch (error) {
-      setPullMessage({ text: 'Error pulling from GitHub: ' + error.message, type: 'error' })
-    } finally {
       setPulling(false)
+      setPullMessage({ text: 'Error starting update: ' + error.message, type: 'error' })
     }
   }
 
@@ -651,11 +697,20 @@ function Settings() {
     return () => clearInterval(runningTestsInterval)
   }, [isSystemAdmin])
 
-  const getMessageClasses = (type) => (
-    type === 'success'
-      ? 'bg-green-50 text-green-700 border-green-200'
-      : 'bg-red-50 text-red-700 border-red-200'
-  )
+  useEffect(() => {
+    return () => {
+      if (updatePollRef.current) {
+        clearInterval(updatePollRef.current)
+        updatePollRef.current = null
+      }
+    }
+  }, [])
+
+  const getMessageClasses = (type) => {
+    if (type === 'success') return 'bg-green-50 text-green-700 border-green-200'
+    if (type === 'info') return 'bg-blue-50 text-blue-700 border-blue-200'
+    return 'bg-red-50 text-red-700 border-red-200'
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
