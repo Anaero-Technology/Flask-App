@@ -152,12 +152,20 @@ def get_wifi_networks_linux():
     try:
         connected_ssid = get_connected_ssid_linux()
 
-        # Try nmcli first (NetworkManager)
-        result = subprocess.run(
-            ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+        # Trigger a rescan first (requires sudo)
+        subprocess.run(
+            ['sudo', 'nmcli', 'dev', 'wifi', 'rescan'],
             capture_output=True,
             text=True,
             timeout=5
+        )
+
+        # Try nmcli first (NetworkManager)
+        result = subprocess.run(
+            ['sudo', 'nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+            capture_output=True,
+            text=True,
+            timeout=10
         )
 
         if result.returncode == 0:
@@ -254,21 +262,96 @@ def connect_to_wifi_macos(ssid, password):
     except Exception as e:
         return False, str(e)
 
-def connect_to_wifi_linux(ssid, password):
-    """Connect to WiFi network on Linux"""
+def _find_existing_connection(ssid):
+    """Find existing NM connection profile UUID for an SSID."""
     try:
-        # Try nmcli first (NetworkManager)
         result = subprocess.run(
-            ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
-            capture_output=True,
-            text=True,
-            timeout=30
+            ['sudo', 'nmcli', '-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(':')
+                if len(parts) >= 3 and parts[0] == ssid and '802-11-wireless' in parts[2]:
+                    return parts[1]
+    except Exception:
+        pass
+    return None
+
+def connect_to_wifi_linux(ssid, password, username=None, security=''):
+    """Connect to WiFi network on Linux.
+
+    Avoids 'nmcli dev wifi connect' which corrupts saved profiles by
+    stripping key-mgmt. Instead, manages connection profiles directly.
+    Supports both WPA-PSK and WPA2 Enterprise (802.1X/EAP).
+    """
+    is_enterprise = '802.1X' in security or username
+    try:
+        existing_uuid = _find_existing_connection(ssid)
+
+        if existing_uuid:
+            if is_enterprise:
+                subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
+                     'wifi-sec.key-mgmt', 'wpa-eap',
+                     '802-1x.eap', 'peap',
+                     '802-1x.phase2-auth', 'mschapv2',
+                     '802-1x.identity', username or '',
+                     '802-1x.password', password],
+                    capture_output=True, text=True, timeout=10
+                )
+            else:
+                subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
+                     'wifi-sec.key-mgmt', 'wpa-psk',
+                     'wifi-sec.psk', password],
+                    capture_output=True, text=True, timeout=10
+                )
+        else:
+            if is_enterprise:
+                result = subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'add',
+                     'type', 'wifi',
+                     'con-name', ssid,
+                     'ifname', 'wlan0',
+                     'ssid', ssid,
+                     'wifi-sec.key-mgmt', 'wpa-eap',
+                     '802-1x.eap', 'peap',
+                     '802-1x.phase2-auth', 'mschapv2',
+                     '802-1x.identity', username or '',
+                     '802-1x.password', password],
+                    capture_output=True, text=True, timeout=10
+                )
+            else:
+                result = subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'add',
+                     'type', 'wifi',
+                     'con-name', ssid,
+                     'ifname', 'wlan0',
+                     'ssid', ssid,
+                     'wifi-sec.key-mgmt', 'wpa-psk',
+                     'wifi-sec.psk', password],
+                    capture_output=True, text=True, timeout=10
+                )
+            if result.returncode != 0:
+                return False, result.stderr or "Failed to create connection profile"
+            existing_uuid = _find_existing_connection(ssid)
+
+        # Activate the connection
+        result = subprocess.run(
+            ['sudo', 'nmcli', 'connection', 'up', existing_uuid or ssid],
+            capture_output=True, text=True, timeout=30
         )
 
         if result.returncode == 0:
             return True, "Successfully connected to WiFi"
         else:
-            return False, result.stderr or "Failed to connect"
+            stderr = result.stderr or ""
+            if 'Secrets were required' in stderr or 'passwd-file' in stderr:
+                return False, "Incorrect password"
+            if 'not found' in stderr:
+                return False, "Network not found. It may be out of range."
+            return False, stderr or "Failed to connect"
     except Exception as e:
         return False, str(e)
 
@@ -311,6 +394,8 @@ def connect_wifi():
         data = request.get_json()
         ssid = data.get('ssid')
         password = data.get('password', '')
+        username = data.get('username', '')
+        security = data.get('security', '')
 
         if not ssid:
             return jsonify({'error': 'SSID is required'}), 400
@@ -320,7 +405,7 @@ def connect_wifi():
         if system == 'Darwin':  # macOS
             success, message = connect_to_wifi_macos(ssid, password)
         elif system == 'Linux':
-            success, message = connect_to_wifi_linux(ssid, password)
+            success, message = connect_to_wifi_linux(ssid, password, username=username, security=security)
         else:
             return jsonify({'error': 'Unsupported operating system'}), 400
 

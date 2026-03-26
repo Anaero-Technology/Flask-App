@@ -28,6 +28,7 @@ function Settings() {
   const [connecting, setConnecting] = useState(false)
   const [selectedNetworkIndex, setSelectedNetworkIndex] = useState(null)
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
   const [message, setMessage] = useState({ text: '', type: '' })
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
@@ -97,6 +98,7 @@ function Settings() {
 
     setSelectedNetworkIndex(index)
     setPassword('')
+    setUsername('')
     setMessage({ text: '', type: '' })
 
     // If network is open, connect immediately
@@ -108,10 +110,25 @@ function Settings() {
   const handleCancelConnect = () => {
     setSelectedNetworkIndex(null)
     setPassword('')
+    setUsername('')
     setMessage({ text: '', type: '' })
   }
 
-  const connectToNetwork = async (ssid, pwd) => {
+  const connectToNetwork = async (ssid, pwd, networkUsername = '', security = '') => {
+    // Check if switching networks - warn user they'll be disconnected
+    const currentNetwork = networks.find(n => n.connected)
+    if (currentNetwork && currentNetwork.ssid !== ssid) {
+      const confirmed = window.confirm(
+        `Connecting to "${ssid}" will disconnect you from "${currentNetwork.ssid}".\n\n` +
+        `You will lose access to this page and need to reconnect to the app using the new network's IP address (shown on the device display).\n\n` +
+        `You must be connected to the same network as the Chimera to access the application.`
+      )
+      if (!confirmed) {
+        setConnecting(false)
+        return
+      }
+    }
+
     setConnecting(true)
     setMessage({ text: '', type: '' })
 
@@ -120,7 +137,9 @@ function Settings() {
         method: 'POST',
         body: JSON.stringify({
           ssid: ssid,
-          password: pwd
+          password: pwd,
+          username: networkUsername,
+          security: security
         })
       })
 
@@ -134,7 +153,8 @@ function Settings() {
         setMessage({ text: data.error || tPages('settings.connection_failed'), type: 'error' })
       }
     } catch (error) {
-      setMessage({ text: `${tPages('settings.error_connecting')}: ${error.message}`, type: 'error' })
+      // If we lose connection, the network switch likely succeeded
+      toast.info(`Connecting to ${ssid}. Check the device display for the new IP address.`, 10000)
     } finally {
       setConnecting(false)
     }
@@ -142,8 +162,9 @@ function Settings() {
 
   const handleConnectWithPassword = (e, network) => {
     e.preventDefault()
-    if (network && password) {
-      connectToNetwork(network.ssid, password)
+    const isEnterprise = network.security && network.security.includes('802.1X')
+    if (network && password && (!isEnterprise || username)) {
+      connectToNetwork(network.ssid, password, username, network.security)
     }
   }
 
@@ -841,6 +862,7 @@ function Settings() {
                   const isSelected = selectedNetworkIndex === index
                   const isConnected = Boolean(network.connected)
                   const needsPassword = network.security !== 'None' && network.security !== 'Open' && network.security !== ''
+                  const isEnterprise = network.security && network.security.includes('802.1X')
 
                   return (
                     <div key={index} className="border-b border-gray-200 last:border-b-0">
@@ -881,6 +903,23 @@ function Settings() {
                       {isSelected && needsPassword && (
                         <div className="border-t border-blue-100 bg-blue-50/60 px-4 py-2.5 sm:px-5">
                           <form onSubmit={(e) => handleConnectWithPassword(e, network)} className="space-y-3">
+                            {isEnterprise && (
+                              <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                  Username
+                                </label>
+                                <input
+                                  type="text"
+                                  value={username}
+                                  onChange={(e) => setUsername(e.target.value)}
+                                  className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Enter username"
+                                  autoFocus
+                                  required
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            )}
                             <div>
                               <label className="mb-1 block text-sm font-medium text-gray-700">
                                 {tPages('settings.password')}
@@ -891,7 +930,7 @@ function Settings() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder={tPages('settings.enter_password')}
-                                autoFocus
+                                autoFocus={!isEnterprise}
                                 required
                                 onClick={(e) => e.stopPropagation()}
                               />
@@ -911,7 +950,7 @@ function Settings() {
                               <button
                                 type="submit"
                                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                                disabled={connecting || !password}
+                                disabled={connecting || !password || (isEnterprise && !username)}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {connecting ? tPages('settings.connecting') : tPages('settings.connect')}

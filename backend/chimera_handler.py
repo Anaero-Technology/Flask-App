@@ -542,11 +542,15 @@ class ChimeraHandler(SerialHandler):
     def delete_file(self, filename: str) -> Tuple[bool, str]:
         """Delete a file from SD card"""
         response = self.send_command(f"delete {filename}")
-        
+
         if response == "done delete":
             return True, "File deleted successfully"
         elif response == "failed delete nofile":
             return False, "File does not exist"
+        elif response == "failed delete fileinuse":
+            return False, "File is currently in use (stop logging first)"
+        elif response is None:
+            return False, "Device did not respond (timeout)"
         else:
             return False, f"Unexpected response: {response}"
     
@@ -902,46 +906,50 @@ class ChimeraHandler(SerialHandler):
                 return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
             
             elif system == 'Linux':
-                # First, try to delete any existing connection with this SSID
-                # This avoids conflicts with stale connection profiles
-                subprocess.run(
-                    ['nmcli', 'connection', 'delete', ssid],
-                    capture_output=True, text=True, timeout=10
+                # Find existing connection profile for this SSID
+                existing_uuid = None
+                list_result = subprocess.run(
+                    ['sudo', 'nmcli', '-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'],
+                    capture_output=True, text=True, timeout=5
                 )
-                
-                # Now connect with fresh credentials
-                # Use --ask=no to prevent interactive prompts
-                result = subprocess.run(
-                    ['nmcli', 'device', 'wifi', 'connect', ssid, 'password', password],
-                    capture_output=True, text=True, timeout=30
-                )
-                
-                if result.returncode == 0:
-                    return True, "Connected successfully"
-                
-                # If that fails, try creating a new connection profile explicitly
-                if result.returncode != 0:
-                    # Try with explicit connection creation
-                    result2 = subprocess.run(
-                        ['nmcli', 'connection', 'add',
+                if list_result.returncode == 0:
+                    for line in list_result.stdout.strip().split('\n'):
+                        parts = line.split(':')
+                        if len(parts) >= 3 and parts[0] == ssid and '802-11-wireless' in parts[2]:
+                            existing_uuid = parts[1]
+                            break
+
+                if existing_uuid:
+                    # Update existing profile with new password and ensure key-mgmt is set
+                    subprocess.run(
+                        ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
+                         'wifi-sec.key-mgmt', 'wpa-psk',
+                         'wifi-sec.psk', password],
+                        capture_output=True, text=True, timeout=10
+                    )
+                else:
+                    # Create new profile with explicit key-mgmt
+                    result = subprocess.run(
+                        ['sudo', 'nmcli', 'connection', 'add',
                          'type', 'wifi',
                          'con-name', ssid,
+                         'ifname', 'wlan0',
                          'ssid', ssid,
                          'wifi-sec.key-mgmt', 'wpa-psk',
                          'wifi-sec.psk', password],
-                        capture_output=True, text=True, timeout=30
+                        capture_output=True, text=True, timeout=10
                     )
-                    
-                    if result2.returncode == 0:
-                        # Activate the connection
-                        result3 = subprocess.run(
-                            ['nmcli', 'connection', 'up', ssid],
-                            capture_output=True, text=True, timeout=30
-                        )
-                        if result3.returncode == 0:
-                            return True, "Connected successfully"
-                        return False, result3.stderr.strip() if result3.stderr else "Failed to activate connection"
-                    
+                    if result.returncode != 0:
+                        return False, result.stderr.strip() if result.stderr else "Failed to create connection profile"
+                    existing_uuid = ssid
+
+                # Activate the connection
+                result = subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'up', existing_uuid or ssid],
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.returncode == 0:
+                    return True, "Connected successfully"
                 return False, result.stderr.strip() if result.stderr else "Connection failed"
             else:
                 return False, "Unsupported OS"
@@ -953,10 +961,11 @@ class ChimeraHandler(SerialHandler):
         """Get the local IP address by attempting to connect to an external server"""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-            return local_ip
+            try:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+            finally:
+                s.close()
         except Exception:
             return None
 
