@@ -5,12 +5,14 @@ import Chimera from "../assets/chimera.jpg"
 import { RefreshCw, Server, Activity, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../components/Toast';
 
 
 
 function Dashboard({ onViewPlot }) {
   const { authFetch, user } = useAuth();
   const { t: tPages } = useTranslation('pages');
+  const toast = useToast();
   const [devices, setDevices] = useState([])
   const [activeTests, setActiveTests] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
@@ -375,10 +377,16 @@ function Dashboard({ onViewPlot }) {
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
+          toast.success(`Downloaded ${filename}`);
+        } else {
+          toast.error(data.message || 'Failed to download file', 5000);
         }
+      } else {
+        toast.error('Failed to download file', 5000);
       }
     } catch (error) {
       console.error('Dashboard file download failed:', error);
+      toast.error('Failed to download file', 5000);
     }
   };
 
@@ -412,10 +420,16 @@ function Dashboard({ onViewPlot }) {
               fetchedAt: Date.now()
             }
           }))
+          toast.success(`Deleted ${filename}`);
+        } else {
+          toast.error(data.message || 'Failed to delete file', 5000);
         }
+      } else {
+        toast.error('Failed to delete file', 5000);
       }
     } catch (error) {
       console.error('Dashboard file delete failed:', error);
+      toast.error('Failed to delete file', 5000);
     }
   };
 

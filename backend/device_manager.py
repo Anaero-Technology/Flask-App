@@ -30,7 +30,14 @@ class DeviceManager:
     def _handle_disconnect(self, device_id: int):
         """Handle device disconnection - update database and remove from active handlers"""
         if device_id in self._active_handlers:
-            del self._active_handlers[device_id]
+            handler = self._active_handlers.pop(device_id)
+            # Close the serial connection to prevent FD leaks.
+            # Note: we can't call handler.disconnect() here because this runs
+            # inside the reader thread (would deadlock on thread.join).
+            try:
+                handler.connection.close()
+            except Exception:
+                pass
 
         # Update database with app context
         if self._app:
@@ -56,11 +63,13 @@ class DeviceManager:
             # Check if port is already connected
             if self.is_port_connected(port):
                 print(f"[DeviceManager] Port {port} is already connected")
-                # Ensure database reflects connected state
-                device = Device.query.filter_by(serial_port=port).first()
-                if device and not device.connected:
-                    device.connected = True
-                    db.session.commit()
+                # Find the actual active device record for this port
+                for device in Device.query.filter_by(serial_port=port).all():
+                    if device.id in self._active_handlers:
+                        if not device.connected:
+                            device.connected = True
+                            db.session.commit()
+                        break
                 return True
 
             print(f"[DeviceManager] DEBUG: Port {port} not connected, proceeding with connection")
@@ -97,7 +106,7 @@ class DeviceManager:
                 mac_address = handler.mac_address
                 print(f"[DeviceManager] DEBUG: Handler connected, MAC={mac_address}")
 
-                # Look up device by MAC address first (robust across port changes)
+                # Look up device by MAC address (robust across port changes)
                 device = None
                 if mac_address:
                     device = Device.query.filter_by(mac_address=mac_address).first()
@@ -309,9 +318,11 @@ class DeviceManager:
             return None
 
         with self._app.app_context():
-            device = Device.query.filter_by(serial_port=port).first()
-            if device:
-                return self._active_handlers.get(device.id)
+            devices = Device.query.filter_by(serial_port=port).all()
+            for device in devices:
+                handler = self._active_handlers.get(device.id)
+                if handler:
+                    return handler
         return None
 
     def list_devices(self) -> Dict:
@@ -390,8 +401,8 @@ class DeviceManager:
         if not self._app:
             return False
         with self._app.app_context():
-            device = Device.query.filter_by(serial_port=port).first()
-            return device and device.id in self._active_handlers
+            devices = Device.query.filter_by(serial_port=port).all()
+            return any(device.id in self._active_handlers for device in devices)
 
     def get_chimera_reading_channel(self, test_id: int) -> Optional[int]:
         """Get the channel currently being read by the Chimera for a given test.

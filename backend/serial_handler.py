@@ -86,11 +86,12 @@ class SerialHandler:
             raise Exception(f"Invalid response format: {response}")
 
     def disconnect(self) -> bool:
-        if self.connection.is_open:
-            self._stop_reader_thread()
+        self._stop_reader_thread()
+        try:
             self.connection.close()
-            return True
-        return False
+        except Exception:
+            pass
+        return True
     
     def register_automatic_handler(self, prefix: str, handler: Callable[[str], None]):
         """Register a handler for automatic messages that start with a specific prefix"""
@@ -127,7 +128,13 @@ class SerialHandler:
                 break
             except Exception:
                 time.sleep(0.1)
-        
+
+        # Connection has broken - close the FD to prevent leaking
+        try:
+            self.connection.close()
+        except Exception:
+            pass
+
         # Connection has stopped - call the disconnect callback
         if self.on_disconnect and callable(self.on_disconnect):
             try:

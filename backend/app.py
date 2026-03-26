@@ -71,6 +71,12 @@ def auto_connect_devices():
     import concurrent.futures
 
     time.sleep(2)
+
+    # Reset stale connected flags from previous run (atexit may not have run)
+    with app.app_context():
+        Device.query.update({Device.connected: False})
+        db.session.commit()
+
     chimera_found = False
 
     def check_port(port_info):

@@ -436,6 +436,7 @@ function TestForm() {
         }
 
         setLoading(true);
+        let testId = null;
         try {
             const getDraftConfigForDevice = (deviceId) => {
                 if (blackboxDrafts[deviceId]) return blackboxDrafts[deviceId];
@@ -464,7 +465,7 @@ function TestForm() {
                 throw new Error(testResult.error);
             }
 
-            const testId = testResult.test_id;
+            testId = testResult.test_id;
 
             // Create channel configurations (BlackBox)
             const configArray = Object.entries(configurations).map(([key, config]) => {
@@ -549,6 +550,12 @@ function TestForm() {
         } catch (error) {
             console.error('Error starting test:', error);
             toast.error(`${tPages('test_form.test_start_failed')}: ${error.message}`);
+            // Clean up the failed test so it doesn't linger with 'setup' status
+            if (testId) {
+                try {
+                    await authFetch(`/api/v1/tests/${testId}`, { method: 'DELETE' });
+                } catch (e) { /* ignore cleanup errors */ }
+            }
         } finally {
             setLoading(false);
         }

@@ -278,8 +278,18 @@ def disconnect_device(device_id):
 def list_connected_devices():
     """List all currently connected devices with availability status"""
     try:
-        # Simply query the database for connected devices
-        connected_devices = Device.query.filter_by(connected=True).all()
+        # Return connected devices, deduplicated by port
+        # If multiple records share a port, prefer the one with an active handler
+        manager = get_device_manager()
+        all_connected = Device.query.filter_by(connected=True).all()
+        seen_ports = {}
+        for d in all_connected:
+            port = d.serial_port
+            if port not in seen_ports:
+                seen_ports[port] = d
+            elif d.id in manager._active_handlers:
+                seen_ports[port] = d
+        connected_devices = list(seen_ports.values())
 
         devices_list = []
         for device in connected_devices:
@@ -1270,17 +1280,37 @@ def start_test(test_id):
     except Exception as e:
         if started_devices:
             for started_device, started_handler in started_devices:
-                try:
-                    if started_handler:
-                        started_handler.stop_logging()
-                except Exception:
-                    pass
                 if started_handler:
+                    # Retry stop_logging to ensure the device actually stops
+                    for attempt in range(3):
+                        try:
+                            success, _ = started_handler.stop_logging()
+                            if success:
+                                break
+                        except Exception:
+                            pass
                     try:
                         started_handler.set_test_id(None)
                     except Exception:
                         pass
+                # Ensure DB reflects stopped state
+                try:
+                    started_device.logging = False
+                    started_device.active_test_id = None
+                except Exception:
+                    pass
         db.session.rollback()
+        # Commit the logging=False updates since rollback undid them
+        if started_devices:
+            try:
+                for started_device, _ in started_devices:
+                    device_fresh = Device.query.get(started_device.id)
+                    if device_fresh:
+                        device_fresh.logging = False
+                        device_fresh.active_test_id = None
+                db.session.commit()
+            except Exception:
+                pass
         return jsonify({"error": str(e)}), 400
 
 @devices_tests_bp.route("/api/v1/tests/<int:test_id>/stop", methods=['POST'])
