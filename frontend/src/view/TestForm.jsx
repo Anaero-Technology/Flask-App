@@ -757,10 +757,7 @@ function TestForm() {
 
                 {/* Action Bar */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 px-6 py-4 flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
-                            {Object.keys(configurations).length} {tPages('test_form.channels_configured')}
-                        </div>
+                    <div className="bg-gray-50 px-6 py-4 flex items-center justify-end">
                         <div className="flex items-center gap-3">
                             {(() => {
                                 const validation = getTestValidationStatus();
