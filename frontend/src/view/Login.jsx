@@ -116,6 +116,9 @@ function Login() {
                 <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">
                     Contact your administrator if you need access.
                 </p>
+                <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-2">
+                    v1.0.0
+                </p>
             </div>
         </div>
     );
