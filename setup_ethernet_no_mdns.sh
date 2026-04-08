@@ -37,7 +37,7 @@ if [ -z "${ETH_CONN}" ]; then
         ipv4.method auto \
         ipv4.addresses "${FALLBACK_CIDR}" \
         ipv4.dhcp-timeout 3 \
-        ipv4.never-default yes \
+        ipv4.never-default no \
         ipv6.method link-local
 else
     echo "Updating connection profile: ${ETH_CONN}"
@@ -46,7 +46,7 @@ else
         ipv4.method auto \
         ipv4.addresses "${FALLBACK_CIDR}" \
         ipv4.dhcp-timeout 3 \
-        ipv4.never-default yes \
+        ipv4.never-default no \
         ipv6.method link-local
 fi
 

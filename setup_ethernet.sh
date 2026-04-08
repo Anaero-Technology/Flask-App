@@ -55,7 +55,7 @@ if [ -z "$ETH_CONN" ]; then
         ipv4.method auto \
         ipv4.addresses 169.254.50.1/16 \
         ipv4.dhcp-timeout 3 \
-        ipv4.never-default yes \
+        ipv4.never-default no \
         ipv6.method link-local \
         connection.autoconnect yes
 else
@@ -64,7 +64,7 @@ else
         ipv4.method auto \
         ipv4.addresses 169.254.50.1/16 \
         ipv4.dhcp-timeout 3 \
-        ipv4.never-default yes \
+        ipv4.never-default no \
         ipv6.method link-local \
         connection.autoconnect yes
 fi
