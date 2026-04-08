@@ -64,6 +64,7 @@ main() {
     exit 42
   fi
   trap 'rmdir "${LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
+  trap 'log "ERROR: Update failed unexpectedly (line ${LINENO}) — check network connection and try again"' ERR
 
   require_cmd git
   require_cmd npm
