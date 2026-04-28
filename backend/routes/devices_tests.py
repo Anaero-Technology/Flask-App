@@ -692,7 +692,7 @@ def create_test():
             name=data.get('name'),
             description=data.get('description'),
             created_by=created_by,
-            date_created=datetime.now(),
+            date_created=datetime.utcnow(),
             status='setup'
         )
         
@@ -730,9 +730,9 @@ def list_tests():
                 "name": test.name,
                 "description": test.description,
                 "created_by": test.created_by,
-                "date_created": test.date_created.isoformat() if test.date_created else None,
-                "date_started": test.date_started.isoformat() if test.date_started else None,
-                "date_ended": test.date_ended.isoformat() if test.date_ended else None,
+                "date_created": test.date_created.isoformat() + "Z" if test.date_created else None,
+                "date_started": test.date_started.isoformat() + "Z" if test.date_started else None,
+                "date_ended": test.date_ended.isoformat() + "Z" if test.date_ended else None,
                 "status": test.status
             }
             
@@ -786,9 +786,9 @@ def get_test(test_id):
             "name": test.name,
             "description": test.description,
             "created_by": test.created_by,
-            "date_created": test.date_created.isoformat() if test.date_created else None,
-            "date_started": test.date_started.isoformat() if test.date_started else None,
-            "date_ended": test.date_ended.isoformat() if test.date_ended else None,
+            "date_created": test.date_created.isoformat() + "Z" if test.date_created else None,
+            "date_started": test.date_started.isoformat() + "Z" if test.date_started else None,
+            "date_ended": test.date_ended.isoformat() + "Z" if test.date_ended else None,
             "status": test.status,
             "configurations": [{
                 "id": config.id,
@@ -1140,7 +1140,7 @@ def start_test(test_id):
 
         # Update test status
         test.status = 'running'
-        test.date_started = datetime.now()
+        test.date_started = datetime.utcnow()
 
         # Start logging on each device
         logging_results = []
@@ -1379,7 +1379,7 @@ def stop_test(test_id):
 
         # Update test status
         test.status = 'completed'
-        test.date_ended = datetime.now()
+        test.date_ended = datetime.utcnow()
 
         db.session.commit()
 
