@@ -1119,17 +1119,17 @@ class ChimeraHandler(SerialHandler):
                         else:
                             print(f"[CHIMERA IP MONITOR] Connection not open, cannot send ipset command")
 
-                    # Scan/sync SSIDs only when reconnected or when we have no cache yet.
-                    if just_reconnected or not self.last_known_ssids:
-                        ssids = self._get_wifi_ssids()
-                        self._sync_wifi_ssids_to_device(ssids)
-
                 else:
                     if self.is_network_connected:
                         print(f"[CHIMERA IP MONITOR] No connection detected")
                         self.is_network_connected = False
                         self.last_known_ip = None
                         self.last_known_ssids.clear()
+
+                # Always scan and sync SSIDs regardless of internet connectivity so
+                # the chimera board can show available networks even before connecting.
+                ssids = self._get_wifi_ssids()
+                self._sync_wifi_ssids_to_device(ssids)
 
             except Exception as e:
                 print(f"[CHIMERA IP MONITOR] Error in monitoring loop: {e}")
