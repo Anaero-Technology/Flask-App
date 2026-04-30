@@ -1101,8 +1101,9 @@ class ChimeraHandler(SerialHandler):
                     just_reconnected = not self.is_network_connected
                     self.is_network_connected = True
 
-                    # Only send ipset command if IP has changed or this is the first check
-                    if current_ip != self.last_known_ip:
+                    # Re-send ipset every iteration while idle so the chimera screen
+                    # self-recovers if it loses state; while logging, only send on change.
+                    if current_ip != self.last_known_ip or not self.is_logging:
                         print(f"[CHIMERA IP MONITOR] IP detected: {current_ip}")
 
                         # Send ipset command to chimera
