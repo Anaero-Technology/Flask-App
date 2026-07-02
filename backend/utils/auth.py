@@ -1,6 +1,6 @@
 from functools import wraps
-from flask import jsonify
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask import jsonify, request
+from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity, decode_token
 
 ROLE_HIERARCHY = {
     'admin': 4,
@@ -98,6 +98,26 @@ def require_minimum_role(minimum_role):
             return fn(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def check_stream_token():
+    """Validate the short-lived SSE token passed as ?token=.
+
+    EventSource cannot send an Authorization header, so stream endpoints
+    authenticate with a scoped, short-lived JWT in the query string instead
+    (issued by /api/v1/auth/stream-token). Returns an error response when
+    the token is missing/invalid, or None when it is valid.
+    """
+    token = request.args.get('token', '')
+    if not token:
+        return jsonify({"error": "Missing stream token"}), 401
+    try:
+        claims = decode_token(token)
+    except Exception:
+        return jsonify({"error": "Invalid or expired stream token"}), 401
+    if claims.get('scope') != 'stream':
+        return jsonify({"error": "Invalid stream token"}), 401
+    return None
 
 
 def get_current_user():

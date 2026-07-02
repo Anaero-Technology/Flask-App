@@ -7,11 +7,29 @@ from flask_jwt_extended import (
     get_jwt
 )
 import bcrypt
+from datetime import timedelta
 from database.models import db, User
 from utils.auth import log_audit
 from utils.rate_limit import auth_limiter, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS
 
 auth_bp = Blueprint('auth', __name__)
+
+
+@auth_bp.route('/api/v1/auth/stream-token', methods=['GET'])
+@jwt_required()
+def stream_token():
+    """Issue a short-lived scoped token for SSE streams.
+
+    EventSource cannot send an Authorization header, so stream endpoints
+    accept this token as a ?token= query parameter instead. Validity only
+    matters at connection time; an open stream is not cut off on expiry.
+    """
+    token = create_access_token(
+        identity=get_jwt_identity(),
+        expires_delta=timedelta(minutes=5),
+        additional_claims={'scope': 'stream'}
+    )
+    return jsonify({"stream_token": token}), 200
 
 
 @auth_bp.route('/api/v1/auth/login', methods=['POST'])

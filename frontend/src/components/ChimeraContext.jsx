@@ -97,7 +97,20 @@ export const ChimeraProvider = ({ children }) => {
             // Silently ignore - calibration check is optional
         }
 
-        const eventSource = new EventSource(`/api/v1/chimera/${deviceId}/stream`);
+        // The stream endpoint authenticates with a short-lived ?token=
+        // (EventSource cannot send Authorization headers)
+        let streamUrl = `/api/v1/chimera/${deviceId}/stream`;
+        try {
+            const tokenResponse = await authFetch('/api/v1/auth/stream-token');
+            if (tokenResponse.ok) {
+                const { stream_token } = await tokenResponse.json();
+                streamUrl += `?token=${encodeURIComponent(stream_token)}`;
+            }
+        } catch (err) {
+            console.error('Failed to fetch stream token:', err);
+        }
+
+        const eventSource = new EventSource(streamUrl);
 
         eventSource.addEventListener('calibration_progress', (event) => {
             const data = JSON.parse(event.data);

@@ -6,6 +6,7 @@ import time
 from device_manager import DeviceManager
 from database.models import *
 from utils.auth import require_role
+from utils.errors import internal_error
 
 black_box_bp = Blueprint('black_box', __name__)
 device_manager = DeviceManager()
@@ -45,7 +46,7 @@ def get_connected_black_boxes():
         
         return jsonify(devices_list)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -86,7 +87,7 @@ def connect_black_box(device_id):
         }), 200
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -115,7 +116,7 @@ def disconnect_black_box(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -205,7 +206,7 @@ def start_logging(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -256,7 +257,7 @@ def stop_logging(device_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -500,7 +501,7 @@ def set_name(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -559,7 +560,7 @@ def send_command(device_id):
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 

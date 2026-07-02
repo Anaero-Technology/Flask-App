@@ -21,9 +21,15 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = Config.JWT_ACCESS_TOKEN_EXPIRES
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = Config.JWT_REFRESH_TOKEN_EXPIRES
 app.config['CHIMERA_DEVICE_MODEL'] = Config.CHIMERA_DEVICE_MODEL
 
-CORS(app, supports_credentials=True)
+# No supports_credentials: auth is a bearer token in the Authorization
+# header, never cookies, so credentialed cross-origin requests must not be
+# allowed (any-origin + credentials lets other sites ride a user's session).
+CORS(app)
 db.init_app(app)
 jwt = JWTManager(app)
+
+from utils.errors import init_error_handling
+init_error_handling(app)
 
 device_manager = DeviceManager()
 DeviceManager.set_app(app)
@@ -105,6 +111,11 @@ def auto_connect_devices():
 
         return False
 
+    # Back off between scans so BlackBox-only or bench setups don't probe
+    # serial ports every 5s forever, competing with user-initiated connects.
+    retry_delay = 5
+    max_retry_delay = 60
+
     while not chimera_found:
         print('[AUTO-CONNECT] Scanning for Chimera device...')
 
@@ -118,12 +129,13 @@ def auto_connect_devices():
                 if chimera_found:
                     print('[AUTO-CONNECT] Chimera found, stopping scan')
                 else:
-                    print('[AUTO-CONNECT] No Chimera found, retrying in 5 seconds...')
+                    print(f'[AUTO-CONNECT] No Chimera found, retrying in {retry_delay} seconds...')
             except Exception as exc:
                 print(f'[AUTO-CONNECT] Error during auto-connect: {exc}')
 
         if not chimera_found:
-            time.sleep(5)
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
 
     print('[AUTO-CONNECT] Device scan complete')
 
@@ -177,8 +189,22 @@ app.register_blueprint(data_bp)
 app.register_blueprint(devices_tests_bp)
 app.register_blueprint(system_bp)
 app.register_blueprint(app_settings_bp)
+
+from utils.auth import check_stream_token
+
+
+@sse.before_request
+def _require_stream_token():
+    # EventSource cannot send Authorization headers; streams authenticate
+    # with a short-lived ?token= issued by /api/v1/auth/stream-token.
+    return check_stream_token()
+
+
 app.register_blueprint(sse, url_prefix='/stream')
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=6000)
+    # Werkzeug's debugger allows remote code execution — never enable it
+    # implicitly on a network-reachable interface.
+    debug = os.environ.get('FLASK_DEBUG') == '1'
+    app.run(debug=debug, host='0.0.0.0', port=6000)

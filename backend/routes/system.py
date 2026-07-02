@@ -4,6 +4,7 @@ from sqlalchemy.engine import make_url
 from database.models import *
 from utils.auth import require_role
 import os
+from utils.errors import internal_error
 
 
 system_bp = Blueprint('system', __name__)
@@ -28,7 +29,7 @@ def download_serial_log():
             download_name='serial_messages.log'
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/serial-log", methods=['DELETE'])
@@ -45,7 +46,7 @@ def clear_serial_log():
         else:
             return jsonify({"error": "Failed to clear serial log"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/serial-log/info", methods=['GET'])
@@ -72,7 +73,7 @@ def serial_log_info():
             "enabled": serial_logger.enabled
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 def get_sqlite_db_path():
@@ -116,7 +117,7 @@ def download_database():
             download_name=os.path.basename(db_path)
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/database/transfer", methods=['POST'])
@@ -163,13 +164,24 @@ def transfer_database():
 
         os.replace(temp_path, db_path)
 
+        # Keep only the newest backups — the SD card is small and each
+        # transfer would otherwise leave another full copy forever.
+        keep = 3
+        import glob
+        backups = sorted(glob.glob(f"{db_path}.bak-*"), reverse=True)
+        for stale_backup in backups[keep:]:
+            try:
+                os.remove(stale_backup)
+            except OSError:
+                pass
+
         return jsonify({
             "success": True,
             "message": "Database transferred successfully",
             "backup_path": backup_path
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/database", methods=['DELETE'])
@@ -229,7 +241,7 @@ def delete_database():
         }), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/git-pull", methods=['POST'])
@@ -307,6 +319,55 @@ def git_pull():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@system_bp.route("/api/v1/system/update-check", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def update_check():
+    """Compare the local commit against the remote update branch."""
+    import subprocess
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    branch = os.environ.get('UPDATE_BRANCH', 'master')
+
+    try:
+        local = subprocess.run(
+            ['git', '-C', repo_root, 'rev-parse', 'HEAD'],
+            capture_output=True, text=True, timeout=10
+        )
+        if local.returncode != 0:
+            return jsonify({"error": "Could not determine current version"}), 500
+        current = local.stdout.strip()
+
+        # ls-remote asks the server for the branch head without fetching
+        remote = subprocess.run(
+            ['git', '-C', repo_root, 'ls-remote', 'origin', f'refs/heads/{branch}'],
+            capture_output=True, text=True, timeout=20
+        )
+        if remote.returncode != 0 or not remote.stdout.strip():
+            return jsonify({
+                "current_commit": current,
+                "remote_commit": None,
+                "update_available": None,
+                "error": "Could not reach the update server. Check the internet connection."
+            }), 200
+
+        latest = remote.stdout.split()[0]
+        return jsonify({
+            "current_commit": current,
+            "remote_commit": latest,
+            "update_available": latest != current
+        }), 200
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "current_commit": None,
+            "remote_commit": None,
+            "update_available": None,
+            "error": "Timed out contacting the update server."
+        }), 200
+    except Exception as e:
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/system/update-status", methods=['GET'])
@@ -501,7 +562,7 @@ def get_audit_logs():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @system_bp.route("/api/v1/audit-logs/download", methods=['GET'])
@@ -586,4 +647,4 @@ def download_audit_logs():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)

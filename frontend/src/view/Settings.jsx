@@ -26,12 +26,15 @@ function Settings() {
   const [networks, setNetworks] = useState([])
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [connectingSsid, setConnectingSsid] = useState(null)
   const [selectedNetworkIndex, setSelectedNetworkIndex] = useState(null)
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [message, setMessage] = useState({ text: '', type: '' })
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
+  const [updateCheck, setUpdateCheck] = useState(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [runningTestsCount, setRunningTestsCount] = useState(0)
   const [serialLogInfo, setSerialLogInfo] = useState(null)
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
@@ -89,6 +92,19 @@ function Settings() {
       return
     }
 
+    // Open networks have no credential form: connect straight away instead
+    // of expanding an empty panel (which made the button flip to "Hide")
+    if (network.security === 'None' || network.security === 'Open' || network.security === '') {
+      if (!connecting) {
+        setSelectedNetworkIndex(null)
+        setPassword('')
+        setUsername('')
+        setMessage({ text: '', type: '' })
+        connectToNetwork(network.ssid, '', '', network.security)
+      }
+      return
+    }
+
     // If clicking the same network, collapse it
     if (selectedNetworkIndex === index) {
       setSelectedNetworkIndex(null)
@@ -100,11 +116,6 @@ function Settings() {
     setPassword('')
     setUsername('')
     setMessage({ text: '', type: '' })
-
-    // If network is open, connect immediately
-    if (network.security === 'None' || network.security === 'Open' || network.security === '') {
-      connectToNetwork(network.ssid, '')
-    }
   }
 
   const handleCancelConnect = () => {
@@ -130,6 +141,7 @@ function Settings() {
     }
 
     setConnecting(true)
+    setConnectingSsid(ssid)
     setMessage({ text: '', type: '' })
 
     try {
@@ -157,6 +169,7 @@ function Settings() {
       toast.info(`Connecting to ${ssid}. Check the device display for the new IP address.`, 10000)
     } finally {
       setConnecting(false)
+      setConnectingSsid(null)
     }
   }
 
@@ -246,10 +259,27 @@ function Settings() {
           text: data.message,
           type: data.status === 'success' ? 'success' : 'error'
         })
+        checkForUpdates()
       } catch {
         // Network error — backend still down, keep polling
       }
     }, POLL_INTERVAL_MS)
+  }
+
+  const checkForUpdates = async () => {
+    setCheckingUpdate(true)
+    try {
+      const response = await authFetch('/api/v1/system/update-check')
+      if (response.ok) {
+        setUpdateCheck(await response.json())
+      } else {
+        setUpdateCheck({ error: true })
+      }
+    } catch {
+      setUpdateCheck({ error: true })
+    } finally {
+      setCheckingUpdate(false)
+    }
   }
 
   const pullFromGithub = async () => {
@@ -727,6 +757,7 @@ function Settings() {
 
     fetchSerialLogInfo()
     fetchRunningTestsCount()
+    checkForUpdates()
     const runningTestsInterval = setInterval(fetchRunningTestsCount, 10000)
     return () => clearInterval(runningTestsInterval)
   }, [isSystemAdmin])
@@ -817,7 +848,9 @@ function Settings() {
                 >
                   <option value=",">{tPages('settings.comma')}</option>
                   <option value=";">{tPages('settings.semicolon')}</option>
-                  <option value="\t">{tPages('settings.tab')}</option>
+                  {/* Must be a JS expression: value="\t" would send the
+                      literal two characters \ + t, which the backend rejects */}
+                  <option value={'\t'}>{tPages('settings.tab')}</option>
                 </select>
                 <button
                   onClick={saveDelimiterPreference}
@@ -906,9 +939,15 @@ function Settings() {
                               if (isConnected) return
                               handleNetworkSelect(network, index)
                             }}
-                            disabled={isConnected}
+                            disabled={isConnected || (connecting && connectingSsid === network.ssid)}
                           >
-                            {isConnected ? tPages('settings.connected_badge') : isSelected ? tPages('settings.hide') : tPages('settings.connect')}
+                            {isConnected
+                              ? tPages('settings.connected_badge')
+                              : connecting && connectingSsid === network.ssid
+                                ? tPages('settings.connecting')
+                                : isSelected
+                                  ? tPages('settings.hide')
+                                  : tPages('settings.connect')}
                           </button>
                         </div>
                       </div>
@@ -994,16 +1033,39 @@ function Settings() {
               <div>
                 <h3 className="text-sm font-bold text-gray-900">{tPages('settings.update_software')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.reboot_after_update')}</p>
+                {checkingUpdate ? (
+                  <p className="mt-1 text-[12px] text-gray-500">{tPages('settings.checking_updates')}</p>
+                ) : updateCheck?.update_available === true ? (
+                  <p className="mt-1 text-[12px] font-medium text-emerald-600">
+                    {tPages('settings.update_available', {
+                      current: updateCheck.current_commit?.slice(0, 7),
+                      latest: updateCheck.remote_commit?.slice(0, 7)
+                    })}
+                  </p>
+                ) : updateCheck?.update_available === false ? (
+                  <p className="mt-1 text-[12px] text-gray-500">
+                    {tPages('settings.update_up_to_date', { version: updateCheck.current_commit?.slice(0, 7) })}
+                  </p>
+                ) : updateCheck?.error ? (
+                  <p className="mt-1 text-[12px] text-amber-600">{tPages('settings.update_check_error')}</p>
+                ) : null}
                 {runningTestsCount > 0 && (
                   <p className="mt-1 text-[12px] text-amber-600">
                     {tPages('settings.update_disabled_running', { count: runningTestsCount })}
                   </p>
                 )}
               </div>
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={checkForUpdates}
+                  disabled={checkingUpdate || pulling}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                >
+                  {checkingUpdate ? tPages('settings.checking_updates') : tPages('settings.check_updates')}
+                </button>
                 <button
                   onClick={pullFromGithub}
-                  disabled={pulling || runningTestsCount > 0}
+                  disabled={pulling || runningTestsCount > 0 || checkingUpdate || updateCheck?.update_available === false}
                   className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {pulling && <Loader2 size={14} className="animate-spin" />}

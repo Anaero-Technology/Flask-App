@@ -15,6 +15,10 @@ class SerialHandler:
         self.timeout = timeout
         self.connection = serial.Serial()
         self._write_lock = threading.Lock()
+        # Serializes whole send->receive cycles so concurrent callers (e.g.
+        # the chimera IP-monitor thread and Flask request threads) cannot
+        # swallow or cross-attribute each other's responses.
+        self._command_lock = threading.Lock()
         self._reader_thread = None
         self._stop_reading = threading.Event()
         self._command_response_queue = queue.Queue()
@@ -182,25 +186,26 @@ class SerialHandler:
         if not self.connection.is_open:
             raise Exception("Device not connected")
 
-        # Clear the response queue before sending
-        while not self._command_response_queue.empty():
+        with self._command_lock:
+            # Clear the response queue before sending
+            while not self._command_response_queue.empty():
+                try:
+                    self._command_response_queue.get_nowait()
+                except queue.Empty:
+                    break
+
+            # Send command
+            with self._write_lock:
+                self.connection.write(f"{command}\n".encode())
+                self.connection.flush()
+                serial_logger.log_sent(self.port, command)
+
+            # Wait for response
             try:
-                self._command_response_queue.get_nowait()
+                response = self._command_response_queue.get(timeout=timeout)
+                return response
             except queue.Empty:
-                break
-
-        # Send command
-        with self._write_lock:
-            self.connection.write(f"{command}\n".encode())
-            self.connection.flush()
-            serial_logger.log_sent(self.port, command)
-
-        # Wait for response
-        try:
-            response = self._command_response_queue.get(timeout=timeout)
-            return response
-        except queue.Empty:
-            return None
+                return None
     
     def send_command_no_wait(self, command: str) -> None:
         """Send a command without waiting for response"""

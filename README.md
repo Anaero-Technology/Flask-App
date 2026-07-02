@@ -142,6 +142,17 @@ Add this line:
 anaero ALL=(root) NOPASSWD: /bin/systemctl start flaskapp-updater.service, /bin/systemctl is-active --quiet flaskapp-updater.service
 ```
 
+The WiFi manager also needs passwordless `nmcli` to scan and connect. Scope
+the rule to exactly the `nmcli` binary — do **not** grant `NOPASSWD: ALL`:
+
+```bash
+sudo visudo -f /etc/sudoers.d/flaskapp-nmcli
+```
+
+```text
+anaero ALL=(root) NOPASSWD: /usr/bin/nmcli
+```
+
 Load and start services:
 
 ```bash

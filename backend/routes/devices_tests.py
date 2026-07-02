@@ -7,6 +7,7 @@ from device_manager import DeviceManager
 from werkzeug.utils import secure_filename
 import io
 import serial.tools.list_ports
+from utils.errors import internal_error
 
 
 devices_tests_bp = Blueprint('devices_tests', __name__)
@@ -119,7 +120,7 @@ def update_device(device_id):
         })
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -143,7 +144,7 @@ def delete_device(device_id):
         return jsonify({"message": "Device deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -241,7 +242,7 @@ def connect_device():
         else:
             return jsonify(result), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/devices/disconnect/<string:port>", methods=['POST'])
 @jwt_required()
@@ -256,7 +257,7 @@ def disconnect_device_by_port(port):
         else:
             return jsonify({"error": "Device not found or not connected"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/devices/<int:device_id>/disconnect", methods=['POST'])
 @jwt_required()
@@ -271,7 +272,7 @@ def disconnect_device(device_id):
         else:
             return jsonify({"error": "Device not found or not connected"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/devices/connected")
 @jwt_required()
@@ -316,7 +317,7 @@ def list_connected_devices():
 
         return jsonify(devices_list)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/devices/discover", methods=['POST'])
 @jwt_required()
@@ -370,7 +371,7 @@ def discover_device():
         
         return jsonify(device_info)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 # Sample Management Endpoints
@@ -513,7 +514,7 @@ def list_substrate_samples():
     except Exception as e:
         db.session.rollback()
         print(f"Error fetching samples: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/inoculum", methods=['GET'])
 @jwt_required()
@@ -534,7 +535,7 @@ def list_inoculum_samples():
     except Exception as e:
         db.session.rollback()
         print(f"Error fetching inoculums: {e}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @devices_tests_bp.route("/api/v1/samples/<int:sample_id>/image", methods=['GET'])
@@ -559,7 +560,7 @@ def get_sample_image(sample_id):
         response.headers['Expires'] = '0'
         return response
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @devices_tests_bp.route("/api/v1/samples/<int:sample_id>", methods=['PUT'])
@@ -945,7 +946,7 @@ def get_chimera_configuration(test_id):
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/tests/<int:test_id>/blackbox-configuration/<int:device_id>", methods=['GET'])
 @jwt_required()
@@ -1015,7 +1016,7 @@ def get_blackbox_configuration(test_id, device_id):
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 @devices_tests_bp.route("/api/v1/tests/<int:test_id>/start", methods=['POST'])
 @jwt_required()
@@ -1937,7 +1938,7 @@ def delete_test(test_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @devices_tests_bp.route("/api/v1/tests/<int:test_id>/download", methods=['GET'])
@@ -2133,4 +2134,4 @@ def download_test_data(test_id):
             )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)

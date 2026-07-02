@@ -461,6 +461,15 @@ def connect(ssid: str, password: str = '', username: Optional[str] = None,
         created_new_profile = False
 
         if existing_uuid:
+            # Drop the profile's previous auth settings first: reusing it
+            # across enterprise/PSK/open changes would otherwise carry stale
+            # wifi-sec/802-1x properties from the old mode (and an "open"
+            # reconnect would silently keep the old password requirement).
+            result = _nmcli(['connection', 'modify', existing_uuid,
+                             'remove', '802-11-wireless-security',
+                             'remove', '802-1x'], timeout=15)
+            if result.returncode != 0:
+                return False, _result_error(result, "Failed to reset connection profile")
             if props:
                 result = _nmcli(['connection', 'modify', existing_uuid] + props, timeout=15)
                 if result.returncode != 0:

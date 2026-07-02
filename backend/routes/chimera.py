@@ -4,9 +4,10 @@ from flask_jwt_extended import jwt_required
 from datetime import datetime, timezone
 from device_manager import DeviceManager
 from database.models import *
-from utils.auth import require_role
+from utils.auth import require_role, check_stream_token
 import os
 import re
+from utils.errors import internal_error
 
 chimera_bp = Blueprint('chimera', __name__)
 device_manager = DeviceManager()
@@ -27,7 +28,7 @@ def get_global_device_model():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/config', methods=['GET'])
@@ -59,7 +60,7 @@ def get_device_config(device_id):
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -103,7 +104,7 @@ def set_device_model(device_id):
             with open(env_file, 'w') as f:
                 f.write(env_contents)
         except Exception as e:
-            return jsonify({"error": f"Failed to update .env file: {str(e)}"}), 500
+            return internal_error(e, "Failed to persist device model setting")
 
         has_pump = device_model == 'chimera-max'
         calibration_mode = 'pump' if has_pump else 'manual'
@@ -118,7 +119,7 @@ def set_device_model(device_id):
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -157,7 +158,7 @@ def get_connected_chimeras():
         
         return jsonify(devices_list)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -199,7 +200,7 @@ def connect_chimera(device_id):
         }), 200
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -229,7 +230,7 @@ def disconnect_chimera(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -340,7 +341,7 @@ def start_logging(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -391,7 +392,7 @@ def stop_logging(device_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -998,7 +999,7 @@ def set_name(device_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -1031,14 +1032,21 @@ def send_command(device_id):
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
 
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/stream', methods=['GET'])
 def stream(device_id):
-    """SSE endpoint for real-time chimera notifications for a specific device."""
+    """SSE endpoint for real-time chimera notifications for a specific device.
+
+    Authenticated via short-lived ?token= (see /api/v1/auth/stream-token)
+    because EventSource cannot send Authorization headers.
+    """
+    auth_error = check_stream_token()
+    if auth_error:
+        return auth_error
     try:
         # Verify device exists and is connected
         device = Device.query.get(device_id)

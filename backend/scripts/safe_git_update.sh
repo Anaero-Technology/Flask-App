@@ -8,7 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
 FRONTEND_DIR="${PROJECT_ROOT}/frontend"
-LOCK_DIR="/tmp/flaskapp_update.lock.d"
+# Keep the lock out of /tmp (world-writable: any local user could pre-create
+# it there and permanently block updates). Untracked, so git reset ignores it.
+LOCK_DIR="${BACKEND_DIR}/.update.lock.d"
 LOG_DIR="${BACKEND_DIR}/logs"
 LOG_FILE="${LOG_DIR}/update.log"
 
@@ -60,12 +62,33 @@ rollback() {
   log "Rollback completed"
 }
 
+acquire_lock() {
+  if mkdir "${LOCK_DIR}" 2>/dev/null; then
+    echo "$$" > "${LOCK_DIR}/pid"
+    return 0
+  fi
+  # Lock exists — reclaim it if the owning process is gone (crash/SIGKILL
+  # would otherwise block all future updates until manual cleanup)
+  local owner
+  owner="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
+  if [[ -n "${owner}" && -d "/proc/${owner}" ]]; then
+    return 1
+  fi
+  log "Removing stale update lock (owner ${owner:-unknown} not running)"
+  rm -rf "${LOCK_DIR}"
+  if mkdir "${LOCK_DIR}" 2>/dev/null; then
+    echo "$$" > "${LOCK_DIR}/pid"
+    return 0
+  fi
+  return 1
+}
+
 main() {
-  if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+  if ! acquire_lock; then
     log "Another update is already running"
     exit 42
   fi
-  trap 'rmdir "${LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
+  trap 'rm -rf "${LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
   trap 'log "ERROR: Update failed unexpectedly (line ${LINENO}) — check network connection and try again"' ERR
 
   require_cmd git

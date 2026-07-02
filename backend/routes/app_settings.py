@@ -5,6 +5,7 @@ from utils.auth import require_role
 from werkzeug.utils import secure_filename
 import os
 import re
+from utils.errors import internal_error
 
 
 app_settings_bp = Blueprint('app_settings', __name__)
@@ -33,7 +34,7 @@ def get_app_settings():
             'logo_url': logo_url
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/app-settings', methods=['PUT'])
@@ -68,7 +69,7 @@ def update_app_settings():
 
         return jsonify({'success': True, 'company_name': company_name})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/app-settings/logo', methods=['POST'])
@@ -127,7 +128,7 @@ def upload_logo():
 
         return jsonify({'success': True, 'logo_url': '/api/v1/app-settings/logo'})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/app-settings/logo', methods=['GET'])
@@ -145,7 +146,7 @@ def get_logo():
 
         return send_file(logo_path, mimetype='image/png')
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/app-settings/logo', methods=['DELETE'])
@@ -178,7 +179,7 @@ def delete_logo():
 
         return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/users/<int:user_id>/profile-picture', methods=['POST'])
@@ -234,7 +235,7 @@ def upload_profile_picture(user_id):
 
         return jsonify({'success': True, 'profile_picture_url': f'/api/v1/users/{user_id}/profile-picture'})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/users/<int:user_id>/profile-picture', methods=['GET'])
@@ -251,7 +252,7 @@ def get_profile_picture(user_id):
 
         return send_file(pic_path, mimetype='image/png')
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)
 
 
 @app_settings_bp.route('/api/v1/users/<int:user_id>/profile-picture', methods=['DELETE'])
@@ -280,4 +281,4 @@ def delete_profile_picture(user_id):
 
         return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return internal_error(e)

@@ -284,7 +284,13 @@ class DeviceManager:
         if device_id in self._active_handlers:
             return self._active_handlers[device_id]
 
-        with self._app.app_context():
+        # Lock the reconnect path so two concurrent requests cannot open
+        # duplicate handlers on the same serial port.
+        with self._lock, self._app.app_context():
+            handler = self._active_handlers.get(device_id)
+            if handler:
+                return handler
+
             device = Device.query.get(device_id)
             if not device or not device.connected:
                 return None

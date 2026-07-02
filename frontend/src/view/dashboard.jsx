@@ -9,13 +9,23 @@ import { useToast } from '../components/Toast';
 
 
 
+// Last-known dashboard data, so cards render instantly on navigation while
+// fresh data loads in the background
+const readDashboardCache = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem('dashboardCache')) || {}
+  } catch {
+    return {}
+  }
+}
+
 function Dashboard({ onViewPlot }) {
   const { authFetch, user } = useAuth();
   const { t: tPages } = useTranslation('pages');
   const toast = useToast();
-  const [devices, setDevices] = useState([])
-  const [activeTests, setActiveTests] = useState([])
-  const [recentEvents, setRecentEvents] = useState([])
+  const [devices, setDevices] = useState(() => readDashboardCache().devices || [])
+  const [activeTests, setActiveTests] = useState(() => readDashboardCache().activeTests || [])
+  const [recentEvents, setRecentEvents] = useState(() => readDashboardCache().recentEvents || [])
   const [loading, setLoading] = useState(false)
   const [globalDeviceModel, setGlobalDeviceModel] = useState(null)
   const [showFileManager, setShowFileManager] = useState(false)
@@ -105,8 +115,14 @@ function Dashboard({ onViewPlot }) {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Fetch devices
-      const devicesResponse = await authFetch('/api/v1/devices/connected')
+      // The three requests are independent — fetch them in parallel so the
+      // page is ready after one round-trip instead of three
+      const [devicesResponse, testsResponse, eventsResponse] = await Promise.all([
+        authFetch('/api/v1/devices/connected'),
+        authFetch('/api/v1/tests?status=running&include_devices=true'),
+        authFetch('/api/v1/events/recent')
+      ])
+
       let devicesData = []
       if (devicesResponse.ok) {
         const data = await devicesResponse.json()
@@ -121,8 +137,6 @@ function Dashboard({ onViewPlot }) {
         }))
       }
 
-      // Fetch active tests
-      const testsResponse = await authFetch('/api/v1/tests?status=running&include_devices=true')
       let testsData = []
       let testMap = {}
       if (testsResponse.ok) {
@@ -139,8 +153,6 @@ function Dashboard({ onViewPlot }) {
         test_start_time: device.active_test_id ? testMap[device.active_test_id] : null
       }))
 
-      // Fetch recent events
-      const eventsResponse = await authFetch('/api/v1/events/recent')
       let eventsData = []
       if (eventsResponse.ok) {
         eventsData = await eventsResponse.json()
@@ -149,6 +161,15 @@ function Dashboard({ onViewPlot }) {
       setDevices(devicesData)
       setActiveTests(testsData)
       setRecentEvents(eventsData)
+      try {
+        sessionStorage.setItem('dashboardCache', JSON.stringify({
+          devices: devicesData,
+          activeTests: testsData,
+          recentEvents: eventsData
+        }))
+      } catch {
+        // Cache is best-effort only
+      }
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
@@ -288,8 +309,28 @@ function Dashboard({ onViewPlot }) {
     // Poll for updates every 30 seconds as backup
     const interval = setInterval(loadData, 30000)
 
-    // Setup SSE connection
-    const source = new EventSource('/stream');
+    // Setup SSE connection. The stream endpoint authenticates with a
+    // short-lived ?token= (EventSource cannot send Authorization headers),
+    // so reconnects must fetch a fresh token rather than relying on the
+    // browser's automatic EventSource retry.
+    let source = null
+    let streamStopped = false
+    let reconnectTimer = null
+
+    const connectStream = async () => {
+      try {
+        const tokenResponse = await authFetch('/api/v1/auth/stream-token')
+        if (!tokenResponse.ok || streamStopped) return
+        const { stream_token } = await tokenResponse.json()
+        if (streamStopped) return
+        source = new EventSource(`/stream?token=${encodeURIComponent(stream_token)}`)
+        attachStreamListeners(source)
+      } catch (error) {
+        console.error('Failed to open event stream:', error)
+      }
+    }
+
+    const attachStreamListeners = (source) => {
 
     source.addEventListener('tip', (e) => {
       const data = JSON.parse(e.data);
@@ -324,11 +365,21 @@ function Dashboard({ onViewPlot }) {
     source.onerror = (e) => {
       console.error("SSE Error:", e);
       source.close();
+      // Reconnect with a fresh token (the old one may have expired)
+      if (!streamStopped) {
+        reconnectTimer = setTimeout(connectStream, 5000)
+      }
     };
 
+    }
+
+    connectStream()
+
     return () => {
+      streamStopped = true
       clearInterval(interval);
-      source.close();
+      clearTimeout(reconnectTimer)
+      if (source) source.close();
     }
   }, [])
 

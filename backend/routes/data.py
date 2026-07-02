@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required
 from database.models import *
 from sqlalchemy import and_, or_
 from utils.auth import require_minimum_role, log_audit, get_current_user
+from utils.errors import internal_error
 
 data_bp = Blueprint('data', __name__)
 
@@ -203,7 +204,7 @@ def get_device_data(test_id, device_id):
         
     except Exception as e:
         print(f"DEBUG: Error occurred: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -263,7 +264,7 @@ def get_test_devices(test_id):
         return jsonify(response_data)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -406,7 +407,7 @@ def get_recent_events():
         return jsonify(events_list[:limit])
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -472,7 +473,7 @@ def delete_data_points(test_id, device_id):
 
     except Exception as e:
         print(f"ERROR in delete_data_points: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -506,7 +507,7 @@ def get_outliers(test_id, device_id):
 
     except Exception as e:
         print(f"ERROR in get_outliers: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
 
 
 @data_bp.route('/api/v1/tests/<int:test_id>/device/<int:device_id>/outliers', methods=['POST'])
@@ -571,7 +572,7 @@ def label_outliers(test_id, device_id):
     except Exception as e:
         db.session.rollback()
         print(f"ERROR in label_outliers: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
 
@@ -623,6 +624,6 @@ def remove_outlier_labels(test_id, device_id):
     except Exception as e:
         db.session.rollback()
         print(f"ERROR in remove_outlier_labels: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return internal_error(e)
     finally:
         db.session.close()
