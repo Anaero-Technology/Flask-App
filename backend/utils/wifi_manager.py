@@ -614,3 +614,173 @@ def _get_local_ip_socket() -> Optional[str]:
             s.close()
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Wired / IP configuration (Settings > Network)
+# ---------------------------------------------------------------------------
+
+# Kept on the ethernet profile in every mode so a bad static configuration
+# can never lock the user out of a direct-cable connection.
+RESCUE_ADDRESS = '169.254.50.1/16'
+
+_cached_ethernet_iface: Optional[str] = None
+
+
+def get_ethernet_interface() -> Optional[str]:
+    """Detect the ethernet interface name (cached). Returns None if none."""
+    global _cached_ethernet_iface
+    if not IS_LINUX:
+        return None
+    with _iface_lock:
+        if _cached_ethernet_iface:
+            return _cached_ethernet_iface
+        try:
+            result = _nmcli(['-t', '-f', 'DEVICE,TYPE', 'device'], timeout=5)
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    fields = split_terse_fields(line)
+                    if len(fields) >= 2 and fields[1] == 'ethernet':
+                        _cached_ethernet_iface = fields[0]
+                        return _cached_ethernet_iface
+        except Exception as e:
+            print(f"[NETWORK] Ethernet interface detection failed: {e}")
+        return None
+
+
+def _device_show_fields(device: str, fields: str) -> dict:
+    """Return `nmcli device show` terse output as {FIELD: [values...]}."""
+    out = {}
+    result = _nmcli(['-t', '-f', fields, 'device', 'show', device], timeout=5)
+    if result.returncode != 0:
+        return out
+    for line in result.stdout.strip().split('\n'):
+        key, sep, value = line.partition(':')
+        if not sep or not value:
+            continue
+        key = re.sub(r'\[\d+\]$', '', key)  # IP4.ADDRESS[1] -> IP4.ADDRESS
+        out.setdefault(key, []).append(value)
+    return out
+
+
+def get_network_status() -> List[dict]:
+    """Status of the ethernet and WiFi interfaces for the Settings UI."""
+    if not IS_LINUX:
+        return []
+    interfaces = []
+    try:
+        result = _nmcli(['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device'], timeout=5)
+        if result.returncode != 0:
+            return []
+        for line in result.stdout.strip().split('\n'):
+            fields = split_terse_fields(line)
+            if len(fields) < 4 or fields[1] not in ('ethernet', 'wifi'):
+                continue
+            device, dev_type, state, connection = fields[0], fields[1], fields[2], fields[3]
+
+            info = _device_show_fields(device, 'GENERAL.CON-UUID,IP4.ADDRESS,IP4.GATEWAY')
+            con_uuid = (info.get('GENERAL.CON-UUID') or [None])[0]
+
+            method = None
+            if con_uuid:
+                method_result = _nmcli(
+                    ['-t', '-f', 'ipv4.method', 'connection', 'show', con_uuid], timeout=5
+                )
+                if method_result.returncode == 0:
+                    method = method_result.stdout.strip().partition(':')[2] or None
+
+            interfaces.append({
+                'device': device,
+                'type': dev_type,
+                'state': state,
+                'connection': connection or None,
+                'method': method,
+                'addresses': info.get('IP4.ADDRESS', []),
+                'gateway': (info.get('IP4.GATEWAY') or [None])[0],
+            })
+    except Exception as e:
+        print(f"[NETWORK] Status query failed: {e}")
+    return interfaces
+
+
+def _find_ethernet_connection(iface: str) -> Optional[str]:
+    """UUID of the ethernet profile (the active one on iface, else the first
+    wired profile). Creates the default profile if none exists."""
+    try:
+        info = _device_show_fields(iface, 'GENERAL.CON-UUID')
+        uuid = (info.get('GENERAL.CON-UUID') or [None])[0]
+        if uuid:
+            return uuid
+
+        result = _nmcli(['-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'], timeout=5)
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                fields = split_terse_fields(line)
+                if len(fields) >= 3 and '802-3-ethernet' in fields[2]:
+                    return fields[1]
+
+        result = _nmcli(['connection', 'add', 'type', 'ethernet',
+                         'con-name', f'Ethernet {iface}', 'ifname', iface], timeout=10)
+        if result.returncode == 0:
+            info = _device_show_fields(iface, 'GENERAL.CON-UUID')
+            return (info.get('GENERAL.CON-UUID') or [None])[0]
+    except Exception as e:
+        print(f"[NETWORK] Ethernet profile lookup failed: {e}")
+    return None
+
+
+def set_ethernet_config(mode: str, address: Optional[str] = None,
+                        prefix: Optional[int] = None,
+                        gateway: Optional[str] = None,
+                        dns: Optional[List[str]] = None) -> Tuple[bool, str]:
+    """Configure the wired interface.
+
+    mode 'dhcp':   DHCP with the link-local rescue address as fallback
+                   (the shipped default from setup_ethernet*.sh).
+    mode 'static': fixed address/prefix (+ optional gateway/DNS), with the
+                   rescue address kept alongside.
+    Re-activates the profile, which briefly drops the wired link.
+    """
+    if not IS_LINUX:
+        return False, "Network configuration is only supported on the device"
+
+    iface = get_ethernet_interface()
+    if not iface:
+        return False, "No ethernet adapter found"
+
+    uuid = _find_ethernet_connection(iface)
+    if not uuid:
+        return False, "No ethernet connection profile found"
+
+    if mode == 'static':
+        props = [
+            'ipv4.method', 'manual',
+            'ipv4.addresses', f'{address}/{prefix},{RESCUE_ADDRESS}',
+            'ipv4.gateway', gateway or '',
+            'ipv4.dns', ','.join(dns or []),
+        ]
+    elif mode == 'dhcp':
+        props = [
+            'ipv4.method', 'auto',
+            'ipv4.addresses', RESCUE_ADDRESS,
+            'ipv4.gateway', '',
+            'ipv4.dns', '',
+            'ipv4.dhcp-timeout', '30',
+            'ipv4.may-fail', 'yes',
+        ]
+    else:
+        return False, f"Unknown mode '{mode}'"
+
+    result = _nmcli(['connection', 'modify', uuid] + props, timeout=15)
+    if result.returncode != 0:
+        return False, _result_error(result, "Failed to update ethernet profile")
+
+    result = _nmcli(['connection', 'up', uuid], timeout=45)
+    if result.returncode != 0:
+        return False, _result_error(result, "Saved, but failed to activate the new configuration")
+    return True, "Ethernet configuration applied"
+
+
+def reset_ethernet_config() -> Tuple[bool, str]:
+    """Restore the shipped default: DHCP with link-local fallback."""
+    return set_ethernet_config('dhcp')

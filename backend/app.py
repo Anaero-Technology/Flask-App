@@ -175,6 +175,7 @@ from routes.users import users_bp
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
 from routes.wifi import wifi_bp
+from routes.network import network_bp
 from routes.data import data_bp
 from routes.devices_tests import devices_tests_bp
 from routes.system import system_bp
@@ -185,6 +186,7 @@ app.register_blueprint(users_bp)
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
 app.register_blueprint(wifi_bp)
+app.register_blueprint(network_bp)
 app.register_blueprint(data_bp)
 app.register_blueprint(devices_tests_bp)
 app.register_blueprint(system_bp)

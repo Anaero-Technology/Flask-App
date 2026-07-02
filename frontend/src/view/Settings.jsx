@@ -35,6 +35,10 @@ function Settings() {
   const [pullMessage, setPullMessage] = useState({ text: '', type: '' })
   const [updateCheck, setUpdateCheck] = useState(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [networkStatus, setNetworkStatus] = useState(null)
+  const [ethForm, setEthForm] = useState({ mode: 'dhcp', address: '', prefix: '24', gateway: '', dns: '' })
+  const [applyingNetwork, setApplyingNetwork] = useState(false)
+  const [networkMessage, setNetworkMessage] = useState({ text: '', type: '' })
   const [runningTestsCount, setRunningTestsCount] = useState(0)
   const [serialLogInfo, setSerialLogInfo] = useState(null)
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
@@ -117,6 +121,83 @@ function Settings() {
     setUsername('')
     setMessage({ text: '', type: '' })
   }
+
+  const loadNetworkStatus = async () => {
+    try {
+      const response = await authFetch('/api/v1/network/status')
+      if (!response.ok) return
+      const data = await response.json()
+      setNetworkStatus(data)
+      // Pre-fill the form from the live config so Apply is never a surprise
+      const eth = data.interfaces?.find(i => i.type === 'ethernet')
+      if (eth) {
+        const staticAddr = (eth.addresses || []).find(a => !a.startsWith('169.254.'))
+        setEthForm(prev => ({
+          ...prev,
+          mode: eth.method === 'manual' ? 'static' : 'dhcp',
+          address: eth.method === 'manual' && staticAddr ? staticAddr.split('/')[0] : prev.address,
+          prefix: eth.method === 'manual' && staticAddr ? (staticAddr.split('/')[1] || '24') : prev.prefix,
+          gateway: eth.method === 'manual' ? (eth.gateway || '') : prev.gateway
+        }))
+      }
+    } catch {
+      // Status display is best-effort
+    }
+  }
+
+  const isCurrentInterface = (iface) => (
+    (iface?.addresses || []).some(a => a.split('/')[0] === window.location.hostname)
+  )
+
+  const networkStateLabel = (state) => {
+    if (!state) return ''
+    if (state === 'connected') return tPages('settings.network_state_connected')
+    if (state === 'disconnected') return tPages('settings.network_state_disconnected')
+    if (state === 'unavailable') return tPages('settings.network_state_unavailable')
+    if (state.startsWith('connecting')) return tPages('settings.network_state_connecting')
+    return state
+  }
+
+  const submitEthernetConfig = async (request) => {
+    const eth = networkStatus?.interfaces?.find(i => i.type === 'ethernet')
+    if (eth && isCurrentInterface(eth) && !window.confirm(tPages('settings.network_apply_warning'))) {
+      return
+    }
+    setApplyingNetwork(true)
+    setNetworkMessage({ text: '', type: '' })
+    try {
+      const response = await request()
+      const data = await response.json()
+      if (response.ok) {
+        setNetworkMessage({ text: data.message, type: 'success' })
+      } else {
+        setNetworkMessage({ text: data.error || tPages('settings.connection_failed'), type: 'error' })
+      }
+    } catch {
+      // Likely we were connected through the reconfigured interface
+      setNetworkMessage({ text: tPages('settings.network_apply_warning'), type: 'info' })
+    } finally {
+      setApplyingNetwork(false)
+      loadNetworkStatus()
+    }
+  }
+
+  const applyEthernetConfig = () => submitEthernetConfig(() => {
+    const body = ethForm.mode === 'static'
+      ? {
+          mode: 'static',
+          address: ethForm.address.trim(),
+          prefix: parseInt(ethForm.prefix, 10),
+          gateway: ethForm.gateway.trim(),
+          dns: ethForm.dns.trim()
+        }
+      : { mode: 'dhcp' }
+    return authFetch('/api/v1/network/ethernet', { method: 'PUT', body: JSON.stringify(body) })
+  })
+
+  const resetEthernetConfig = () => submitEthernetConfig(() => (
+    authFetch('/api/v1/network/ethernet/reset', { method: 'POST' })
+  ))
 
   const handleCancelConnect = () => {
     setSelectedNetworkIndex(null)
@@ -746,6 +827,7 @@ function Settings() {
     // Auto-scan on component mount
     scanNetworks()
     loadUserPreferences()
+    loadNetworkStatus()
   }, [])
 
   useEffect(() => {
@@ -873,6 +955,118 @@ function Settings() {
               {delimiterMessage.text}
             </div>
           )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.network')}</h2>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            {(networkStatus?.interfaces || []).map((iface) => (
+              <div key={iface.device} className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 last:border-b-0 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-900">
+                      {iface.type === 'ethernet' ? tPages('settings.network_ethernet') : tPages('settings.network_wifi')}
+                    </h3>
+                    <span className="text-[11px] text-gray-400">{iface.device}</span>
+                    {isCurrentInterface(iface) && (
+                      <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                        {tPages('settings.network_this_connection')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-gray-500">
+                    {networkStateLabel(iface.state)}
+                    {iface.method && <> • {iface.method === 'manual' ? tPages('settings.network_method_static') : tPages('settings.network_method_auto')}</>}
+                    {iface.gateway && <> • {tPages('settings.network_gateway')}: {iface.gateway}</>}
+                  </p>
+                </div>
+                <div className="flex flex-col items-start justify-center sm:items-end">
+                  {(iface.addresses || []).map((addr) => (
+                    <span key={addr} className="font-mono text-xs text-gray-700">{addr}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!networkStatus?.interfaces?.length && (
+              <div className="px-5 py-4 text-sm text-gray-500">{tPages('settings.network_no_data')}</div>
+            )}
+
+            {isSystemAdmin && (
+              <div className="border-t border-gray-200 bg-gray-50/60 px-4 py-3 sm:px-5">
+                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.network_ethernet_config')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">
+                  {tPages('settings.network_rescue_note', {
+                    address: (networkStatus?.rescue_address || '169.254.50.1/16').split('/')[0]
+                  })}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select
+                    value={ethForm.mode}
+                    onChange={(e) => setEthForm(prev => ({ ...prev, mode: e.target.value }))}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="dhcp">{tPages('settings.network_method_auto')}</option>
+                    <option value="static">{tPages('settings.network_method_static')}</option>
+                  </select>
+                  {ethForm.mode === 'static' && (
+                    <>
+                      <input
+                        type="text"
+                        value={ethForm.address}
+                        onChange={(e) => setEthForm(prev => ({ ...prev, address: e.target.value }))}
+                        placeholder={tPages('settings.network_ip_address')}
+                        className="w-36 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        max="32"
+                        value={ethForm.prefix}
+                        onChange={(e) => setEthForm(prev => ({ ...prev, prefix: e.target.value }))}
+                        placeholder={tPages('settings.network_prefix')}
+                        title={tPages('settings.network_prefix')}
+                        className="w-20 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        value={ethForm.gateway}
+                        onChange={(e) => setEthForm(prev => ({ ...prev, gateway: e.target.value }))}
+                        placeholder={tPages('settings.network_gateway_optional')}
+                        className="w-40 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        value={ethForm.dns}
+                        onChange={(e) => setEthForm(prev => ({ ...prev, dns: e.target.value }))}
+                        placeholder={tPages('settings.network_dns_optional')}
+                        className="w-56 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </>
+                  )}
+                  <button
+                    onClick={applyEthernetConfig}
+                    disabled={applyingNetwork || (ethForm.mode === 'static' && !ethForm.address.trim())}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  >
+                    {applyingNetwork && <Loader2 size={14} className="animate-spin" />}
+                    {tPages('settings.network_apply')}
+                  </button>
+                  <button
+                    onClick={resetEthernetConfig}
+                    disabled={applyingNetwork}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                  >
+                    {tPages('settings.network_reset')}
+                  </button>
+                </div>
+                {networkMessage.text && (
+                  <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${getMessageClasses(networkMessage.type)}`}>
+                    {networkMessage.text}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="space-y-3">
