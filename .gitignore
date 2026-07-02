@@ -1,17 +1,20 @@
 .env
 .DS_store
 .vscode/
-backend/__pycache__/
-backend/database/__pycache__/
-backend/routes/__pycache__/
-backend/utils/__pycache__/
+__pycache__/
 backend/instance
-backend/tests
 backend/known_issues.md
 backend/venv
 backend/logs/
 backend/uploads/
 node_modules
-package-lock.json
-package.json    
+/package-lock.json
+/package.json
 AGENTS.md
+
+# Local databases / dumps (never commit data)
+*.db
+*.sqlite
+*.sqlite3
+*.rdb
+*.db.bak-*

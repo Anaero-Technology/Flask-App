@@ -1,12 +1,10 @@
 import time
 import json
-import socket
 import threading
-import subprocess
-import platform
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
+from utils import wifi_manager
 
 
 class ChimeraHandler(SerialHandler):
@@ -894,144 +892,22 @@ class ChimeraHandler(SerialHandler):
             print(f"[CHIMERA WIFI] Error: {e}")
 
     def _connect_to_wifi(self, ssid: str, password: str) -> tuple[bool, str]:
-        """Connect to WiFi network"""
-        try:
-            system = platform.system()
+        """Connect to a WiFi network (screen flow: WPA-PSK only).
 
-            if system == 'Darwin':  # macOS
-                result = subprocess.run(
-                    ['networksetup', '-setairportnetwork', 'en0', ssid, password],
-                    capture_output=True, text=True, timeout=30
-                )
-                return (result.returncode == 0, result.stderr.strip() if result.stderr else "Success")
-            
-            elif system == 'Linux':
-                # Find existing connection profile for this SSID
-                existing_uuid = None
-                list_result = subprocess.run(
-                    ['sudo', 'nmcli', '-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'],
-                    capture_output=True, text=True, timeout=5
-                )
-                if list_result.returncode == 0:
-                    for line in list_result.stdout.strip().split('\n'):
-                        parts = line.split(':')
-                        if len(parts) >= 3 and parts[0] == ssid and '802-11-wireless' in parts[2]:
-                            existing_uuid = parts[1]
-                            break
-
-                if existing_uuid:
-                    # Update existing profile with new password and ensure key-mgmt is set
-                    subprocess.run(
-                        ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
-                         'wifi-sec.key-mgmt', 'wpa-psk',
-                         'wifi-sec.psk', password],
-                        capture_output=True, text=True, timeout=10
-                    )
-                else:
-                    # Create new profile with explicit key-mgmt
-                    result = subprocess.run(
-                        ['sudo', 'nmcli', 'connection', 'add',
-                         'type', 'wifi',
-                         'con-name', ssid,
-                         'ifname', 'wlan0',
-                         'ssid', ssid,
-                         'wifi-sec.key-mgmt', 'wpa-psk',
-                         'wifi-sec.psk', password],
-                        capture_output=True, text=True, timeout=10
-                    )
-                    if result.returncode != 0:
-                        return False, result.stderr.strip() if result.stderr else "Failed to create connection profile"
-                    existing_uuid = ssid
-
-                # Activate the connection
-                result = subprocess.run(
-                    ['sudo', 'nmcli', 'connection', 'up', existing_uuid or ssid],
-                    capture_output=True, text=True, timeout=30
-                )
-                if result.returncode == 0:
-                    return True, "Connected successfully"
-                return False, result.stderr.strip() if result.stderr else "Connection failed"
-            else:
-                return False, "Unsupported OS"
-
-        except Exception as e:
-            return False, str(e)
+        The Chimera screen can only collect an SSID and password, so this
+        delegates to the shared PSK-only path; enterprise (802.1X) networks
+        must be joined from the web UI.
+        """
+        return wifi_manager.connect_psk(ssid, password)
 
     def _get_local_ip(self) -> Optional[str]:
-        """Get the local IP address by attempting to connect to an external server"""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                s.connect(("8.8.8.8", 80))
-                return s.getsockname()[0]
-            finally:
-                s.close()
-        except Exception:
-            return None
+        """Get the local IP address (works on direct ethernet / link-local too)."""
+        return wifi_manager.get_local_ip()
 
     def _get_wifi_ssids(self) -> List[str]:
-        """Get list of available WiFi SSIDs"""
+        """Get list of available WiFi SSIDs (strongest first, escaped-colon safe)."""
         try:
-            system = platform.system()
-
-            if system == 'Darwin':  # macOS
-                result = subprocess.run(
-                    ['system_profiler', 'SPAirPortDataType'],
-                    capture_output=True,
-                    text=True,
-                    timeout=15
-                )
-
-                if result.returncode != 0:
-                    return []
-
-                ssids = []
-                lines = result.stdout.split('\n')
-                in_other_networks = False
-
-                for line in lines:
-                    stripped = line.strip()
-
-                    if 'Other Local Wi-Fi Networks:' in line:
-                        in_other_networks = True
-                        continue
-
-                    if not in_other_networks:
-                        continue
-
-                    # New network entry (ends with :)
-                    if stripped.endswith(':') and not any(x in stripped for x in ['PHY Mode', 'Channel', 'Network Type', 'Security', 'Signal']):
-                        ssid = stripped[:-1]  # Remove trailing ':'
-                        # Filter out system entries
-                        if ssid not in ['awdl0', 'llw0', 'Current Network Information'] and not ssid.startswith('en'):
-                            if ssid and ssid.strip():
-                                ssids.append(ssid)
-
-                return ssids
-
-            elif system == 'Linux':
-                # Use nmcli (NetworkManager)
-                result = subprocess.run(
-                    ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-
-                if result.returncode == 0:
-                    ssids = []
-                    lines = result.stdout.strip().split('\n')
-                    for line in lines:
-                        ssid = line.strip()
-                        if ssid and ssid != '--':
-                            ssids.append(ssid)
-                    return ssids
-
-                return []
-
-            else:
-                return []
-
+            return wifi_manager.list_ssids()
         except Exception as e:
             print(f"[CHIMERA IP MONITOR] Error scanning WiFi SSIDs: {e}")
             return []

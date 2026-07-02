@@ -83,4 +83,16 @@ i18n
     },
   });
 
+// Keep <html lang> in sync with the active language so the browser and
+// assistive tech see the correct language (and don't offer to "translate"
+// a page whose declared language doesn't match its content).
+const syncDocumentLanguage = (language) => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = language;
+  }
+};
+
+syncDocumentLanguage(i18n.language);
+i18n.on('languageChanged', syncDocumentLanguage);
+
 export default i18n;

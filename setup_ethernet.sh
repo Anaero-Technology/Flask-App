@@ -54,7 +54,7 @@ if [ -z "$ETH_CONN" ]; then
     sudo nmcli con add type ethernet ifname eth0 con-name "$ETH_CONN" \
         ipv4.method auto \
         ipv4.addresses 169.254.50.1/16 \
-        ipv4.dhcp-timeout 3 \
+        ipv4.dhcp-timeout 30 \
         ipv4.never-default no \
         ipv6.method link-local \
         connection.autoconnect yes
@@ -63,7 +63,7 @@ else
     sudo nmcli con modify "$ETH_CONN" \
         ipv4.method auto \
         ipv4.addresses 169.254.50.1/16 \
-        ipv4.dhcp-timeout 3 \
+        ipv4.dhcp-timeout 30 \
         ipv4.never-default no \
         ipv6.method link-local \
         connection.autoconnect yes

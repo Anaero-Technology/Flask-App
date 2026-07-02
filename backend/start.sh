@@ -18,6 +18,18 @@ if [ ! -f ".env" ]; then
     cp .env.example .env 2>/dev/null || { echo "Create .env file manually"; exit 1; }
 fi
 
+# Ensure a persistent JWT signing secret exists (never run with the default)
+if ! grep -qE '^JWT_SECRET_KEY=.+' .env; then
+    echo "Generating JWT_SECRET_KEY..."
+    JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    if grep -qE '^JWT_SECRET_KEY=' .env; then
+        # Replace empty value in place
+        sed -i.bak "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=${JWT_SECRET}/" .env && rm -f .env.bak
+    else
+        printf '\nJWT_SECRET_KEY=%s\n' "${JWT_SECRET}" >> .env
+    fi
+fi
+
 # Start Redis in background (no sudo)
 if ! pgrep -x "redis-server" > /dev/null; then
     echo "Starting Redis..."

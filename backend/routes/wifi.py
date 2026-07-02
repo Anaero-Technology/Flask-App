@@ -1,379 +1,21 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
-import subprocess
-import re
-import platform
-from utils.auth import require_role
+from utils import wifi_manager
 
 wifi_bp = Blueprint('wifi', __name__)
 
-def get_connected_ssid_linux():
-    """Get currently connected WiFi SSID on Linux."""
-    try:
-        result = subprocess.run(
-            ['iwgetid', '-r'],
-            capture_output=True,
-            text=True,
-            timeout=3
-        )
-        if result.returncode == 0:
-            ssid = result.stdout.strip()
-            return ssid if ssid else None
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(
-            ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
-            capture_output=True,
-            text=True,
-            timeout=3
-        )
-        if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                if line.startswith('yes:'):
-                    return line.split(':', 1)[1].strip() or None
-    except Exception:
-        pass
-
-    return None
-
-def get_connected_ssid_macos():
-    """Get currently connected WiFi SSID on macOS."""
-    try:
-        result = subprocess.run(
-            ['networksetup', '-getairportnetwork', 'en0'],
-            capture_output=True,
-            text=True,
-            timeout=3
-        )
-        if result.returncode == 0:
-            # Example output: "Current Wi-Fi Network: MyNetwork"
-            if ':' in result.stdout:
-                ssid = result.stdout.split(':', 1)[1].strip()
-                return ssid if ssid else None
-    except Exception:
-        pass
-    return None
-
-def get_wifi_networks_macos():
-    """Scan for WiFi networks on macOS"""
-    try:
-        # Use system_profiler to get WiFi networks
-        result = subprocess.run(
-            ['system_profiler', 'SPAirPortDataType'],
-            capture_output=True,
-            text=True,
-            timeout=15
-        )
-
-        if result.returncode != 0:
-            print(f"system_profiler failed with return code: {result.returncode}")
-            print(f"stderr: {result.stderr}")
-            return []
-
-        networks = []
-        lines = result.stdout.split('\n')
-
-        # Parse the "Other Local Wi-Fi Networks:" section
-        in_other_networks = False
-        current_ssid = None
-        current_network = {}
-
-        for line in lines:
-            stripped = line.strip()
-
-            if 'Other Local Wi-Fi Networks:' in line:
-                in_other_networks = True
-                continue
-
-            if not in_other_networks:
-                continue
-
-            # New network entry (ends with :)
-            if stripped.endswith(':') and not any(x in stripped for x in ['PHY Mode', 'Channel', 'Network Type', 'Security', 'Signal']):
-                # Save previous network if it exists
-                if current_ssid and current_network:
-                    current_network['ssid'] = current_ssid
-                    networks.append(current_network.copy())
-
-                # Start new network
-                current_ssid = stripped[:-1]  # Remove the trailing ':'
-                current_network = {
-                    'signal': 'N/A',
-                    'security': 'Unknown'
-                }
-
-            # Parse network details
-            if current_ssid:
-                if 'Security:' in line:
-                    security = stripped.split('Security:')[1].strip()
-                    current_network['security'] = security if security else 'Open'
-                elif 'Signal / Noise:' in line:
-                    match = re.search(r'(-?\d+)\s*dBm', stripped)
-                    if match:
-                        current_network['signal'] = match.group(1)
-
-        # Add the last network
-        if current_ssid and current_network:
-            current_network['ssid'] = current_ssid
-            networks.append(current_network.copy())
-
-        # Filter out invalid networks (interface names, system entries, etc.)
-        filtered_networks = []
-        for net in networks:
-            ssid = net['ssid']
-            # Skip system entries and interface names
-            if ssid in ['awdl0', 'llw0', 'Current Network Information'] or ssid.startswith('en'):
-                continue
-            # Skip empty SSIDs
-            if not ssid or ssid.strip() == '':
-                continue
-            filtered_networks.append(net)
-
-        connected_ssid = get_connected_ssid_macos()
-        for net in filtered_networks:
-            net['connected'] = connected_ssid is not None and net.get('ssid') == connected_ssid
-
-        print(f"Found {len(filtered_networks)} WiFi networks on macOS")
-        return filtered_networks
-
-    except subprocess.TimeoutExpired:
-        print("WiFi scan timed out on macOS")
-        return []
-    except Exception as e:
-        print(f"Error scanning WiFi networks on macOS: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def get_wifi_networks_linux():
-    """Scan for WiFi networks on Linux. Returns (networks, error_message) tuple."""
-    try:
-        connected_ssid = get_connected_ssid_linux()
-
-        # Trigger a rescan first (requires sudo)
-        subprocess.run(
-            ['sudo', 'nmcli', 'dev', 'wifi', 'rescan'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-
-        # Try nmcli first (NetworkManager)
-        result = subprocess.run(
-            ['sudo', 'nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode == 0:
-            networks = []
-            lines = result.stdout.strip().split('\n')
-
-            for line in lines:
-                if line.strip():
-                    parts = line.split(':')
-                    if len(parts) >= 4:
-                        in_use = parts[0].strip() == '*'
-                        ssid = parts[1]
-                        signal = parts[2] if len(parts) > 2 else 'N/A'
-                        security = ':'.join(parts[3:]) if len(parts) > 3 else 'Open'
-
-                        networks.append({
-                            'ssid': ssid,
-                            'signal': signal,
-                            'security': security,
-                            'connected': in_use or (connected_ssid is not None and ssid == connected_ssid)
-                        })
-
-            return networks, None
-
-        # Check if the error is due to missing WiFi adapter
-        stderr = result.stderr.strip().lower() if result.stderr else ''
-        if 'no wi-fi device' in stderr or 'wifi' in stderr and 'not found' in stderr:
-            return [], "No WiFi adapter found"
-
-        # Fallback to iwlist
-        result = subprocess.run(
-            ['sudo', 'iwlist', 'wlan0', 'scan'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-
-        if result.returncode == 0:
-            networks = []
-            current_network = {}
-
-            for line in result.stdout.split('\n'):
-                line = line.strip()
-
-                if 'ESSID:' in line:
-                    essid = re.search(r'ESSID:"(.*)"', line)
-                    if essid:
-                        current_network['ssid'] = essid.group(1)
-
-                elif 'Signal level=' in line:
-                    signal = re.search(r'Signal level=(-?\d+)', line)
-                    if signal:
-                        current_network['signal'] = signal.group(1)
-
-                elif 'Encryption key:' in line:
-                    if 'on' in line.lower():
-                        current_network['security'] = 'Secured'
-                    else:
-                        current_network['security'] = 'Open'
-
-                    # End of network info, add to list
-                    if 'ssid' in current_network:
-                        current_network['connected'] = (
-                            connected_ssid is not None
-                            and current_network.get('ssid') == connected_ssid
-                        )
-                        networks.append(current_network.copy())
-                    current_network = {}
-
-            return networks, None
-
-        return [], None
-    except subprocess.TimeoutExpired:
-        return [], "WiFi scan timed out"
-    except Exception as e:
-        print(f"Error scanning WiFi networks on Linux: {e}")
-        return [], None
-
-def connect_to_wifi_macos(ssid, password):
-    """Connect to WiFi network on macOS"""
-    try:
-        # Use networksetup to connect
-        result = subprocess.run(
-            ['networksetup', '-setairportnetwork', 'en0', ssid, password],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        if result.returncode == 0:
-            return True, "Successfully connected to WiFi"
-        else:
-            return False, result.stderr or "Failed to connect"
-    except Exception as e:
-        return False, str(e)
-
-def _find_existing_connection(ssid):
-    """Find existing NM connection profile UUID for an SSID."""
-    try:
-        result = subprocess.run(
-            ['sudo', 'nmcli', '-t', '-f', 'NAME,UUID,TYPE', 'connection', 'show'],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            for line in result.stdout.strip().split('\n'):
-                parts = line.split(':')
-                if len(parts) >= 3 and parts[0] == ssid and '802-11-wireless' in parts[2]:
-                    return parts[1]
-    except Exception:
-        pass
-    return None
-
-def connect_to_wifi_linux(ssid, password, username=None, security=''):
-    """Connect to WiFi network on Linux.
-
-    Avoids 'nmcli dev wifi connect' which corrupts saved profiles by
-    stripping key-mgmt. Instead, manages connection profiles directly.
-    Supports both WPA-PSK and WPA2 Enterprise (802.1X/EAP).
-    """
-    is_enterprise = '802.1X' in security or username
-    try:
-        existing_uuid = _find_existing_connection(ssid)
-
-        if existing_uuid:
-            if is_enterprise:
-                subprocess.run(
-                    ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
-                     'wifi-sec.key-mgmt', 'wpa-eap',
-                     '802-1x.eap', 'peap',
-                     '802-1x.phase2-auth', 'mschapv2',
-                     '802-1x.identity', username or '',
-                     '802-1x.password', password],
-                    capture_output=True, text=True, timeout=10
-                )
-            else:
-                subprocess.run(
-                    ['sudo', 'nmcli', 'connection', 'modify', existing_uuid,
-                     'wifi-sec.key-mgmt', 'wpa-psk',
-                     'wifi-sec.psk', password],
-                    capture_output=True, text=True, timeout=10
-                )
-        else:
-            if is_enterprise:
-                result = subprocess.run(
-                    ['sudo', 'nmcli', 'connection', 'add',
-                     'type', 'wifi',
-                     'con-name', ssid,
-                     'ifname', 'wlan0',
-                     'ssid', ssid,
-                     'wifi-sec.key-mgmt', 'wpa-eap',
-                     '802-1x.eap', 'peap',
-                     '802-1x.phase2-auth', 'mschapv2',
-                     '802-1x.identity', username or '',
-                     '802-1x.password', password],
-                    capture_output=True, text=True, timeout=10
-                )
-            else:
-                result = subprocess.run(
-                    ['sudo', 'nmcli', 'connection', 'add',
-                     'type', 'wifi',
-                     'con-name', ssid,
-                     'ifname', 'wlan0',
-                     'ssid', ssid,
-                     'wifi-sec.key-mgmt', 'wpa-psk',
-                     'wifi-sec.psk', password],
-                    capture_output=True, text=True, timeout=10
-                )
-            if result.returncode != 0:
-                return False, result.stderr or "Failed to create connection profile"
-            existing_uuid = _find_existing_connection(ssid)
-
-        # Activate the connection
-        result = subprocess.run(
-            ['sudo', 'nmcli', 'connection', 'up', existing_uuid or ssid],
-            capture_output=True, text=True, timeout=30
-        )
-
-        if result.returncode == 0:
-            return True, "Successfully connected to WiFi"
-        else:
-            stderr = result.stderr or ""
-            if 'Secrets were required' in stderr or 'passwd-file' in stderr:
-                return False, "Incorrect password"
-            if 'not found' in stderr:
-                return False, "Network not found. It may be out of range."
-            return False, stderr or "Failed to connect"
-    except Exception as e:
-        return False, str(e)
 
 @wifi_bp.route('/api/v1/wifi/scan', methods=['GET'])
 @jwt_required()
 def scan_wifi():
     """Scan for available WiFi networks"""
     try:
-        system = platform.system()
-        adapter_error = None
-
-        if system == 'Darwin':  # macOS
-            networks = get_wifi_networks_macos()
-        elif system == 'Linux':
-            networks, adapter_error = get_wifi_networks_linux()
-        else:
-            return jsonify({'error': 'Unsupported operating system'}), 400
+        networks, adapter_error = wifi_manager.scan_networks()
 
         if adapter_error:
             return jsonify({'error': adapter_error, 'networks': []})
 
-        # Remove duplicates by SSID
+        # Remove duplicates by SSID (keep first occurrence = strongest)
         seen_ssids = set()
         unique_networks = []
         for network in networks:
@@ -384,35 +26,49 @@ def scan_wifi():
         return jsonify({'networks': unique_networks})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[WIFI] Scan error: {e}")
+        return jsonify({'error': 'WiFi scan failed'}), 500
+
 
 @wifi_bp.route('/api/v1/wifi/connect', methods=['POST'])
 @jwt_required()
 def connect_wifi():
-    """Connect to a WiFi network"""
+    """Connect to a WiFi network.
+
+    Request body:
+        {
+            "ssid": "string",           # required
+            "password": "string",
+            "username": "string",       # WPA-Enterprise (802.1X) only
+            "security": "string",       # as reported by /wifi/scan
+            "eap_method": "peap|ttls|pwd",          # optional, default peap
+            "phase2": "mschapv2|pap|chap|..."        # optional, default mschapv2
+        }
+    """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         ssid = data.get('ssid')
         password = data.get('password', '')
-        username = data.get('username', '')
+        username = data.get('username', '') or None
         security = data.get('security', '')
+        eap_method = data.get('eap_method') or None
+        phase2 = data.get('phase2') or None
 
         if not ssid:
             return jsonify({'error': 'SSID is required'}), 400
 
-        system = platform.system()
-
-        if system == 'Darwin':  # macOS
-            success, message = connect_to_wifi_macos(ssid, password)
-        elif system == 'Linux':
-            success, message = connect_to_wifi_linux(ssid, password, username=username, security=security)
-        else:
-            return jsonify({'error': 'Unsupported operating system'}), 400
+        success, message = wifi_manager.connect(
+            ssid, password,
+            username=username,
+            security=security,
+            eap_method=eap_method,
+            phase2=phase2
+        )
 
         if success:
             return jsonify({'message': message})
-        else:
-            return jsonify({'error': message}), 400
+        return jsonify({'error': message}), 400
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[WIFI] Connect error: {e}")
+        return jsonify({'error': 'WiFi connection failed'}), 500

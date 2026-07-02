@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 function Settings() {
-  const { authFetch, canPerform } = useAuth();
+  const { authFetch, canPerform, refreshUser } = useAuth();
   const { changeLanguage, currentLanguage } = useI18n();
   const { t: tCommon } = useTranslation('common');
   const { t: tPages } = useTranslation('pages');
@@ -171,6 +171,14 @@ function Settings() {
   const getSignalStrength = (signal) => {
     const signalNum = parseInt(signal)
     if (isNaN(signalNum)) return tPages('settings.signal_unknown')
+
+    // nmcli reports signal as 0-100 percent; iwlist/macOS report dBm (negative)
+    if (signalNum >= 0) {
+      if (signalNum >= 75) return tPages('settings.signal_excellent')
+      if (signalNum >= 50) return tPages('settings.signal_good')
+      if (signalNum >= 30) return tPages('settings.signal_fair')
+      return tPages('settings.signal_weak')
+    }
 
     if (signalNum >= -50) return tPages('settings.signal_excellent')
     if (signalNum >= -60) return tPages('settings.signal_good')
@@ -557,6 +565,9 @@ function Settings() {
 
       if (response.ok) {
         setDelimiterMessage({ text: tPages('settings.delimiter_saved'), type: 'success' })
+        // Sync the cached user object so client-side CSV exports pick up
+        // the new delimiter without a page reload
+        refreshUser()
       } else {
         const data = await response.json()
         setDelimiterMessage({ text: data.error || tPages('settings.save_preference_failed'), type: 'error' })

@@ -36,7 +36,7 @@ if [ -z "${ETH_CONN}" ]; then
         connection.autoconnect yes \
         ipv4.method auto \
         ipv4.addresses "${FALLBACK_CIDR}" \
-        ipv4.dhcp-timeout 3 \
+        ipv4.dhcp-timeout 30 \
         ipv4.never-default no \
         ipv6.method link-local
 else
@@ -45,7 +45,7 @@ else
         connection.autoconnect yes \
         ipv4.method auto \
         ipv4.addresses "${FALLBACK_CIDR}" \
-        ipv4.dhcp-timeout 3 \
+        ipv4.dhcp-timeout 30 \
         ipv4.never-default no \
         ipv6.method link-local
 fi

@@ -9,6 +9,7 @@ from flask_jwt_extended import (
 import bcrypt
 from database.models import db, User
 from utils.auth import log_audit
+from utils.rate_limit import auth_limiter, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -42,6 +43,11 @@ def login():
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
 
+    # Brute-force protection: sliding window per (IP, username)
+    rate_key = f"login:{request.remote_addr}:{username.lower()}"
+    if not auth_limiter.is_allowed(rate_key, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS):
+        return jsonify({"error": "Too many login attempts. Try again in a few minutes."}), 429
+
     # Find user by username or email
     user = User.query.filter(
         (User.username == username) | (User.email == username)
@@ -50,12 +56,14 @@ def login():
     if not user:
         return jsonify({"error": "Invalid credentials"}), 401
 
+    # Verify password before revealing account state (prevents enumeration)
+    if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+        return jsonify({"error": "Invalid credentials"}), 401
+
     if not user.is_active:
         return jsonify({"error": "Account is deactivated"}), 403
 
-    # Verify password
-    if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
-        return jsonify({"error": "Invalid credentials"}), 401
+    auth_limiter.reset(rate_key)
 
     # Create tokens (identity must be a string for flask-jwt-extended)
     access_token = create_access_token(identity=str(user.id))
@@ -151,9 +159,14 @@ def verify_password():
     if not password:
         return jsonify({"error": "Password is required"}), 400
 
+    rate_key = f"verify:{user.id}"
+    if not auth_limiter.is_allowed(rate_key, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS):
+        return jsonify({"error": "Too many attempts. Try again in a few minutes."}), 429
+
     if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
         return jsonify({"error": "Password is incorrect"}), 401
 
+    auth_limiter.reset(rate_key)
     return jsonify({"valid": True})
 
 

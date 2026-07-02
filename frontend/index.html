@@ -1,9 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/anaero-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The app has built-in i18n (en/es/fr/de/zh). Browser machine
+         translation (e.g. Chrome auto-translate) mutates the DOM behind
+         React's back and crashes the UI (NotFoundError: removeChild),
+         so it is disabled; users switch language in Settings instead. -->
+    <meta name="google" content="notranslate" />
     <title>Data Digester</title>
   </head>
   <body>

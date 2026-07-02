@@ -331,7 +331,7 @@ function BlackBoxTestConfig({
     showActiveOnly = false,
     saveInactiveAsEmpty = false
 }) {
-    const { authFetch } = useAuth();
+    const { authFetch, user } = useAuth();
     const { t: tPages } = useTranslation('pages');
     const draftStorageKey = `test_form_blackbox_drafts_${device.id}`;
     const expandedStorageKey = `test_form_blackbox_expanded_${device.id}`;
@@ -827,9 +827,12 @@ function BlackBoxTestConfig({
             }));
 
         const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        // Honour the user's CSV delimiter preference (values are always
+        // quoted, so any delimiter is safe)
+        const delimiter = user?.csv_delimiter || ',';
 
         const csvRows = [
-            headers.map(escapeCsv).join(','),
+            headers.map(escapeCsv).join(delimiter),
             ...normalizedRows.map(row => {
                 const data = [
                     row.sampleDescription,
@@ -842,7 +845,7 @@ function BlackBoxTestConfig({
                 if (showChimeraChannel) {
                     data.push(row.chimeraChannel);
                 }
-                return data.map(escapeCsv).join(',');
+                return data.map(escapeCsv).join(delimiter);
             })
         ];
 

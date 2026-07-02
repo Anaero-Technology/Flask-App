@@ -31,7 +31,7 @@ const formatGasNameUnicode = (name) => {
 };
 
 function Plot({ initialParams, onNavigate }) {
-    const { authFetch, canPerform } = useAuth(); 
+    const { authFetch, canPerform, user } = useAuth();
     const toast = useToast();
     const { t: tPages } = useTranslation('pages');
     const { theme } = useTheme();
@@ -399,11 +399,20 @@ function Plot({ initialParams, onNavigate }) {
         });
     }, [selectedPoints, selectedDataColumns, toast, tPages]);
 
-    // Download selected data as CSV
+    // Download selected data as CSV (honours the user's delimiter preference)
     const downloadSelectedData = useCallback(() => {
         if (selectedPoints.length === 0) return;
 
-        const headers = selectedDataColumns.map(col => col.header).join(',');
+        const delimiter = user?.csv_delimiter || ',';
+        const escapeCsv = (value) => {
+            const text = String(value);
+            if (text.includes(delimiter) || text.includes('"') || text.includes('\n')) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        };
+
+        const headers = selectedDataColumns.map(col => escapeCsv(col.header)).join(delimiter);
         const rows = selectedPoints.map(point => {
             return selectedDataColumns.map(col => {
                 let value = point[col.accessorKey];
@@ -414,11 +423,8 @@ function Plot({ initialParams, onNavigate }) {
                     value = value.toFixed(2);
                 }
                 value = value !== undefined && value !== null ? value : '-';
-                if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-                    value = `"${value.replace(/"/g, '""')}"`;
-                }
-                return value;
-            }).join(',');
+                return escapeCsv(value);
+            }).join(delimiter);
         });
 
         const csv = [headers, ...rows].join('\n');
@@ -431,7 +437,7 @@ function Plot({ initialParams, onNavigate }) {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }, [selectedPoints, selectedDataColumns, selectedTest]);
+    }, [selectedPoints, selectedDataColumns, selectedTest, user]);
 
     const selectedTable = useReactTable({
         data: selectedPoints,

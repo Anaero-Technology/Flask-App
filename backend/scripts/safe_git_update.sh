@@ -54,6 +54,8 @@ rollback() {
   (
     cd "${FRONTEND_DIR}"
     npm install --no-audit --no-fund --silent
+    # Rebuild: a failed update may have left a stale/broken dist from the new code
+    npm run build --silent
   )
   log "Rollback completed"
 }

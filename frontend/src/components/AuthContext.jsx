@@ -181,6 +181,22 @@ export const AuthProvider = ({ children }) => {
         return allowedRoles.includes(user.role);
     };
 
+    // Re-fetch the current user (e.g. after preferences change) so cached
+    // fields like csv_delimiter stay in sync without a page reload
+    const refreshUser = useCallback(async () => {
+        try {
+            const response = await authFetch(`${API_BASE}/auth/me`);
+            if (response.ok) {
+                const userData = await response.json();
+                setUser(userData);
+                return userData;
+            }
+        } catch (err) {
+            console.error('Failed to refresh user:', err);
+        }
+        return null;
+    }, [authFetch]);
+
     // Fetch current user on mount
     useEffect(() => {
         const fetchUser = async () => {
@@ -251,6 +267,7 @@ export const AuthProvider = ({ children }) => {
         hasRole,
         canPerform,
         authFetch,
+        refreshUser,
         clearError: () => setError(null),
     };
 

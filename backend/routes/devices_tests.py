@@ -1729,7 +1729,10 @@ def upload_csv_configuration():
             dialect = csv.Sniffer().sniff(sample_text, delimiters=[',', ';', '\t'])
             delimiter = dialect.delimiter
         except csv.Error:
-            delimiter = ','
+            # Sniffing failed (e.g. single-column file): fall back to the
+            # uploader's configured CSV delimiter preference
+            user = User.query.get(get_jwt_identity())
+            delimiter = user.csv_delimiter if user and user.csv_delimiter else ','
 
         stream = io.StringIO(text_content, newline=None)
         csv_reader = csv.DictReader(stream, delimiter=delimiter)
