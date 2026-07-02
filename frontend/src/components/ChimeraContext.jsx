@@ -185,15 +185,25 @@ export const ChimeraProvider = ({ children }) => {
                     phaseDuration = channelTimesMs[channelIndex] || 600000;
                 }
 
-                setChimeraStates(prev => ({
-                    ...prev,
-                    [deviceId]: {
-                        status: data.status,
-                        channel: data.channel,
-                        phaseStartTime: now,
-                        phaseDuration: phaseDuration
+                setChimeraStates(prev => {
+                    // Duplicate event for the phase we're already in (older
+                    // backends republish on valve-close; SSE reconnects can
+                    // also redeliver) — keep the original start time so the
+                    // progress animation doesn't restart mid-phase
+                    const prevState = prev[deviceId];
+                    if (prevState && prevState.status === data.status && prevState.channel === data.channel) {
+                        return prev;
                     }
-                }));
+                    return {
+                        ...prev,
+                        [deviceId]: {
+                            status: data.status,
+                            channel: data.channel,
+                            phaseStartTime: now,
+                            phaseDuration: phaseDuration
+                        }
+                    };
+                });
 
                 // Clear status after timeout (in case we miss close events)
                 if (chimeraTimeoutsRef.current[deviceId]) {

@@ -313,6 +313,24 @@ class ChimeraHandler(SerialHandler):
                         self.current_status = 'reading'
                         self.current_channel = valve_num + 1
                         print(f"[CHIMERA STATUS] Reading channel {self.current_channel}")
+
+                    # Publish only on 'opened': valve-close events don't change
+                    # the phase, and re-publishing the same status made the UI
+                    # restart its phase-progress animation mid-cycle.
+                    if self.app and hasattr(self, 'id'):
+                        try:
+                            with self.app.app_context():
+                                from flask_sse import sse
+                                sse.publish(
+                                    {
+                                        "device_id": self.id,
+                                        "status": self.current_status,
+                                        "channel": self.current_channel
+                                    },
+                                    type='chimera_status'
+                                )
+                        except Exception as e:
+                            print(f"[CHIMERA STATUS] SSE publish failed: {e}")
                 elif state == 'closed':
                     if valve_num == 15:
                         # Flush valve closed - will transition to reading
@@ -320,22 +338,6 @@ class ChimeraHandler(SerialHandler):
                     else:
                         # Channel valve closed
                         print(f"[CHIMERA STATUS] Channel {valve_num + 1} closed")
-
-                # Send SSE notification for status change
-                if self.app and hasattr(self, 'id'):
-                    try:
-                        with self.app.app_context():
-                            from flask_sse import sse
-                            sse.publish(
-                                {
-                                    "device_id": self.id,
-                                    "status": self.current_status,
-                                    "channel": self.current_channel
-                                },
-                                type='chimera_status'
-                            )
-                    except Exception as e:
-                        print(f"[CHIMERA STATUS] SSE publish failed: {e}")
 
         except (ValueError, IndexError) as e:
             print(f"[CHIMERA STATUS] Failed to parse valve message: {e} - Line: {line}")
