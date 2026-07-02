@@ -225,7 +225,9 @@ function Settings() {
       }
 
       try {
-        const response = await authFetch(
+        // Plain fetch: the endpoint is unauthenticated because the update
+        // restarts the backend, which may invalidate this session's JWT.
+        const response = await fetch(
           `/api/v1/system/update-status?triggered_at=${encodeURIComponent(triggeredAt)}`
         )
         if (!response.ok) return

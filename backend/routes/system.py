@@ -310,10 +310,14 @@ def git_pull():
 
 
 @system_bp.route("/api/v1/system/update-status", methods=['GET'])
-@jwt_required()
-@require_role(['admin'])
 def update_status():
-    """Return the result of the most recent software update."""
+    """Return the result of the most recent software update.
+
+    Deliberately unauthenticated: the updater restarts the backend
+    mid-update, which can invalidate the caller's JWT (e.g. when the signing
+    key changes), and the polling client must still be able to read the
+    outcome. Only exposes the parsed tail of update.log.
+    """
     import re
     from datetime import datetime
 
