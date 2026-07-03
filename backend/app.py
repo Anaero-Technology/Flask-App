@@ -165,15 +165,18 @@ if _should_start_auto_connect():
     auto_connect_thread = threading.Thread(target=auto_connect_devices, daemon=True)
     auto_connect_thread.start()
 
-
-@atexit.register
-def on_exit():
-    with app.app_context():
-        devices = db.session.query(Device).all()
-        for device in devices:
-            device.connected = False
-        db.session.commit()
-        db.session.close()
+    # Only the real server process may mark devices disconnected on exit.
+    # Utility scripts and CLI commands also import this module, and an
+    # unconditional atexit hook made every one of them clobber the connected
+    # flags of the still-running server's devices when they exited.
+    @atexit.register
+    def on_exit():
+        with app.app_context():
+            devices = db.session.query(Device).all()
+            for device in devices:
+                device.connected = False
+            db.session.commit()
+            db.session.close()
 
 
 from routes.auth import auth_bp
