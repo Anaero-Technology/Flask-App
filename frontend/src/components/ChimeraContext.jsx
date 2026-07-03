@@ -41,6 +41,7 @@ export const ChimeraProvider = ({ children }) => {
     const [chimeraStates, setChimeraStates] = useState({});
     // Use ref for eventSources to avoid closure issues
     const eventSourcesRef = useRef({});
+    const reconnectTimersRef = useRef({});
     // Use ref for finishing timeouts
     const finishingTimeoutsRef = useRef({});
     // Use ref for chimera status timeout (to clear stale status)
@@ -81,6 +82,45 @@ export const ChimeraProvider = ({ children }) => {
             const response = await authFetch(`/api/v1/chimera/${deviceId}/sensor_info`);
             if (response.ok) {
                 const data = await response.json();
+
+                // Seed the flushing/reading progress ring from the device's
+                // current phase, so it survives page reloads instead of
+                // waiting for the next valve event
+                if (data.current_phase) {
+                    const timing = chimeraTimingRef.current[deviceId] || {};
+                    let phaseDuration = 30000;
+                    if (data.current_phase.status === 'flushing') {
+                        phaseDuration = timing.flushTimeMs || 30000;
+                    } else {
+                        const channelIndex = (data.current_phase.channel || 1) - 1;
+                        phaseDuration = (timing.channelTimesMs || [])[channelIndex] || 600000;
+                    }
+                    const elapsed = data.current_phase.elapsed_ms || 0;
+
+                    setChimeraStates(prev => ({
+                        ...prev,
+                        [deviceId]: {
+                            status: data.current_phase.status,
+                            channel: data.current_phase.channel,
+                            phaseStartTime: Date.now() - elapsed,
+                            phaseDuration: phaseDuration
+                        }
+                    }));
+
+                    // Clear after the remaining phase time (plus buffer) in
+                    // case no further events arrive
+                    if (chimeraTimeoutsRef.current[deviceId]) {
+                        clearTimeout(chimeraTimeoutsRef.current[deviceId]);
+                    }
+                    chimeraTimeoutsRef.current[deviceId] = setTimeout(() => {
+                        setChimeraStates(prev => {
+                            const newState = { ...prev };
+                            delete newState[deviceId];
+                            return newState;
+                        });
+                    }, Math.max(phaseDuration - elapsed, 0) + 5000);
+                }
+
                 if (data.is_calibrating) {
                     setCalibrationStates(prev => ({
                         ...prev,
@@ -260,13 +300,25 @@ export const ChimeraProvider = ({ children }) => {
         });
 
         eventSource.onerror = () => {
-            // Don't close on error - SSE will auto-reconnect
+            // The ?token= in the URL is short-lived, so the browser's own
+            // retry would replay an expired token and be rejected — the
+            // stream would die silently. Reconnect with a fresh token.
+            eventSource.close();
+            if (eventSourcesRef.current[deviceId] === eventSource) {
+                delete eventSourcesRef.current[deviceId];
+                clearTimeout(reconnectTimersRef.current[deviceId]);
+                reconnectTimersRef.current[deviceId] = setTimeout(() => {
+                    subscribeToDevice(deviceId);
+                }, 5000);
+            }
         };
 
         eventSourcesRef.current[deviceId] = eventSource;
     };
 
     const unsubscribeFromDevice = (deviceId) => {
+        clearTimeout(reconnectTimersRef.current[deviceId]);
+        delete reconnectTimersRef.current[deviceId];
         if (eventSourcesRef.current[deviceId]) {
             eventSourcesRef.current[deviceId].close();
             delete eventSourcesRef.current[deviceId];
@@ -284,6 +336,8 @@ export const ChimeraProvider = ({ children }) => {
     // Cleanup all connections on unmount
     useEffect(() => {
         return () => {
+            Object.values(reconnectTimersRef.current).forEach(t => clearTimeout(t));
+            reconnectTimersRef.current = {};
             Object.values(eventSourcesRef.current).forEach(es => es.close());
             eventSourcesRef.current = {};
         };

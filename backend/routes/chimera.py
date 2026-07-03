@@ -747,13 +747,27 @@ def get_sensor_info(device_id):
             return jsonify({"error": "Device handler not found"}), 404
         
         success, sensor_types, message = handler.get_sensor_info()
-        
+
+        # Current flushing/reading phase, so a freshly opened page can show
+        # the progress ring immediately instead of waiting for the next
+        # valve event (reading phases can run for many minutes).
+        current_phase = None
+        if (handler.is_logging and handler.current_status in ('flushing', 'reading')
+                and handler.current_status_ts):
+            import time
+            current_phase = {
+                "status": handler.current_status,
+                "channel": handler.current_channel,
+                "elapsed_ms": int((time.time() - handler.current_status_ts) * 1000)
+            }
+
         return jsonify({
             "success": success,
             "sensor_types": sensor_types,
-            "message": message
+            "message": message,
+            "current_phase": current_phase
         })
-        
+
     finally:
         db.session.close()
 

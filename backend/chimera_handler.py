@@ -17,6 +17,7 @@ class ChimeraHandler(SerialHandler):
         self.is_logging = False
         self.current_channel = 0
         self.current_status = 'idle'  # 'idle', 'flushing', 'reading'
+        self.current_status_ts = None  # time.time() when the phase last changed
         self.seconds_elapsed = 0
         self.channel_times_ms = [0] * 15  # Open/read times for channels 0-14
         self.flush_time_ms = 0  # Flush time (channel 15)
@@ -313,6 +314,7 @@ class ChimeraHandler(SerialHandler):
                         self.current_status = 'reading'
                         self.current_channel = valve_num + 1
                         print(f"[CHIMERA STATUS] Reading channel {self.current_channel}")
+                    self.current_status_ts = time.time()
 
                     # Publish only on 'opened': valve-close events don't change
                     # the phase, and re-publishing the same status made the UI
