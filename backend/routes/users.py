@@ -274,12 +274,13 @@ def list_roles():
 @jwt_required()
 def update_user_preferences():
     """
-    Update current user's preferences (csv_delimiter, language).
+    Update current user's preferences (csv_delimiter, language, time_display).
 
     Request body:
         {
             "csv_delimiter": "string",  // ',', ';', or '\t'
-            "language": "string"        // 'en', 'es', 'fr', 'de'
+            "language": "string",       // 'en', 'es', 'fr', 'de'
+            "time_display": "string"    // 'local' or 'utc'
         }
     """
     user_id = get_jwt_identity()
@@ -306,6 +307,13 @@ def update_user_preferences():
         if language not in ['en', 'es', 'fr', 'de', 'zh']:
             return jsonify({"error": "Invalid language. Must be 'en', 'es', 'fr', 'de', or 'zh'"}), 400
         user.language = language
+
+    if 'time_display' in data:
+        time_display = data['time_display']
+        # Validate time display preference
+        if time_display not in ['local', 'utc']:
+            return jsonify({"error": "Invalid time_display. Must be 'local' or 'utc'"}), 400
+        user.time_display = time_display
 
     db.session.commit()
 

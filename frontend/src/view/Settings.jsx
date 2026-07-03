@@ -73,6 +73,9 @@ function Settings() {
   const [csvDelimiter, setCsvDelimiter] = useState(',')
   const [savingDelimiter, setSavingDelimiter] = useState(false)
   const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
+  const [timeDisplay, setTimeDisplay] = useState('local')
+  const [savingTimeDisplay, setSavingTimeDisplay] = useState(false)
+  const [timeDisplayMessage, setTimeDisplayMessage] = useState({ text: '', type: '' })
   const [language, setLanguage] = useState('en')
   const [savingLanguage, setSavingLanguage] = useState(false)
   const [languageMessage, setLanguageMessage] = useState({ text: '', type: '' })
@@ -84,6 +87,7 @@ function Settings() {
   useAutoDismiss(message, setMessage)
   useAutoDismiss(networkMessage, setNetworkMessage)
   useAutoDismiss(delimiterMessage, setDelimiterMessage)
+  useAutoDismiss(timeDisplayMessage, setTimeDisplayMessage)
   useAutoDismiss(languageMessage, setLanguageMessage)
   useAutoDismiss(brandingMessage, setBrandingMessage)
   const isSystemAdmin = canPerform('system_settings')
@@ -681,6 +685,7 @@ function Settings() {
         const user = await response.json()
         setCsvDelimiter(user.csv_delimiter || ',')
         setLanguage(user.language || 'en')
+        setTimeDisplay(user.time_display || 'local')
       }
     } catch (error) {
       console.error('Error loading user preferences:', error)
@@ -712,6 +717,34 @@ function Settings() {
       setDelimiterMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
     } finally {
       setSavingDelimiter(false)
+    }
+  }
+
+  const saveTimeDisplayPreference = async () => {
+    setSavingTimeDisplay(true)
+    setTimeDisplayMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/user/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          time_display: timeDisplay
+        })
+      })
+
+      if (response.ok) {
+        setTimeDisplayMessage({ text: tPages('settings.time_display_saved'), type: 'success' })
+        // Sync the cached user object so timestamps across the app pick up
+        // the new preference without a page reload
+        refreshUser()
+      } else {
+        const data = await response.json()
+        setTimeDisplayMessage({ text: data.error || tPages('settings.save_preference_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setTimeDisplayMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
+    } finally {
+      setSavingTimeDisplay(false)
     }
   }
 
@@ -993,6 +1026,30 @@ function Settings() {
                 </button>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.time_display')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.time_display_help')}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={timeDisplay}
+                  onChange={(e) => setTimeDisplay(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="local">{tPages('settings.time_local')}</option>
+                  <option value="utc">{tPages('settings.time_utc')}</option>
+                </select>
+                <button
+                  onClick={saveTimeDisplayPreference}
+                  disabled={savingTimeDisplay}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {savingTimeDisplay ? tPages('settings.saving') : tCommon('save')}
+                </button>
+              </div>
+            </div>
           </div>
 
           {languageMessage.text && (
@@ -1003,6 +1060,11 @@ function Settings() {
           {delimiterMessage.text && (
             <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(delimiterMessage.type)}`}>
               {delimiterMessage.text}
+            </div>
+          )}
+          {timeDisplayMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(timeDisplayMessage.type)}`}>
+              {timeDisplayMessage.text}
             </div>
           )}
         </section>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
+import { formatDate, tzQueryParam } from '../utils/timeFormat';
 import {
     UserPlus,
     Edit2,
@@ -189,7 +190,7 @@ function UserManagement() {
     const handleDownloadAuditLog = async () => {
         setDownloadingAuditLog(true);
         try {
-            const response = await authFetch('/api/v1/audit-logs/download');
+            const response = await authFetch(`/api/v1/audit-logs/download${tzQueryParam(currentUser?.time_display)}`);
             if (response.ok) {
                 // Get the filename from the Content-Disposition header
                 const contentDisposition = response.headers.get('content-disposition');
@@ -319,7 +320,7 @@ function UserManagement() {
                                         )}
                                     </td>
                                     <td className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap">
-                                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                                        {user.created_at ? formatDate(user.created_at, currentUser?.time_display) : '-'}
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                         <div className="flex items-center justify-end gap-1">

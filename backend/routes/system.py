@@ -210,6 +210,7 @@ def delete_database():
                 "created_by": admin.created_by if admin.created_by in admin_ids else None,
                 "csv_delimiter": admin.csv_delimiter,
                 "language": admin.language,
+                "time_display": admin.time_display,
                 "profile_picture_filename": admin.profile_picture_filename,
             })
 
@@ -228,6 +229,7 @@ def delete_database():
                 created_by=admin_data["created_by"],
                 csv_delimiter=admin_data["csv_delimiter"],
                 language=admin_data["language"],
+                time_display=admin_data["time_display"],
                 profile_picture_filename=admin_data["profile_picture_filename"],
             )
             admin.id = admin_data["id"]
@@ -582,7 +584,8 @@ def download_audit_logs():
     try:
         import io
         import csv
-        from datetime import datetime
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
         from flask import send_file
 
         # Get filters from query parameters
@@ -614,6 +617,26 @@ def download_audit_logs():
         user = User.query.get(current_user_id)
         csv_delimiter = user.csv_delimiter if user else ','
 
+        # Timestamps are stored as naive UTC datetimes. When the user prefers
+        # local time the frontend passes its IANA timezone as ?tz=...; without
+        # it we format in UTC with an explicit suffix. Format matches the UI
+        # display ('YYYY-MM-DD HH:MM:SS').
+        display_tz = timezone.utc
+        tz_suffix = ' UTC'
+        tz_name = request.args.get('tz')
+        if tz_name:
+            try:
+                display_tz = ZoneInfo(tz_name)
+                tz_suffix = ''
+            except (KeyError, ValueError):
+                pass
+
+        def format_ts(naive_utc_dt):
+            if naive_utc_dt is None:
+                return ''
+            localized = naive_utc_dt.replace(tzinfo=timezone.utc).astimezone(display_tz)
+            return localized.strftime('%Y-%m-%d %H:%M:%S') + tz_suffix
+
         # Create CSV
         csv_headers = [
             'Timestamp', 'User ID', 'Username', 'Action', 'Target Type',
@@ -626,7 +649,7 @@ def download_audit_logs():
 
         for log, username in logs:
             writer.writerow([
-                log.timestamp.isoformat() if log.timestamp else '',
+                format_ts(log.timestamp),
                 log.user_id or '',
                 username or 'Unknown',
                 log.action or '',

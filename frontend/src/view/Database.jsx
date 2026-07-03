@@ -11,12 +11,14 @@ import { ChevronDown, ChevronRight, Edit2 } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import { useTranslation } from 'react-i18next';
+import { formatDate, tzQueryParam } from '../utils/timeFormat';
 
 const Database = ({ onViewPlot, initialParams }) => {
     const MAX_SAMPLE_IMAGE_BYTES = 2 * 1024 * 1024;
     const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-    const { authFetch, canPerform } = useAuth();
+    const { authFetch, canPerform, user } = useAuth();
+    const timeDisplay = user?.time_display || 'local';
     const { t: tPages } = useTranslation('pages');
     const [activeTable, setActiveTable] = useState('tests');
     const [data, setData] = useState([]);
@@ -1333,7 +1335,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                             </div>
                             <div>
                                 <span className="text-xs uppercase text-gray-400 block">{tPages('database.date_created')}</span>
-                                <span>{sample.date_created ? new Date(sample.date_created).toLocaleDateString() : tPages('database.na')}</span>
+                                <span>{sample.date_created ? formatDate(sample.date_created, timeDisplay) : tPages('database.na')}</span>
                             </div>
                         </div>
 
@@ -1410,9 +1412,9 @@ const Database = ({ onViewPlot, initialParams }) => {
             accessorKey: 'date_created',
             header: tPages('database.date_created'),
             size: 140,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : tPages('database.na')
+            cell: info => info.getValue() ? formatDate(info.getValue(), timeDisplay) : tPages('database.na')
         }
-    ], [tPages, expandedSamples]);
+    ], [tPages, expandedSamples, timeDisplay]);
 
     const testsColumns = useMemo(() => [
         {
@@ -1537,13 +1539,13 @@ const Database = ({ onViewPlot, initialParams }) => {
             accessorKey: 'date_started',
             header: tPages('database.started'),
             size: 85,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
+            cell: info => info.getValue() ? formatDate(info.getValue(), timeDisplay) : '-'
         },
         {
             accessorKey: 'date_ended',
             header: tPages('database.ended'),
             size: 85,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
+            cell: info => info.getValue() ? formatDate(info.getValue(), timeDisplay) : '-'
         },
         { accessorKey: 'created_by', header: tPages('database.created_by'), size: 90 },
         {
@@ -1572,7 +1574,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                                 <button
                                     onClick={async () => {
                                         try {
-                                            const response = await authFetch(`/api/v1/tests/${test.id}/download`);
+                                            const response = await authFetch(`/api/v1/tests/${test.id}/download${tzQueryParam(timeDisplay)}`);
                                             if (response.ok) {
                                                 const blob = await response.blob();
                                                 const url = window.URL.createObjectURL(blob);
@@ -1683,7 +1685,8 @@ const Database = ({ onViewPlot, initialParams }) => {
         startEditingTest,
         updateTestDraft,
         saveTest,
-        cancelEditingTest
+        cancelEditingTest,
+        timeDisplay
     ]);
 
     const columns = useMemo(() => {

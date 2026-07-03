@@ -1953,7 +1953,8 @@ def download_test_data(test_id):
         import io
         import csv
         import zipfile
-        from datetime import datetime
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
         from flask import send_file
 
         test = Test.query.get(test_id)
@@ -1964,6 +1965,25 @@ def download_test_data(test_id):
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         csv_delimiter = user.csv_delimiter if user else ','
+
+        # Timestamps are stored as UTC epoch seconds. When the user prefers
+        # local time the frontend passes its IANA timezone as ?tz=...; without
+        # it we format in UTC with an explicit suffix. Format matches the UI
+        # display ('YYYY-MM-DD HH:MM:SS').
+        display_tz = timezone.utc
+        tz_suffix = ' UTC'
+        tz_name = request.args.get('tz')
+        if tz_name:
+            try:
+                display_tz = ZoneInfo(tz_name)
+                tz_suffix = ''
+            except (KeyError, ValueError):
+                pass
+
+        def format_ts(epoch_seconds):
+            if epoch_seconds is None:
+                return ''
+            return datetime.fromtimestamp(epoch_seconds, tz=display_tz).strftime('%Y-%m-%d %H:%M:%S') + tz_suffix
 
         # 1. Fetch BlackBox Event Log Data
         bb_events = db.session.query(
@@ -2017,7 +2037,7 @@ def download_test_data(test_id):
         def map_bb_event(item):
             event, device_name = item
             return [
-                datetime.fromtimestamp(event.timestamp).isoformat(),
+                format_ts(event.timestamp),
                 device_name,
                 event.channel_number,
                 event.channel_name,
@@ -2040,7 +2060,7 @@ def download_test_data(test_id):
         def map_bb_raw(item):
             row, device_name = item
             return [
-                datetime.fromtimestamp(row.timestamp).isoformat() if row.timestamp else '',
+                format_ts(row.timestamp),
                 device_name,
                 row.channel_number,
                 row.tip_number,
@@ -2052,7 +2072,7 @@ def download_test_data(test_id):
         def map_chimera(item):
             row, device_name = item
             return [
-                datetime.fromtimestamp(row.timestamp).isoformat(),
+                format_ts(row.timestamp),
                 device_name,
                 row.channel_number,
                 row.gas_name,

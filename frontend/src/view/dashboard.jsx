@@ -6,6 +6,7 @@ import { RefreshCw, Server, Activity, FlaskConical, Loader2, TriangleAlert } fro
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../components/Toast';
+import { formatDate, formatTime } from '../utils/timeFormat';
 
 
 
@@ -648,7 +649,7 @@ function Dashboard({ onViewPlot }) {
                         {event.type === 'tip' ? tPages('dashboard.event_tip') : event.type === 'raw_data' ? tPages('dashboard.event_raw_data') : event.type === 'gas_analysis' ? tPages('dashboard.event_gas_analysis') : 'Event'}
                       </span>
                       <span className="text-xs text-gray-400">
-                        {new Date(event.timestamp * 1000).toLocaleTimeString()}
+                        {formatTime(event.timestamp, user?.time_display)}
                       </span>
                     </div>
 
@@ -771,7 +772,7 @@ function Dashboard({ onViewPlot }) {
                           </span>
                           {file.created && (
                             <span className="text-gray-400 ml-2 text-sm">
-                              {new Date(file.created * 1000).toLocaleDateString()}
+                              {formatDate(file.created, user?.time_display)}
                             </span>
                           )}
                         </div>

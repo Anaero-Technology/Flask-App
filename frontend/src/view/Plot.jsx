@@ -14,6 +14,7 @@ import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../components/ThemeContext';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { formatDate, formatDateTime } from '../utils/timeFormat';
 
 // Format gas names with proper subscripts (for Plotly - uses HTML)
 const formatGasName = (name) => {
@@ -32,6 +33,7 @@ const formatGasNameUnicode = (name) => {
 
 function Plot({ initialParams, onNavigate }) {
     const { authFetch, canPerform, user } = useAuth();
+    const timeDisplay = user?.time_display || 'local';
     const toast = useToast();
     const { t: tPages } = useTranslation('pages');
     const { theme } = useTheme();
@@ -316,7 +318,7 @@ function Plot({ initialParams, onNavigate }) {
                     const val = info.getValue();
                     // Handle both seconds (from backend) and ISO strings (if any legacy)
                     // Backend sends unix timestamp in seconds
-                    return val ? new Date(val * 1000).toLocaleString() : '-';
+                    return val ? formatDateTime(val, timeDisplay) : '-';
                 }
             },
             {
@@ -370,7 +372,7 @@ function Plot({ initialParams, onNavigate }) {
                 }
             },
         ];
-    }, [selectedDeviceId, devices, tPages]);
+    }, [selectedDeviceId, devices, tPages, timeDisplay]);
 
     // Copy selected data to clipboard
     const copySelectedData = useCallback(() => {
@@ -381,7 +383,7 @@ function Plot({ initialParams, onNavigate }) {
             return selectedDataColumns.map(col => {
                 const value = point[col.accessorKey];
                 if (col.accessorKey === 'timestamp') {
-                    return value ? new Date(value * 1000).toLocaleString() : '-';
+                    return value ? formatDateTime(value, timeDisplay) : '-';
                 }
                 if (typeof value === 'number' && col.cell) {
                     return value.toFixed(2);
@@ -397,7 +399,7 @@ function Plot({ initialParams, onNavigate }) {
             console.error('Failed to copy:', err);
             toast.error(tPages('plot.copy_failed'));
         });
-    }, [selectedPoints, selectedDataColumns, toast, tPages]);
+    }, [selectedPoints, selectedDataColumns, toast, tPages, timeDisplay]);
 
     // Download selected data as CSV (honours the user's delimiter preference)
     const downloadSelectedData = useCallback(() => {
@@ -417,7 +419,7 @@ function Plot({ initialParams, onNavigate }) {
             return selectedDataColumns.map(col => {
                 let value = point[col.accessorKey];
                 if (col.accessorKey === 'timestamp') {
-                    value = value ? new Date(value * 1000).toLocaleString() : '-';
+                    value = value ? formatDateTime(value, timeDisplay) : '-';
                 }
                 if (typeof value === 'number' && col.cell) {
                     value = value.toFixed(2);
@@ -613,13 +615,13 @@ function Plot({ initialParams, onNavigate }) {
             accessorKey: 'date_created',
             header: tPages('plot.table_created'),
             size: 120,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
+            cell: info => info.getValue() ? formatDate(info.getValue(), timeDisplay) : '-'
         },
         {
             accessorKey: 'date_ended',
             header: tPages('plot.table_ended'),
             size: 120,
-            cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '-'
+            cell: info => info.getValue() ? formatDate(info.getValue(), timeDisplay) : '-'
         },
         {
             id: 'actions',
@@ -639,7 +641,7 @@ function Plot({ initialParams, onNavigate }) {
                 </button>
             )
         }
-    ], [tPages]);
+    ], [tPages, timeDisplay]);
 
     const table = useReactTable({
         data,
@@ -718,7 +720,7 @@ function Plot({ initialParams, onNavigate }) {
                             outlierTrace.x.push(getXValue(d));
                             outlierTrace.y.push(d.peak_value);
                             outlierTrace.text.push(
-                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                             );
                             outlierTrace.customdata.push(d);
                         }
@@ -738,7 +740,7 @@ function Plot({ initialParams, onNavigate }) {
                     groups[d.gas_name].y.push(d.peak_value);
                     const peakValue = typeof d.peak_value === 'number' ? d.peak_value.toFixed(2) : 'N/A';
                     groups[d.gas_name].text.push(
-                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                     );
                     groups[d.gas_name].customdata.push(d);
                 });
@@ -755,7 +757,7 @@ function Plot({ initialParams, onNavigate }) {
                             outlierTrace.x.push(getXValue(d));
                             outlierTrace.y.push(d.peak_value);
                             outlierTrace.text.push(
-                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                                `[Outlier] Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${d.peak_value?.toFixed(2) || 'N/A'}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                             );
                             outlierTrace.customdata.push(d);
                         }
@@ -775,7 +777,7 @@ function Plot({ initialParams, onNavigate }) {
                     groups[d.channel_number].y.push(d.peak_value);
                     const peakValue = typeof d.peak_value === 'number' ? d.peak_value.toFixed(2) : 'N/A';
                     groups[d.channel_number].text.push(
-                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                        `Channel: ${d.channel_number}<br>Gas: ${d.gas_name}<br>Value: ${peakValue}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                     );
                     groups[d.channel_number].customdata.push(d);
                 });
@@ -823,7 +825,7 @@ function Plot({ initialParams, onNavigate }) {
                         let yVal = d[yAxisMetric];
                         outlierTrace.y.push(yVal);
                         outlierTrace.text.push(
-                            `[Outlier] Channel: ${d.channel_number}<br>${yAxisMetric}: ${yVal}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                            `[Outlier] Channel: ${d.channel_number}<br>${yAxisMetric}: ${yVal}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                         );
                         outlierTrace.customdata.push(d);
                     }
@@ -845,7 +847,7 @@ function Plot({ initialParams, onNavigate }) {
                 channelGroups[d.channel_number].x.push(getXValue(d));
                 channelGroups[d.channel_number].y.push(yVal);
                 channelGroups[d.channel_number].text.push(
-                    `Channel: ${d.channel_number}<br>${yAxisMetric}: ${yVal}<br>Time: ${new Date(d.timestamp * 1000).toLocaleString()}`
+                    `Channel: ${d.channel_number}<br>${yAxisMetric}: ${yVal}<br>Time: ${formatDateTime(d.timestamp, timeDisplay)}`
                 );
                 channelGroups[d.channel_number].customdata.push(d);
             });
@@ -881,7 +883,7 @@ function Plot({ initialParams, onNavigate }) {
 
             return traces;
         }
-    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel, unitFilter, outlierIds, showOutliers, tPages]);
+    }, [plotData, devices, selectedDeviceId, selectedGas, graphType, yAxisMetric, xAxisMode, groupingMode, selectedChannel, unitFilter, outlierIds, showOutliers, tPages, timeDisplay]);
 
     // Handle plot initialization and attach native Plotly event listeners
     const handlePlotInitialized = useCallback((figure, graphDiv) => {
