@@ -67,10 +67,12 @@ const Layout = ({ children, currentView, onNavigate }) => {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 lg:ml-64 overflow-y-auto p-4 pt-16 lg:pt-4 text-gray-900 dark:text-slate-100">
-        <div className="max-w-7xl mx-auto">
-          {children}
-        </div>
+      <main className={`flex-1 lg:ml-64 overflow-y-auto text-gray-900 dark:text-slate-100 ${currentView === 'settings' ? 'pt-14 lg:pt-0' : 'p-4 pt-16 lg:pt-4'}`}>
+        {currentView === 'settings' ? children : (
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );
