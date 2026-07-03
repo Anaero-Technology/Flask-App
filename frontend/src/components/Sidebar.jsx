@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useTranslation } from 'react-i18next';
 import logo from '../assets/logo.png';
@@ -41,6 +41,15 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
   const [showProfileUpload, setShowProfileUpload] = useState(false);
   const [profilePicturePreview, setProfilePicturePreview] = useState(user?.profile_picture_url);
   const [uploadingProfile, setUploadingProfile] = useState(false);
+
+  // Follow the user object from AuthContext so pictures changed elsewhere
+  // (e.g. Settings > Preferences) show up without a reload. The URL is
+  // stable across re-uploads, so add a cache-buster to force a fresh fetch.
+  useEffect(() => {
+    setProfilePicturePreview(
+      user?.profile_picture_url ? `${user.profile_picture_url}?t=${Date.now()}` : null
+    );
+  }, [user]);
 
   const menuItems = [
     { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },

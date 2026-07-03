@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast';
 import { useTheme } from '../components/ThemeContext';
 import {
   Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
-  Lock, Search, Download, Trash2, ShieldAlert,
+  Lock, Search, Download, Trash2, ShieldAlert, User,
   Sun, Moon, Monitor, SlidersHorizontal, Network, Wrench, Palette,
   RefreshCw
 } from 'lucide-react';
@@ -23,7 +23,7 @@ function useAutoDismiss(message, setMessage, delayMs = 5000) {
 }
 
 function Settings() {
-  const { authFetch, canPerform, refreshUser } = useAuth();
+  const { user, authFetch, canPerform, refreshUser } = useAuth();
   const { changeLanguage, currentLanguage } = useI18n();
   const { t: tCommon } = useTranslation('common');
   const { t: tPages } = useTranslation('pages');
@@ -76,6 +76,9 @@ function Settings() {
   const [timeDisplay, setTimeDisplay] = useState('local')
   const [savingTimeDisplay, setSavingTimeDisplay] = useState(false)
   const [timeDisplayMessage, setTimeDisplayMessage] = useState({ text: '', type: '' })
+  const [profilePicPreview, setProfilePicPreview] = useState(user?.profile_picture_url)
+  const [savingProfilePic, setSavingProfilePic] = useState(false)
+  const [profilePicMessage, setProfilePicMessage] = useState({ text: '', type: '' })
   const [language, setLanguage] = useState('en')
   const [savingLanguage, setSavingLanguage] = useState(false)
   const [languageMessage, setLanguageMessage] = useState({ text: '', type: '' })
@@ -88,6 +91,7 @@ function Settings() {
   useAutoDismiss(networkMessage, setNetworkMessage)
   useAutoDismiss(delimiterMessage, setDelimiterMessage)
   useAutoDismiss(timeDisplayMessage, setTimeDisplayMessage)
+  useAutoDismiss(profilePicMessage, setProfilePicMessage)
   useAutoDismiss(languageMessage, setLanguageMessage)
   useAutoDismiss(brandingMessage, setBrandingMessage)
   const isSystemAdmin = canPerform('system_settings')
@@ -781,6 +785,73 @@ function Settings() {
     setTheme(value)
   }
 
+  const handleProfilePictureUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 2 * 1024 * 1024) {
+      setProfilePicMessage({ text: tPages('settings.profile_picture_too_large'), type: 'error' })
+      e.target.value = ''
+      return
+    }
+
+    setSavingProfilePic(true)
+    setProfilePicMessage({ text: '', type: '' })
+
+    try {
+      const formData = new FormData()
+      formData.append('profile_picture', file)
+
+      const response = await authFetch(`/api/v1/users/${user.id}/profile-picture`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (response.ok) {
+        setProfilePicMessage({ text: tPages('settings.profile_picture_uploaded'), type: 'success' })
+        // Show the new picture immediately
+        const reader = new FileReader()
+        reader.onload = (event) => setProfilePicPreview(event.target?.result)
+        reader.readAsDataURL(file)
+        // Sync the cached user object so the sidebar updates without a reload
+        refreshUser()
+      } else {
+        const data = await response.json()
+        setProfilePicMessage({ text: data.error || tPages('settings.profile_picture_upload_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setProfilePicMessage({ text: tPages('settings.profile_picture_upload_failed') + ': ' + error.message, type: 'error' })
+    } finally {
+      setSavingProfilePic(false)
+      e.target.value = ''
+    }
+  }
+
+  const removeProfilePicture = async () => {
+    setSavingProfilePic(true)
+    setProfilePicMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch(`/api/v1/users/${user.id}/profile-picture`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setProfilePicMessage({ text: tPages('settings.profile_picture_removed'), type: 'success' })
+        setProfilePicPreview(null)
+        // Sync the cached user object so the sidebar updates without a reload
+        refreshUser()
+      } else {
+        const data = await response.json()
+        setProfilePicMessage({ text: data.error || tPages('settings.profile_picture_remove_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setProfilePicMessage({ text: tPages('settings.profile_picture_remove_failed') + ': ' + error.message, type: 'error' })
+    } finally {
+      setSavingProfilePic(false)
+    }
+  }
+
   const saveCompanyName = async () => {
     setSavingBranding(true)
     setBrandingMessage({ text: '', type: '' })
@@ -946,12 +1017,49 @@ function Settings() {
         </aside>
 
         <div className="min-w-0 flex-1 bg-gray-50 dark:bg-slate-950 lg:overflow-y-auto">
-        <div className="min-h-full max-w-3xl space-y-6 border-x border-gray-100 bg-white p-4 dark:bg-slate-900 lg:ml-4 lg:p-8">
+        <div className="min-h-full max-w-7xl space-y-6 border-x border-gray-100 bg-white p-4 dark:bg-slate-900 lg:mx-4 lg:p-8">
 
         {activeTab === 'preferences' && (
         <section className="space-y-3">
           <h2 className="text-base font-bold text-gray-900">{tCommon('preferences')}</h2>
           <div className="divide-y divide-gray-200">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.profile_picture')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.profile_picture_help')}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+                  {profilePicPreview ? (
+                    <img src={profilePicPreview} alt="Profile" className="h-full w-full object-cover" />
+                  ) : (
+                    <User size={22} className="text-gray-500" />
+                  )}
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700">
+                  {savingProfilePic ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  <span>{tPages('settings.profile_picture_upload')}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfilePictureUpload}
+                    disabled={savingProfilePic}
+                    className="hidden"
+                  />
+                </label>
+                {profilePicPreview && (
+                  <button
+                    onClick={removeProfilePicture}
+                    disabled={savingProfilePic}
+                    className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  >
+                    <X size={14} />
+                    {tPages('settings.profile_picture_remove')}
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
                 <h3 className="text-sm font-medium text-gray-900">{tPages('settings.theme')}</h3>
@@ -1065,6 +1173,11 @@ function Settings() {
           {timeDisplayMessage.text && (
             <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(timeDisplayMessage.type)}`}>
               {timeDisplayMessage.text}
+            </div>
+          )}
+          {profilePicMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(profilePicMessage.type)}`}>
+              {profilePicMessage.text}
             </div>
           )}
         </section>
