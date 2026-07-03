@@ -729,58 +729,66 @@ def _find_ethernet_connection(iface: str) -> Optional[str]:
     return None
 
 
-def set_ethernet_config(mode: str, address: Optional[str] = None,
-                        prefix: Optional[int] = None,
-                        gateway: Optional[str] = None,
-                        dns: Optional[List[str]] = None) -> Tuple[bool, str]:
-    """Configure the wired interface.
+def set_ip_config(iface_type: str, mode: str, address: Optional[str] = None,
+                  prefix: Optional[int] = None,
+                  gateway: Optional[str] = None,
+                  dns: Optional[List[str]] = None) -> Tuple[bool, str]:
+    """Configure IPv4 for the wired or WiFi interface.
 
-    mode 'dhcp':   DHCP with the link-local rescue address as fallback
-                   (the shipped default from setup_ethernet*.sh).
-    mode 'static': fixed address/prefix (+ optional gateway/DNS), with the
-                   rescue address kept alongside.
-    Re-activates the profile, which briefly drops the wired link.
+    Ethernet keeps the link-local rescue address alongside either mode, so a
+    bad static config can never lock out a direct-cable connection. WiFi
+    configures the profile of the currently connected network (per-SSID —
+    each network remembers its own settings) and has no rescue address.
+    Re-activates the profile, which briefly drops the link.
     """
     if not IS_LINUX:
         return False, "Network configuration is only supported on the device"
 
-    iface = get_ethernet_interface()
-    if not iface:
-        return False, "No ethernet adapter found"
-
-    uuid = _find_ethernet_connection(iface)
-    if not uuid:
-        return False, "No ethernet connection profile found"
+    if iface_type == 'ethernet':
+        iface = get_ethernet_interface()
+        if not iface:
+            return False, "No ethernet adapter found"
+        uuid = _find_ethernet_connection(iface)
+        if not uuid:
+            return False, "No ethernet connection profile found"
+        rescue = RESCUE_ADDRESS
+    elif iface_type == 'wifi':
+        iface = get_wifi_interface()
+        if not iface:
+            return False, "No WiFi adapter found"
+        info = _device_show_fields(iface, 'GENERAL.CON-UUID')
+        uuid = (info.get('GENERAL.CON-UUID') or [None])[0]
+        if not uuid:
+            return False, "Connect to a WiFi network first, then configure its IP settings"
+        rescue = None
+    else:
+        return False, f"Unknown interface type '{iface_type}'"
 
     if mode == 'static':
+        addresses = f'{address}/{prefix}' + (f',{rescue}' if rescue else '')
         props = [
             'ipv4.method', 'manual',
-            'ipv4.addresses', f'{address}/{prefix},{RESCUE_ADDRESS}',
+            'ipv4.addresses', addresses,
             'ipv4.gateway', gateway or '',
             'ipv4.dns', ','.join(dns or []),
         ]
     elif mode == 'dhcp':
         props = [
             'ipv4.method', 'auto',
-            'ipv4.addresses', RESCUE_ADDRESS,
+            'ipv4.addresses', rescue or '',
             'ipv4.gateway', '',
             'ipv4.dns', '',
-            'ipv4.dhcp-timeout', '30',
-            'ipv4.may-fail', 'yes',
         ]
+        if iface_type == 'ethernet':
+            props += ['ipv4.dhcp-timeout', '30', 'ipv4.may-fail', 'yes']
     else:
         return False, f"Unknown mode '{mode}'"
 
     result = _nmcli(['connection', 'modify', uuid] + props, timeout=15)
     if result.returncode != 0:
-        return False, _result_error(result, "Failed to update ethernet profile")
+        return False, _result_error(result, "Failed to update connection profile")
 
     result = _nmcli(['connection', 'up', uuid], timeout=45)
     if result.returncode != 0:
         return False, _result_error(result, "Saved, but failed to activate the new configuration")
-    return True, "Ethernet configuration applied"
-
-
-def reset_ethernet_config() -> Tuple[bool, str]:
-    """Restore the shipped default: DHCP with link-local fallback."""
-    return set_ethernet_config('dhcp')
+    return True, "Network configuration applied"

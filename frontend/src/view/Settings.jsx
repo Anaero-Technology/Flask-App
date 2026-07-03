@@ -8,8 +8,19 @@ import { useTheme } from '../components/ThemeContext';
 import {
   Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
   Lock, Search, Download, Trash2, ShieldAlert,
-  Sun, Moon, Monitor
+  Sun, Moon, Monitor, SlidersHorizontal, Network, Wrench, Palette,
+  RefreshCw
 } from 'lucide-react';
+
+// Success acknowledgements ("scanned", "applied", "saved"...) fade out on
+// their own; errors stay until the user acts on them.
+function useAutoDismiss(message, setMessage, delayMs = 5000) {
+  useEffect(() => {
+    if (message.type !== 'success' || !message.text) return
+    const timer = setTimeout(() => setMessage({ text: '', type: '' }), delayMs)
+    return () => clearTimeout(timer)
+  }, [message])
+}
 
 function Settings() {
   const { authFetch, canPerform, refreshUser } = useAuth();
@@ -39,6 +50,7 @@ function Settings() {
   const [ethForm, setEthForm] = useState({ mode: 'dhcp', address: '', prefix: '24', gateway: '', dns: '' })
   const [applyingNetwork, setApplyingNetwork] = useState(false)
   const [networkMessage, setNetworkMessage] = useState({ text: '', type: '' })
+  const [ethConfigOpen, setEthConfigOpen] = useState(false)
   const [runningTestsCount, setRunningTestsCount] = useState(0)
   const [serialLogInfo, setSerialLogInfo] = useState(null)
   const [serialLogMessage, setSerialLogMessage] = useState({ text: '', type: '' })
@@ -68,7 +80,22 @@ function Settings() {
   const [brandingLogoPreview, setBrandingLogoPreview] = useState(logoUrl)
   const [savingBranding, setSavingBranding] = useState(false)
   const [brandingMessage, setBrandingMessage] = useState({ text: '', type: '' })
+
+  useAutoDismiss(message, setMessage)
+  useAutoDismiss(networkMessage, setNetworkMessage)
+  useAutoDismiss(delimiterMessage, setDelimiterMessage)
+  useAutoDismiss(languageMessage, setLanguageMessage)
+  useAutoDismiss(brandingMessage, setBrandingMessage)
   const isSystemAdmin = canPerform('system_settings')
+  const [activeTab, setActiveTab] = useState('preferences')
+  const wifiScannedRef = useRef(false)
+
+  const settingsTabs = [
+    { id: 'preferences', label: tCommon('preferences'), icon: SlidersHorizontal },
+    { id: 'network', label: tPages('settings.network'), icon: Network },
+    ...(isSystemAdmin ? [{ id: 'system', label: tPages('settings.system_tools'), icon: Wrench }] : []),
+    ...(isSystemAdmin ? [{ id: 'branding', label: tPages('settings.branding_title'), icon: Palette }] : []),
+  ]
 
   const scanNetworks = async () => {
     setLoading(true)
@@ -126,23 +153,24 @@ function Settings() {
     try {
       const response = await authFetch('/api/v1/network/status')
       if (!response.ok) return
-      const data = await response.json()
-      setNetworkStatus(data)
-      // Pre-fill the form from the live config so Apply is never a surprise
-      const eth = data.interfaces?.find(i => i.type === 'ethernet')
-      if (eth) {
-        const staticAddr = (eth.addresses || []).find(a => !a.startsWith('169.254.'))
-        setEthForm(prev => ({
-          ...prev,
-          mode: eth.method === 'manual' ? 'static' : 'dhcp',
-          address: eth.method === 'manual' && staticAddr ? staticAddr.split('/')[0] : prev.address,
-          prefix: eth.method === 'manual' && staticAddr ? (staticAddr.split('/')[1] || '24') : prev.prefix,
-          gateway: eth.method === 'manual' ? (eth.gateway || '') : prev.gateway
-        }))
-      }
+      setNetworkStatus(await response.json())
     } catch {
       // Status display is best-effort
     }
+  }
+
+  const openIpConfig = (iface) => {
+    // Pre-fill from the live config so Apply is never a surprise
+    const staticAddr = (iface.addresses || []).find(a => !a.startsWith('169.254.'))
+    setEthForm({
+      mode: iface.method === 'manual' ? 'static' : 'dhcp',
+      address: staticAddr ? staticAddr.split('/')[0] : '',
+      prefix: staticAddr ? (staticAddr.split('/')[1] || '24') : '24',
+      gateway: iface.gateway || '',
+      dns: ''
+    })
+    setNetworkMessage({ text: '', type: '' })
+    setEthConfigOpen(iface.type)
   }
 
   const isCurrentInterface = (iface) => (
@@ -158,15 +186,27 @@ function Settings() {
     return state
   }
 
-  const submitEthernetConfig = async (request) => {
-    const eth = networkStatus?.interfaces?.find(i => i.type === 'ethernet')
-    if (eth && isCurrentInterface(eth) && !window.confirm(tPages('settings.network_apply_warning'))) {
+  const applyIpConfig = async (ifaceType) => {
+    const iface = networkStatus?.interfaces?.find(i => i.type === ifaceType)
+    if (iface && isCurrentInterface(iface) && !window.confirm(tPages('settings.network_apply_warning'))) {
       return
     }
     setApplyingNetwork(true)
     setNetworkMessage({ text: '', type: '' })
     try {
-      const response = await request()
+      const body = ethForm.mode === 'static'
+        ? {
+            mode: 'static',
+            address: ethForm.address.trim(),
+            prefix: parseInt(ethForm.prefix, 10),
+            gateway: ethForm.gateway.trim(),
+            dns: ethForm.dns.trim()
+          }
+        : { mode: 'dhcp' }
+      const response = await authFetch(`/api/v1/network/${ifaceType}`, {
+        method: 'PUT',
+        body: JSON.stringify(body)
+      })
       const data = await response.json()
       if (response.ok) {
         setNetworkMessage({ text: data.message, type: 'success' })
@@ -181,23 +221,6 @@ function Settings() {
       loadNetworkStatus()
     }
   }
-
-  const applyEthernetConfig = () => submitEthernetConfig(() => {
-    const body = ethForm.mode === 'static'
-      ? {
-          mode: 'static',
-          address: ethForm.address.trim(),
-          prefix: parseInt(ethForm.prefix, 10),
-          gateway: ethForm.gateway.trim(),
-          dns: ethForm.dns.trim()
-        }
-      : { mode: 'dhcp' }
-    return authFetch('/api/v1/network/ethernet', { method: 'PUT', body: JSON.stringify(body) })
-  })
-
-  const resetEthernetConfig = () => submitEthernetConfig(() => (
-    authFetch('/api/v1/network/ethernet/reset', { method: 'POST' })
-  ))
 
   const handleCancelConnect = () => {
     setSelectedNetworkIndex(null)
@@ -824,11 +847,17 @@ function Settings() {
   }, [companyName, logoUrl])
 
   useEffect(() => {
-    // Auto-scan on component mount
-    scanNetworks()
     loadUserPreferences()
     loadNetworkStatus()
   }, [])
+
+  useEffect(() => {
+    // Scan lazily the first time the network tab is opened
+    if (activeTab === 'network' && !wifiScannedRef.current) {
+      wifiScannedRef.current = true
+      scanNetworks()
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (!isSystemAdmin) {
@@ -860,21 +889,42 @@ function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{tPages('settings.title')}</h1>
-          <p className="text-sm text-gray-500">{tPages('settings.subtitle')}</p>
-        </div>
+    <div className="flex min-h-full flex-col bg-gray-50 dark:bg-slate-950 lg:h-full lg:flex-row lg:overflow-hidden">
+        <aside className="shrink-0 border-b border-gray-200 bg-white dark:bg-slate-900 lg:flex lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
+          <div className="p-4 pb-1 lg:p-6 lg:pb-2">
+            <h1 className="text-base font-bold text-gray-900 tracking-tight">{tPages('settings.title')}</h1>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto p-3 lg:flex-1 lg:flex-col lg:gap-0 lg:space-y-1 lg:overflow-y-auto">
+            {settingsTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex shrink-0 items-center gap-3 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors lg:w-full ${
+                  activeTab === id
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <Icon size={18} className={activeTab === id ? 'text-blue-600' : 'text-gray-400'} />
+                {label}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
+        <div className="min-w-0 flex-1 bg-gray-50 dark:bg-slate-950 lg:overflow-y-auto">
+        <div className="min-h-full max-w-3xl space-y-6 border-x border-gray-100 bg-white p-4 dark:bg-slate-900 lg:ml-4 lg:p-8">
+
+        {activeTab === 'preferences' && (
         <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">{tCommon('preferences')}</h2>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+          <h2 className="text-base font-bold text-gray-900">{tCommon('preferences')}</h2>
+          <div className="divide-y divide-gray-200">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.theme')}</h3>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.theme')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.theme_help')}</p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center self-center rounded-lg bg-gray-100 p-0.5">
                 {[
                   { value: 'light', icon: Sun, label: tPages('settings.theme_light') },
                   { value: 'dark', icon: Moon, label: tPages('settings.theme_dark') },
@@ -883,10 +933,10 @@ function Settings() {
                   <button
                     key={value}
                     onClick={() => handleThemeChange(value)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       themePreference === value
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
                     <Icon size={14} />
@@ -896,9 +946,9 @@ function Settings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tCommon('language')}</h3>
+                <h3 className="text-sm font-medium text-gray-900">{tCommon('language')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.language_help')}</p>
               </div>
               <div className="flex items-center">
@@ -906,7 +956,7 @@ function Settings() {
                   value={language}
                   onChange={(e) => saveLanguagePreference(e.target.value)}
                   disabled={savingLanguage}
-                  className="min-w-40 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                  className="min-w-40 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
                 >
                   <option value="en">{tCommon('english')}</option>
                   <option value="es">{tCommon('spanish')}</option>
@@ -917,16 +967,16 @@ function Settings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.csv_delimiter')}</h3>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.csv_delimiter')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.csv_delimiter_help')}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={csvDelimiter}
                   onChange={(e) => setCsvDelimiter(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value=",">{tPages('settings.comma')}</option>
                   <option value=";">{tPages('settings.semicolon')}</option>
@@ -956,147 +1006,260 @@ function Settings() {
             </div>
           )}
         </section>
+        )}
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.network')}</h2>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            {(networkStatus?.interfaces || []).map((iface) => (
-              <div key={iface.device} className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 last:border-b-0 sm:grid-cols-[1fr_auto] sm:px-5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-gray-900">
-                      {iface.type === 'ethernet' ? tPages('settings.network_ethernet') : tPages('settings.network_wifi')}
-                    </h3>
-                    <span className="text-[11px] text-gray-400">{iface.device}</span>
-                    {isCurrentInterface(iface) && (
-                      <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                        {tPages('settings.network_this_connection')}
-                      </span>
+        {activeTab === 'network' && (
+        <section className="space-y-8">
+          <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-gray-900">{tPages('settings.network')}</h2>
+            <button
+              onClick={loadNetworkStatus}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+            >
+              <RefreshCw size={13} />
+              {tPages('settings.network_refresh')}
+            </button>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {(networkStatus?.interfaces || []).map((iface) => {
+              const isEthernet = iface.type === 'ethernet'
+              const primaryAddresses = (iface.addresses || []).filter(a => !a.startsWith('169.254.'))
+              const fallbackAddresses = (iface.addresses || []).filter(a => a.startsWith('169.254.'))
+              const statePill = iface.state === 'connected'
+                ? 'border-green-200 bg-green-100 text-green-700'
+                : iface.state?.startsWith('connecting')
+                  ? 'border-amber-200 bg-amber-100 text-amber-700'
+                  : 'border-gray-200 bg-gray-100 text-gray-500'
+
+              return (
+                <div key={iface.device} className="py-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-medium text-gray-900">
+                          {isEthernet ? tPages('settings.network_ethernet') : tPages('settings.network_wifi')}
+                        </h3>
+                        <span className="text-[11px] text-gray-400">{iface.device}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statePill}`}>
+                          {networkStateLabel(iface.state)}
+                        </span>
+                        {isCurrentInterface(iface) && (
+                          <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                            {tPages('settings.network_this_connection')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[13px] text-gray-500">
+                        {!isEthernet && iface.connection && (
+                          <>SSID: <span className="font-medium text-gray-700">{iface.connection.replace(/^netplan-\S+?-/, '')}</span> • </>
+                        )}
+                        {tPages('settings.network_mode')}: <span className="text-gray-700">
+                          {iface.method === 'manual'
+                            ? tPages('settings.network_method_static')
+                            : tPages('settings.network_method_auto')}
+                        </span>
+                        {iface.gateway && (
+                          <> • {tPages('settings.network_gateway')}: <span className="font-mono text-gray-700">{iface.gateway}</span></>
+                        )}
+                      </p>
+                      {isEthernet && (
+                        <p className="mt-0.5 text-[12px] text-gray-400">
+                          {tPages('settings.network_rescue_note', {
+                            address: (networkStatus?.rescue_address || '169.254.50.1/16').split('/')[0]
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end sm:justify-center">
+                      {primaryAddresses.map((addr) => (
+                        <span
+                          key={addr}
+                          className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-xs font-semibold text-gray-800"
+                        >
+                          {addr}
+                        </span>
+                      ))}
+                      {fallbackAddresses.map((addr) => (
+                        <span
+                          key={addr}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-xs text-gray-500"
+                        >
+                          {addr}
+                          <span className="font-sans text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                            {tPages('settings.network_fallback_tag')}
+                          </span>
+                        </span>
+                      ))}
+                      {primaryAddresses.length === 0 && fallbackAddresses.length === 0 && (
+                        <span className="text-[13px] text-gray-400">—</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {!networkStatus?.interfaces?.length && (
+              <div className="py-4 text-sm text-gray-500">{tPages('settings.network_no_data')}</div>
+            )}
+
+            {isSystemAdmin && ['ethernet', 'wifi'].map((type) => {
+              const iface = networkStatus?.interfaces?.find(i => i.type === type)
+              if (!iface) return null
+              const isOpen = ethConfigOpen === type
+
+              return (
+                <div key={`${type}-config`} className="py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">
+                        {type === 'ethernet'
+                          ? tPages('settings.network_ethernet_config')
+                          : tPages('settings.network_wifi_config')}
+                      </h3>
+                      <p className="mt-0.5 text-[13px] text-gray-500">
+                        {type === 'ethernet'
+                          ? tPages('settings.network_ethernet_config_help')
+                          : tPages('settings.network_wifi_config_help')}
+                      </p>
+                    </div>
+                    {!isOpen && (
+                      <button
+                        onClick={() => openIpConfig(iface)}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                      >
+                        {tPages('settings.network_configure')}
+                      </button>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[13px] text-gray-500">
-                    {networkStateLabel(iface.state)}
-                    {iface.method && <> • {iface.method === 'manual' ? tPages('settings.network_method_static') : tPages('settings.network_method_auto')}</>}
-                    {iface.gateway && <> • {tPages('settings.network_gateway')}: {iface.gateway}</>}
-                  </p>
-                </div>
-                <div className="flex flex-col items-start justify-center sm:items-end">
-                  {(iface.addresses || []).map((addr) => (
-                    <span key={addr} className="font-mono text-xs text-gray-700">{addr}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!networkStatus?.interfaces?.length && (
-              <div className="px-5 py-4 text-sm text-gray-500">{tPages('settings.network_no_data')}</div>
-            )}
 
-            {isSystemAdmin && (
-              <div className="border-t border-gray-200 bg-gray-50/60 px-4 py-3 sm:px-5">
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.network_ethernet_config')}</h3>
-                <p className="mt-0.5 text-[13px] text-gray-500">
-                  {tPages('settings.network_rescue_note', {
-                    address: (networkStatus?.rescue_address || '169.254.50.1/16').split('/')[0]
-                  })}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <select
-                    value={ethForm.mode}
-                    onChange={(e) => setEthForm(prev => ({ ...prev, mode: e.target.value }))}
-                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  {isOpen && (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); applyIpConfig(type) }}
+                    className="mt-3 space-y-3"
                   >
-                    <option value="dhcp">{tPages('settings.network_method_auto')}</option>
-                    <option value="static">{tPages('settings.network_method_static')}</option>
-                  </select>
-                  {ethForm.mode === 'static' && (
-                    <>
-                      <input
-                        type="text"
-                        value={ethForm.address}
-                        onChange={(e) => setEthForm(prev => ({ ...prev, address: e.target.value }))}
-                        placeholder={tPages('settings.network_ip_address')}
-                        className="w-36 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="number"
-                        min="1"
-                        max="32"
-                        value={ethForm.prefix}
-                        onChange={(e) => setEthForm(prev => ({ ...prev, prefix: e.target.value }))}
-                        placeholder={tPages('settings.network_prefix')}
-                        title={tPages('settings.network_prefix')}
-                        className="w-20 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        value={ethForm.gateway}
-                        onChange={(e) => setEthForm(prev => ({ ...prev, gateway: e.target.value }))}
-                        placeholder={tPages('settings.network_gateway_optional')}
-                        className="w-40 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        value={ethForm.dns}
-                        onChange={(e) => setEthForm(prev => ({ ...prev, dns: e.target.value }))}
-                        placeholder={tPages('settings.network_dns_optional')}
-                        className="w-56 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </>
+                    <div className="max-w-[240px]">
+                      <label className="mb-1 block text-xs font-medium text-gray-700">
+                        {tPages('settings.network_mode')}
+                      </label>
+                      <select
+                        value={ethForm.mode}
+                        onChange={(e) => setEthForm(prev => ({ ...prev, mode: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="dhcp">{tPages('settings.network_method_auto')}</option>
+                        <option value="static">{tPages('settings.network_method_static')}</option>
+                      </select>
+                    </div>
+
+                    {ethForm.mode === 'static' && (
+                      <div className="grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            {tPages('settings.network_ip_address')}
+                          </label>
+                          <input
+                            type="text"
+                            value={ethForm.address}
+                            onChange={(e) => setEthForm(prev => ({ ...prev, address: e.target.value }))}
+                            placeholder="192.168.1.50"
+                            className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            {tPages('settings.network_prefix')}
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="32"
+                            value={ethForm.prefix}
+                            onChange={(e) => setEthForm(prev => ({ ...prev, prefix: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            {tPages('settings.network_gateway_optional')}
+                          </label>
+                          <input
+                            type="text"
+                            value={ethForm.gateway}
+                            onChange={(e) => setEthForm(prev => ({ ...prev, gateway: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-700">
+                            {tPages('settings.network_dns_optional')}
+                          </label>
+                          <input
+                            type="text"
+                            value={ethForm.dns}
+                            onChange={(e) => setEthForm(prev => ({ ...prev, dns: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={applyingNetwork || (ethForm.mode === 'static' && !ethForm.address.trim())}
+                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                      >
+                        {applyingNetwork && <Loader2 size={14} className="animate-spin" />}
+                        {tPages('settings.network_apply')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEthConfigOpen(false)}
+                        disabled={applyingNetwork}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:text-gray-700"
+                      >
+                        {tCommon('cancel')}
+                      </button>
+                    </div>
+                  </form>
                   )}
-                  <button
-                    onClick={applyEthernetConfig}
-                    disabled={applyingNetwork || (ethForm.mode === 'static' && !ethForm.address.trim())}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                  >
-                    {applyingNetwork && <Loader2 size={14} className="animate-spin" />}
-                    {tPages('settings.network_apply')}
-                  </button>
-                  <button
-                    onClick={resetEthernetConfig}
-                    disabled={applyingNetwork}
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                  >
-                    {tPages('settings.network_reset')}
-                  </button>
-                </div>
-                {networkMessage.text && (
-                  <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${getMessageClasses(networkMessage.type)}`}>
-                    {networkMessage.text}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.wifi')}</h2>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                  {isOpen && networkMessage.text && (
+                    <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${getMessageClasses(networkMessage.type)}`}>
+                      {networkMessage.text}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.available_networks')}</h3>
+                <h2 className="text-base font-bold text-gray-900">{tPages('settings.available_networks')}</h2>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.scan_connect_networks')}</p>
               </div>
-              <div className="flex items-center">
-                <button
-                  onClick={scanNetworks}
-                  disabled={loading}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                  {loading ? tPages('settings.scanning') : tPages('settings.scan_networks')}
-                </button>
-              </div>
+              <button
+                onClick={scanNetworks}
+                disabled={loading}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                {loading ? tPages('settings.scanning') : tPages('settings.scan_networks')}
+              </button>
             </div>
 
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-96 divide-y divide-gray-200 overflow-y-auto">
               {loading ? (
-                <div className="flex items-center gap-2 px-5 py-4 text-sm text-gray-500">
+                <div className="flex items-center gap-2 px-3 py-4 text-sm text-gray-500">
                   <Loader2 size={14} className="animate-spin" />
                   {tPages('settings.scanning_for_networks')}
                 </div>
               ) : networks.length === 0 ? (
-                <div className="px-5 py-4 text-sm text-gray-500">{tPages('settings.no_networks')}</div>
+                <div className="px-3 py-4 text-sm text-gray-500">{tPages('settings.no_networks')}</div>
               ) : (
                 networks.map((network, index) => {
                   const isSelected = selectedNetworkIndex === index
@@ -1105,15 +1268,15 @@ function Settings() {
                   const isEnterprise = network.security && network.security.includes('802.1X')
 
                   return (
-                    <div key={index} className="border-b border-gray-200 last:border-b-0">
+                    <div key={index}>
                       <div
-                        className={`grid cursor-pointer grid-cols-1 gap-4 px-4 py-2.5 transition-colors sm:grid-cols-[1fr_auto] sm:px-5 ${isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-50'} ${isConnected ? 'bg-green-50/40' : ''}`}
+                        className={`grid cursor-pointer grid-cols-1 gap-4 px-3 py-3 transition-colors sm:grid-cols-[1fr_auto] ${isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-100/70'} ${isConnected ? 'bg-green-50/40' : ''}`}
                         onClick={() => handleNetworkSelect(network, index)}
                       >
                         <div>
                           <div className="flex items-center gap-2">
                             {getSignalIcon(network.signal)}
-                            <span className="text-sm font-bold text-gray-900">{network.ssid}</span>
+                            <span className="text-sm font-medium text-gray-900">{network.ssid}</span>
                             {isConnected && (
                               <span className="rounded-full border border-green-200 bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
                                 {tPages('settings.connected_badge')}
@@ -1147,7 +1310,7 @@ function Settings() {
                       </div>
 
                       {isSelected && needsPassword && (
-                        <div className="border-t border-blue-100 bg-blue-50/60 px-4 py-2.5 sm:px-5">
+                        <div className="border-t border-blue-100 bg-blue-50/60 px-3 py-3">
                           <form onSubmit={(e) => handleConnectWithPassword(e, network)} className="space-y-3">
                             {isEnterprise && (
                               <div>
@@ -1210,22 +1373,23 @@ function Settings() {
                 })
               )}
             </div>
+
+            {message.text && (
+              <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(message.type)}`}>
+                {message.text}
+              </div>
+            )}
           </div>
-
-          {message.text && (
-            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(message.type)}`}>
-              {message.text}
-            </div>
-          )}
         </section>
+        )}
 
-        {isSystemAdmin && (
+        {activeTab === 'system' && isSystemAdmin && (
         <section className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">{tPages('settings.system_tools')}</h2>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+          <h2 className="text-base font-bold text-gray-900">{tPages('settings.system_tools')}</h2>
+          <div className="divide-y divide-gray-200">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.update_software')}</h3>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.update_software')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.reboot_after_update')}</p>
                 {checkingUpdate ? (
                   <p className="mt-1 text-[12px] text-gray-500">{tPages('settings.checking_updates')}</p>
@@ -1253,7 +1417,7 @@ function Settings() {
                 <button
                   onClick={checkForUpdates}
                   disabled={checkingUpdate || pulling}
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
                 >
                   {checkingUpdate ? tPages('settings.checking_updates') : tPages('settings.check_updates')}
                 </button>
@@ -1268,9 +1432,9 @@ function Settings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
-                <h3 className="text-sm font-bold text-gray-900">{tPages('settings.serial_log')}</h3>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.serial_log')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">
                   {tPages('settings.download_all_serial')}
                   {serialLogInfo?.exists && (
@@ -1300,9 +1464,9 @@ function Settings() {
 
             {canPerform('manage_database') && (
               <>
-                <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900">{tPages('settings.database_download_title')}</h3>
+                    <h3 className="text-sm font-medium text-gray-900">{tPages('settings.database_download_title')}</h3>
                     <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.database_download_help')}</p>
                   </div>
                   <div className="flex items-center">
@@ -1317,16 +1481,16 @@ function Settings() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900">{tPages('settings.database_transfer_title')}</h3>
+                    <h3 className="text-sm font-medium text-gray-900">{tPages('settings.database_transfer_title')}</h3>
                     <p className="mt-0.5 text-[13px] text-gray-500">
                       {tPages('settings.database_transfer_help')}
                       {databaseFile && <span className="ml-1">({databaseFile.name})</span>}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100">
                       <Upload size={14} />
                       {tPages('settings.database_transfer_choose')}
                       <input
@@ -1347,9 +1511,9 @@ function Settings() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 rounded-b-2xl border-t border-red-200 bg-red-50/30 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+                <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
                   <div>
-                    <h3 className="text-sm font-bold text-red-600">{tPages('settings.database_delete_title')}</h3>
+                    <h3 className="text-sm font-medium text-red-600">{tPages('settings.database_delete_title')}</h3>
                     <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.database_delete_help')}</p>
                   </div>
                   <div className="flex items-center">
@@ -1385,13 +1549,13 @@ function Settings() {
         </section>
         )}
 
-        {canPerform('system_settings') && (
+        {activeTab === 'branding' && canPerform('system_settings') && (
           <section className="space-y-3">
-            <h2 className="text-lg font-bold text-gray-900">{tPages('settings.branding_title')}</h2>
-            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-              <div className="grid grid-cols-1 gap-4 border-b border-gray-200 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+            <h2 className="text-base font-bold text-gray-900">{tPages('settings.branding_title')}</h2>
+            <div className="divide-y divide-gray-200">
+              <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">{tPages('settings.branding_company_name')}</h3>
+                  <h3 className="text-sm font-medium text-gray-900">{tPages('settings.branding_company_name')}</h3>
                   <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.branding_company_help')}</p>
                 </div>
                 <div className="flex w-full max-w-sm flex-wrap items-center gap-2">
@@ -1412,13 +1576,13 @@ function Settings() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 px-4 py-2.5 sm:grid-cols-[1fr_auto] sm:px-5">
+              <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">{tPages('settings.branding_logo')}</h3>
+                  <h3 className="text-sm font-medium text-gray-900">{tPages('settings.branding_logo')}</h3>
                   <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.branding_logo_help')}</p>
                 </div>
                 <div className="grid w-full max-w-sm grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3">
+                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-3">
                     {brandingLogoPreview ? (
                       <img
                         src={brandingLogoPreview}
@@ -1463,6 +1627,9 @@ function Settings() {
             )}
           </section>
         )}
+
+        </div>
+        </div>
 
         {passwordPrompt.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

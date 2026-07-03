@@ -78,46 +78,67 @@ def _validate_static_config(data):
     }, None
 
 
-@network_bp.route('/api/v1/network/ethernet', methods=['PUT'])
+def _subnet_change_warning(config, iface_type):
+    """Warn when the new static address is outside every subnet currently
+    live on the link — valid config, but peers (e.g. a laptop sharing its
+    connection over the cable, or the WiFi router) won't reach it until
+    they are reconfigured too."""
+    try:
+        current = next(
+            (i for i in wifi_manager.get_network_status() if i['type'] == iface_type),
+            None
+        )
+        if not current:
+            return ""
+        on_link = [a for a in current.get('addresses', []) if not a.startswith('169.254.')]
+        if not on_link:
+            return ""
+        new_net = ipaddress.IPv4Network(f"{config['address']}/{config['prefix']}", strict=False)
+        if any(ipaddress.IPv4Interface(a).network.overlaps(new_net) for a in on_link):
+            return ""
+        current_net = ipaddress.IPv4Interface(on_link[0]).network.with_prefixlen
+        peer = "the device(s) on the cable" if iface_type == 'ethernet' else "the WiFi network"
+        return (f" Warning: {peer} currently uses {current_net} — "
+                f"{config['address']} will not be reachable until the other "
+                f"side is reconfigured to the new subnet.")
+    except Exception:
+        return ""
+
+
+@network_bp.route('/api/v1/network/<iface_type>', methods=['PUT'])
 @jwt_required()
 @require_role(['admin'])
-def configure_ethernet():
-    """Set the wired interface to DHCP (with link-local fallback) or a
-    static address. Applying re-activates the link, briefly dropping it."""
+def configure_interface(iface_type):
+    """Set the wired or WiFi interface to DHCP or a static address.
+    Applying re-activates the link, briefly dropping it."""
     try:
+        if iface_type not in ('ethernet', 'wifi'):
+            return jsonify({"error": "Interface type must be 'ethernet' or 'wifi'"}), 404
+
         data = request.get_json(silent=True) or {}
         mode = (data.get('mode') or '').strip().lower()
 
         if mode == 'dhcp':
-            success, message = wifi_manager.set_ethernet_config('dhcp')
+            success, message = wifi_manager.set_ip_config(iface_type, 'dhcp')
         elif mode == 'static':
             config, error = _validate_static_config(data)
             if error:
                 return jsonify({"error": error}), 400
-            success, message = wifi_manager.set_ethernet_config(
+            # Must be computed before applying (the link state changes after)
+            warning = _subnet_change_warning(config, iface_type)
+            success, message = wifi_manager.set_ip_config(
+                iface_type,
                 'static',
                 address=config['address'],
                 prefix=config['prefix'],
                 gateway=config['gateway'],
                 dns=config['dns'],
             )
+            if success and warning:
+                message += warning
         else:
             return jsonify({"error": "mode must be 'dhcp' or 'static'"}), 400
 
-        if not success:
-            return jsonify({"error": message}), 500
-        return jsonify({"success": True, "message": message}), 200
-    except Exception as e:
-        return internal_error(e)
-
-
-@network_bp.route('/api/v1/network/ethernet/reset', methods=['POST'])
-@jwt_required()
-@require_role(['admin'])
-def reset_ethernet():
-    """Restore the shipped default wired configuration."""
-    try:
-        success, message = wifi_manager.reset_ethernet_config()
         if not success:
             return jsonify({"error": message}), 500
         return jsonify({"success": True, "message": message}), 200
