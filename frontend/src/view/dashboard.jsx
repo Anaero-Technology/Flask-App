@@ -13,7 +13,7 @@ import { useToast } from '../components/Toast';
 // fresh data loads in the background
 const readDashboardCache = () => {
   try {
-    return JSON.parse(sessionStorage.getItem('dashboardCache')) || {}
+    return JSON.parse(localStorage.getItem('dashboardCache')) || {}
   } catch {
     return {}
   }
@@ -162,7 +162,7 @@ function Dashboard({ onViewPlot }) {
       setActiveTests(testsData)
       setRecentEvents(eventsData)
       try {
-        sessionStorage.setItem('dashboardCache', JSON.stringify({
+        localStorage.setItem('dashboardCache', JSON.stringify({
           devices: devicesData,
           activeTests: testsData,
           recentEvents: eventsData
@@ -171,8 +171,10 @@ function Dashboard({ onViewPlot }) {
         // Cache is best-effort only
       }
 
+      return devicesData.length
     } catch (error) {
       console.error('Error loading dashboard data:', error)
+      return null
     } finally {
       setLoading(false)
     }
@@ -299,12 +301,16 @@ function Dashboard({ onViewPlot }) {
   useEffect(() => {
     fetchGlobalDeviceModel();
 
-    const hasDiscovered = sessionStorage.getItem('discoveryCompleted')
-    if (hasDiscovered) {
-      loadData()
-    } else {
-      discoverDevices()
+    // The backend auto-connects attached devices at boot, so ask it what it
+    // already knows first — cards render immediately. Only fall back to the
+    // slow serial-port discovery when nothing is connected yet.
+    const initialLoad = async () => {
+      const deviceCount = await loadData()
+      if (deviceCount === 0 && !sessionStorage.getItem('discoveryCompleted')) {
+        await discoverDevices()
+      }
     }
+    initialLoad()
 
     // Poll for updates every 30 seconds as backup
     const interval = setInterval(loadData, 30000)
