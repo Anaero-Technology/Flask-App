@@ -176,6 +176,8 @@
     "no_available_devices": "Keine verfügbaren Geräte gefunden.",
     "all_devices_assigned": "Alle Geräte sind derzeit aktiven Tests zugeordnet.",
     "recent_activity": "Aktuelle Aktivität",
+    "gas_composition_title": "Neueste Gasanalyse",
+    "gas_other": "Sonstige",
     "event_tip": "Spitze",
     "event_raw_data": "Rohdaten",
     "event_gas_analysis": "Gas",

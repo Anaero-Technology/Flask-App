@@ -176,6 +176,8 @@
     "no_available_devices": "未找到可用设备。",
     "all_devices_assigned": "所有设备当前都已分配给活跃测试。",
     "recent_activity": "最近活动",
+    "gas_composition_title": "最新气体分析",
+    "gas_other": "其他",
     "event_tip": "提示",
     "event_raw_data": "原始数据",
     "event_gas_analysis": "气体",

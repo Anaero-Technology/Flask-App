@@ -1,14 +1,148 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import DeviceCard from '../components/deviceCard'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
-import { RefreshCw, Server, Activity, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';
+import { RefreshCw, Server, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../components/Toast';
 import { formatDate, formatTime } from '../utils/timeFormat';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 
+
+// Fixed categorical slot order (validated palette): gases always take the
+// same hue by position, never a generated color. The unmeasured balance is
+// a neutral remainder, not a series.
+const GAS_SLOT_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#008300']
+const GAS_BALANCE_COLOR = '#e1e0d9'
+
+const GasTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null
+  const slice = payload[0]
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs shadow-sm">
+      <span className="text-gray-600">{slice.name}</span>{' '}
+      <span className="font-semibold text-gray-900">{Number(slice.value).toFixed(2)}%</span>
+    </div>
+  )
+}
+
+// Measures an element's box so the chart can be given explicit pixel
+// dimensions — percentage heights don't resolve reliably through the
+// absolute/flex chain this card sits in.
+function useBoxSize() {
+  const ref = useRef(null)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => {
+      const rect = el.getBoundingClientRect()
+      const next = { width: Math.round(rect.width), height: Math.round(rect.height) }
+      setSize(prev => (prev.width === next.width && prev.height === next.height) ? prev : next)
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, size]
+}
+
+function GasCompositionCard({ event, title, otherLabel, timeLabel, cardRef, channelOptions, selectedChannelKey, onSelectChannel }) {
+  const [plotRef, plotSize] = useBoxSize()
+  const gases = (event.details?.gases || []).filter(g => Number.isFinite(g?.peak))
+  if (gases.length === 0) return null
+
+  const slices = gases.map((g, i) => ({
+    name: g.gas,
+    value: Math.max(g.peak, 0),
+    color: GAS_SLOT_COLORS[i % GAS_SLOT_COLORS.length]
+  }))
+  // Sensor readings can sum slightly past 100%; the pie draws angles
+  // proportional to the sum, so only the unmeasured balance needs guarding.
+  const measured = slices.reduce((sum, s) => sum + s.value, 0)
+  if (measured < 99.95) {
+    slices.push({ name: otherLabel, value: Math.max(0, 100 - measured), color: GAS_BALANCE_COLOR })
+  }
+
+  // Methane is the headline number for an AD lab; fall back to the first gas
+  const headline = gases.find(g => /ch4|methane/i.test(g.gas)) || gases[0]
+
+  return (
+    <div ref={cardRef} className="mb-5 flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+        <span className="text-xs text-gray-400">{timeLabel}</span>
+      </div>
+      <div className="mb-1 flex min-w-0 items-center gap-2">
+        <span className="truncate text-xs text-gray-500">{event.device_name}</span>
+        <select
+          value={selectedChannelKey}
+          onChange={(e) => onSelectChannel(e.target.value)}
+          className="shrink-0 cursor-pointer rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-xs text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          {channelOptions.map((option) => (
+            <option key={option.key} value={option.key}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+      <div ref={plotRef} className="relative min-h-44 flex-1">
+        {/* The chart is absolutely positioned and given explicit pixel
+            dimensions so it can never feed back into the measured box */}
+        {plotSize.width > 0 && plotSize.height > 0 && (
+          <div className="absolute inset-0">
+            <PieChart width={plotSize.width} height={plotSize.height}>
+              <Pie
+                data={slices}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="64%"
+                outerRadius="90%"
+                startAngle={90}
+                endAngle={-270}
+                stroke="#ffffff"
+                strokeWidth={2}
+                isAnimationActive={false}
+              >
+                {slices.map((s) => <Cell key={s.name} fill={s.color} />)}
+              </Pie>
+              <Tooltip content={<GasTooltip />} />
+            </PieChart>
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-gray-900">{headline.peak.toFixed(1)}%</span>
+          <span className="text-xs text-gray-500">{headline.gas}</span>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+        {slices.map((s) => (
+          <div key={s.name} className="flex items-center gap-1.5 text-xs">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-gray-600">{s.name}</span>
+            <span className="font-semibold text-gray-900">{s.value.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Merge gas_analysis events into a per-channel map, keeping only the newest
+// reading per channel. Fed from both the fetch results and live SSE events,
+// so a live reading is never regressed by a later poll (the recent-events
+// endpoint only returns readings that were saved to the database).
+const buildGasChannelMap = (events, base = {}) => {
+  const next = { ...base }
+  for (const e of events || []) {
+    if (e?.type !== 'gas_analysis' || !e.details?.gases?.length) continue
+    const key = String(e.channel)
+    if (!next[key] || (e.timestamp || 0) >= (next[key].timestamp || 0)) next[key] = e
+  }
+  return next
+}
 
 // Last-known dashboard data, so cards render instantly on navigation while
 // fresh data loads in the background
@@ -27,6 +161,8 @@ function Dashboard({ onViewPlot }) {
   const [devices, setDevices] = useState(() => readDashboardCache().devices || [])
   const [activeTests, setActiveTests] = useState(() => readDashboardCache().activeTests || [])
   const [recentEvents, setRecentEvents] = useState(() => readDashboardCache().recentEvents || [])
+  const [selectedGasChannel, setSelectedGasChannel] = useState(null)
+  const [gasEventsByChannel, setGasEventsByChannel] = useState(() => buildGasChannelMap(readDashboardCache().recentEvents))
   const [loading, setLoading] = useState(false)
   const [globalDeviceModel, setGlobalDeviceModel] = useState(null)
   const [showFileManager, setShowFileManager] = useState(false)
@@ -162,6 +298,7 @@ function Dashboard({ onViewPlot }) {
       setDevices(devicesData)
       setActiveTests(testsData)
       setRecentEvents(eventsData)
+      setGasEventsByChannel(prev => buildGasChannelMap(eventsData, prev))
       try {
         localStorage.setItem('dashboardCache', JSON.stringify({
           devices: devicesData,
@@ -356,17 +493,16 @@ function Dashboard({ onViewPlot }) {
 
     source.addEventListener('gas_analysis', (e) => {
       const data = JSON.parse(e.data);
-      setRecentEvents(prev => {
-        const newEvent = {
-          id: `gas_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: 'gas_analysis',
-          device_name: data.device_name,
-          channel: data.channel,
-          timestamp: data.timestamp,
-          details: data.details
-        };
-        return [newEvent, ...prev].slice(0, 20);
-      });
+      const newEvent = {
+        id: `gas_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'gas_analysis',
+        device_name: data.device_name,
+        channel: data.channel,
+        timestamp: data.timestamp,
+        details: data.details
+      };
+      setRecentEvents(prev => [newEvent, ...prev].slice(0, 20));
+      setGasEventsByChannel(prev => buildGasChannelMap([newEvent], prev));
     });
 
     source.onerror = (e) => {
@@ -389,6 +525,45 @@ function Dashboard({ onViewPlot }) {
       if (source) source.close();
     }
   }, [])
+
+  const firstDeviceCardRef = useRef(null)
+  const gasCardRef = useRef(null)
+
+  // Match the gas card's bottom edge to the first device card's bottom so
+  // the two columns line up. Only when the columns sit side by side (lg+),
+  // and never squashed below a usable donut size.
+  useEffect(() => {
+    const align = () => {
+      const gasEl = gasCardRef.current
+      if (!gasEl) return
+      const cardEl = firstDeviceCardRef.current
+      if (!cardEl || window.innerWidth < 1024) {
+        gasEl.style.height = ''
+        return
+      }
+      const target = cardEl.getBoundingClientRect().bottom - gasEl.getBoundingClientRect().top
+      gasEl.style.height = target > 300 ? `${target}px` : ''
+    }
+    align()
+    const observer = new ResizeObserver(align)
+    if (firstDeviceCardRef.current) observer.observe(firstDeviceCardRef.current)
+    window.addEventListener('resize', align)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', align)
+    }
+  })
+
+  const gasChannelOptions = Object.keys(gasEventsByChannel)
+    .sort((a, b) => (Number(a) - Number(b)) || a.localeCompare(b))
+    .map(key => ({ key, label: `Ch ${key}` }))
+  const newestGasKey = Object.keys(gasEventsByChannel).reduce((latest, key) => (
+    (!latest || (gasEventsByChannel[key].timestamp || 0) > (gasEventsByChannel[latest].timestamp || 0)) ? key : latest
+  ), null)
+  // Fall back to the overall newest channel until the user picks one (or if
+  // their pick has rolled out of the recent-events window)
+  const activeGasKey = (selectedGasChannel && gasEventsByChannel[selectedGasChannel]) ? selectedGasChannel : newestGasKey
+  const latestGasEvent = activeGasKey ? gasEventsByChannel[activeGasKey] : null
 
   // Calculate stats
   const totalDevices = devices?.length || 0;
@@ -506,56 +681,47 @@ function Dashboard({ onViewPlot }) {
         </button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition-transform hover:scale-[1.02]">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <Server size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.total_devices')}</p>
-            <p className="text-2xl font-bold text-gray-900">{totalDevices}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition-transform hover:scale-[1.02]">
-          <div className="p-3 bg-green-50 text-green-600 rounded-xl">
-            <Activity size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.active_logging')}</p>
-            <p className="text-2xl font-bold text-gray-900">{activeLogging}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition-transform hover:scale-[1.02]">
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-            <FlaskConical size={24} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.running_tests')}</p>
-            {runningTests > 0 ? (
-              <div className="mt-1 space-y-1 max-h-20 overflow-y-auto pr-1">
-                {activeTests.map((test) => (
-                  <button
-                    key={test.id}
-                    type="button"
-                    onClick={() => handleViewTest(test.id)}
-                    className="block w-full text-left text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors"
-                    title={test.name || `Test ${test.id}`}
-                  >
-                    {test.name || `Test ${test.id}`}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-2xl font-bold text-gray-900">0</p>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition-transform hover:scale-[1.02]">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <Server size={24} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.total_devices')}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalDevices}</p>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 transition-transform hover:scale-[1.02]">
+              <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+                <FlaskConical size={24} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-gray-500 font-medium">{tPages('dashboard.running_tests')}</p>
+                {runningTests > 0 ? (
+                  <div className="mt-1 space-y-1 max-h-20 overflow-y-auto pr-1">
+                    {activeTests.map((test) => (
+                      <button
+                        key={test.id}
+                        type="button"
+                        onClick={() => handleViewTest(test.id)}
+                        className="block w-full text-left text-sm font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors"
+                        title={test.name || `Test ${test.id}`}
+                      >
+                        {test.name || `Test ${test.id}`}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-gray-900">0</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Active Devices Section */}
           {activeLogging > 0 && (
             <section>
@@ -566,8 +732,8 @@ function Dashboard({ onViewPlot }) {
                 {devices
                   .filter(d => d.active_test_id)
                   .map((device, index) => (
+                    <div key={device.id || index} ref={index === 0 ? firstDeviceCardRef : null}>
                     <DeviceCard
-                      key={device.id || index}
                       deviceId={device.id}
                       deviceType={device.device_type}
                       title={device.device_type === "black-box" ? "Gas-flow meter" : "Chimera"}
@@ -589,6 +755,7 @@ function Dashboard({ onViewPlot }) {
                       globalDeviceModel={globalDeviceModel}
                       onCalibrateAction={handleCalibrateAction}
                     />
+                    </div>
                   ))}
               </div>
             </section>
@@ -636,6 +803,18 @@ function Dashboard({ onViewPlot }) {
         {/* Sidebar Notifications */}
         <div className="lg:col-span-1">
           <div className="sticky top-6">
+            {latestGasEvent && (
+              <GasCompositionCard
+                event={latestGasEvent}
+                title={tPages('dashboard.gas_composition_title')}
+                otherLabel={tPages('dashboard.gas_other')}
+                timeLabel={formatTime(latestGasEvent.timestamp, user?.time_display)}
+                cardRef={gasCardRef}
+                channelOptions={gasChannelOptions}
+                selectedChannelKey={activeGasKey}
+                onSelectChannel={setSelectedGasChannel}
+              />
+            )}
             <h2 className="text-xl font-bold text-gray-800 mb-5">{tPages('dashboard.recent_activity')}</h2>
             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
               {recentEvents.length > 0 ? (

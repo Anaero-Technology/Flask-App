@@ -176,6 +176,8 @@
     "no_available_devices": "Aucun appareil disponible trouvé.",
     "all_devices_assigned": "Tous les appareils sont actuellement attribués à des tests actifs.",
     "recent_activity": "Activité Récente",
+    "gas_composition_title": "Dernière analyse de gaz",
+    "gas_other": "Autres",
     "event_tip": "Pointe",
     "event_raw_data": "Données Brutes",
     "event_gas_analysis": "Gaz",

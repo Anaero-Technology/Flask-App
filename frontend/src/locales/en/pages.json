@@ -176,6 +176,8 @@
     "no_available_devices": "No available devices found.",
     "all_devices_assigned": "All devices are currently assigned to active tests.",
     "recent_activity": "Recent Activity",
+    "gas_composition_title": "Latest gas analysis",
+    "gas_other": "Other",
     "event_tip": "Tip",
     "event_raw_data": "Raw Data",
     "event_gas_analysis": "Gas",
