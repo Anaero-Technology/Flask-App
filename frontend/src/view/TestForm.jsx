@@ -667,7 +667,11 @@ function TestForm() {
                                             </div>
 
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="text-gray-500 capitalize">{device.device_type}</span>
+                                                <span className="text-gray-500 capitalize">
+                                                    {['chimera', 'chimera-max'].includes(device.device_type)
+                                                        ? (globalDeviceModel === 'chimera-max' ? 'Chimera-Max' : 'Chimera')
+                                                        : device.device_type}
+                                                </span>
                                                 <span className={`flex items-center gap-1 ${device.status === 'connected' ? 'text-green-600' : 'text-gray-400'}`}>
                                                     <div className={`w-1.5 h-1.5 rounded-full ${device.status === 'connected' ? 'bg-green-500' : 'bg-gray-300'}`} />
                                                     {isBusy ? tPages('test_form.in_use') : device.status}

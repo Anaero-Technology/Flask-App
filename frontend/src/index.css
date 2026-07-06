@@ -38,6 +38,17 @@ button:active,
   cursor: pointer;
 }
 
+/* Recharts donut: suppress the browser focus rectangle drawn around a
+   clicked sector (the chart shows the selection in its centre instead)
+   and make sectors read as clickable */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
+.recharts-pie-sector {
+  cursor: pointer;
+}
+
 /* Dark mode overrides for common Tailwind utilities */
 .dark .bg-white {
   background-color: #0f172a;
@@ -111,7 +122,10 @@ button:active,
   border-color: #1e40af;
 }
 
-.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+/* Tailwind v4 puts divide borders on `> :not(:last-child)` (including the
+   first child), so the selector must match that — the v3-style sibling
+   selector misses the first divider and leaves it bright in dark mode */
+.dark .divide-gray-200 > :not(:last-child) {
   border-color: #1e293b;
 }
 

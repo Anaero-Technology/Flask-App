@@ -6,6 +6,7 @@ import ChimeraConfigTooltip from './ChimeraConfigTooltip';
 import BlackBoxConfigTooltip from './BlackBoxConfigTooltip';
 import { useCalibration } from './ChimeraContext';
 import { useAuth } from './AuthContext';
+import { formatGasName } from '../utils/gasNames';
 import { useTheme } from './ThemeContext';
 
 function DeviceCard(props) {
@@ -61,50 +62,63 @@ function DeviceCard(props) {
         };
     }, [props.logging, chimeraStatus]);
 
+    const fetchSensorInfo = () => {
+        if (!props.deviceType.startsWith('chimera')) return;
+        authFetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // 1. Check active calibration - set UI to calibrating mode if active
+                    if (data.is_calibrating) {
+                        setIsCalibrating(true);
+                    }
+
+                    // 2. Process sensors and history
+                    if (data.sensor_types) {
+                        const sensorsArray = Object.entries(data.sensor_types).map(([num, name]) => {
+                            const lastCalStart = data.calibration_history ? data.calibration_history[num] : null;
+                            let lastCalStr = "";
+                            if (lastCalStart) {
+                                const date = new Date(lastCalStart);
+                                // Simple format: "Dec 10, 14:30" or similar
+                                lastCalStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            }
+
+                            return {
+                                sensor_number: parseInt(num),
+                                gas_name: name,
+                                last_calibrated: lastCalStr
+                            };
+                        });
+                        setAvailableSensors(sensorsArray);
+
+                        // Only set default if not already set
+                        if (sensorsArray.length > 0) {
+                            setCalibrationSensor(prev => prev || sensorsArray[0].sensor_number);
+                        }
+                    }
+                }
+            })
+            .catch(err => console.error("Failed to fetch sensor info", err));
+    };
+
     useEffect(() => {
         // Always fetch sensor info on mount to check for active calibration
         if (props.deviceType.startsWith('chimera')) {
             // Subscribe to SSE via global context (handles calibration progress)
             subscribeToDevice(props.deviceId);
-
-            authFetch(`/api/v1/chimera/${props.deviceId}/sensor_info`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        // 1. Check active calibration - set UI to calibrating mode if active
-                        if (data.is_calibrating) {
-                            setIsCalibrating(true);
-                        }
-
-                        // 2. Process sensors and history
-                        if (data.sensor_types) {
-                            const sensorsArray = Object.entries(data.sensor_types).map(([num, name]) => {
-                                const lastCalStart = data.calibration_history ? data.calibration_history[num] : null;
-                                let lastCalStr = "";
-                                if (lastCalStart) {
-                                    const date = new Date(lastCalStart);
-                                    // Simple format: "Dec 10, 14:30" or similar
-                                    lastCalStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                                }
-
-                                return {
-                                    sensor_number: parseInt(num),
-                                    gas_name: name,
-                                    last_calibrated: lastCalStr
-                                };
-                            });
-                            setAvailableSensors(sensorsArray);
-
-                            // Only set default if not already set
-                            if (!calibrationSensor && sensorsArray.length > 0) {
-                                setCalibrationSensor(sensorsArray[0].sensor_number);
-                            }
-                        }
-                    }
-                })
-                .catch(err => console.error("Failed to fetch sensotr info", err));
+            fetchSensorInfo();
         }
     }, [props.deviceId, props.deviceType, subscribeToDevice]);
+
+    // The mount-time fetch can miss (device busy on serial, transient error),
+    // leaving the dropdown with numeric fallbacks — retry when the
+    // calibration panel opens so gas names appear
+    useEffect(() => {
+        if (isCalibrating && availableSensors.length === 0) {
+            fetchSensorInfo();
+        }
+    }, [isCalibrating]);
 
     // Track if calibration was ever in progress (to detect completion)
     const [hadCalibrationProgress, setHadCalibrationProgress] = useState(false);
@@ -192,7 +206,7 @@ function DeviceCard(props) {
         if (!calibrationSensor || !calibrationGasPct) return;
 
         const sensor = availableSensors.find(s => s.sensor_number === parseInt(calibrationSensor));
-        const gasName = sensor ? sensor.gas_name : `Sensor ${calibrationSensor}`;
+        const gasName = sensor ? formatGasName(sensor.gas_name) : `Sensor ${calibrationSensor}`;
 
         if (window.confirm(`Are you sure you want to start calibration for ${gasName}?`)) {
             if (props.onCalibrateAction) {
@@ -520,7 +534,7 @@ function DeviceCard(props) {
                                                 {availableSensors.length > 0 ? (
                                                     availableSensors.map(s => (
                                                         <option key={s.sensor_number} value={s.sensor_number}>
-                                                            {s.gas_name || `Sensor ${s.sensor_number}`}
+                                                            {s.gas_name ? formatGasName(s.gas_name) : `Sensor ${s.sensor_number}`}
                                                         </option>
                                                     ))
                                                 ) : (

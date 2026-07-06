@@ -7,6 +7,7 @@ import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../components/Toast';
 import { formatDate, formatTime } from '../utils/timeFormat';
+import { formatGasName } from '../utils/gasNames';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 
@@ -52,11 +53,13 @@ function useBoxSize() {
 
 function GasCompositionCard({ event, title, otherLabel, timeLabel, cardRef, channelOptions, selectedChannelKey, onSelectChannel }) {
   const [plotRef, plotSize] = useBoxSize()
+  // Slice the user clicked; shown in the donut centre until clicked again
+  const [focusSlice, setFocusSlice] = useState(null)
   const gases = (event.details?.gases || []).filter(g => Number.isFinite(g?.peak))
   if (gases.length === 0) return null
 
   const slices = gases.map((g, i) => ({
-    name: g.gas,
+    name: formatGasName(g.gas),
     value: Math.max(g.peak, 0),
     color: GAS_SLOT_COLORS[i % GAS_SLOT_COLORS.length]
   }))
@@ -67,11 +70,15 @@ function GasCompositionCard({ event, title, otherLabel, timeLabel, cardRef, chan
     slices.push({ name: otherLabel, value: Math.max(0, 100 - measured), color: GAS_BALANCE_COLOR })
   }
 
-  // Methane is the headline number for an AD lab; fall back to the first gas
+  // Methane is the headline number for an AD lab; fall back to the first gas.
+  // A clicked slice takes over the centre readout while it exists.
   const headline = gases.find(g => /ch4|methane/i.test(g.gas)) || gases[0]
+  const centerSlice = slices.find(s => s.name === focusSlice)
+    || slices.find(s => s.name === formatGasName(headline.gas))
+    || slices[0]
 
   return (
-    <div ref={cardRef} className="mb-5 flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div ref={cardRef} className="mb-5 flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:shadow-md">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-bold text-gray-900">{title}</h3>
         <span className="text-xs text-gray-400">{timeLabel}</span>
@@ -105,6 +112,10 @@ function GasCompositionCard({ event, title, otherLabel, timeLabel, cardRef, chan
                 stroke="#ffffff"
                 strokeWidth={2}
                 isAnimationActive={false}
+                onClick={(data) => {
+                  const name = data?.name ?? data?.payload?.name
+                  if (name) setFocusSlice(prev => (prev === name ? null : name))
+                }}
               >
                 {slices.map((s) => <Cell key={s.name} fill={s.color} />)}
               </Pie>
@@ -113,8 +124,8 @@ function GasCompositionCard({ event, title, otherLabel, timeLabel, cardRef, chan
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-gray-900">{headline.peak.toFixed(1)}%</span>
-          <span className="text-xs text-gray-500">{headline.gas}</span>
+          <span className="text-2xl font-bold text-gray-900">{centerSlice.value.toFixed(1)}%</span>
+          <span className="text-xs text-gray-500">{centerSlice.name}</span>
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
@@ -554,6 +565,18 @@ function Dashboard({ onViewPlot }) {
     }
   })
 
+  // A manual channel pick only lasts until the next fresh reading: when a
+  // strictly newer gas analysis arrives (via SSE or the poll), snap the
+  // selector back to auto-following the latest channel
+  const newestGasTsRef = useRef(0)
+  useEffect(() => {
+    const newestTs = Object.values(gasEventsByChannel).reduce((max, e) => Math.max(max, e.timestamp || 0), 0)
+    if (newestTs > newestGasTsRef.current) {
+      if (newestGasTsRef.current > 0) setSelectedGasChannel(null)
+      newestGasTsRef.current = newestTs
+    }
+  }, [gasEventsByChannel])
+
   const gasChannelOptions = Object.keys(gasEventsByChannel)
     .sort((a, b) => (Number(a) - Number(b)) || a.localeCompare(b))
     .map(key => ({ key, label: `Ch ${key}` }))
@@ -572,6 +595,10 @@ function Dashboard({ onViewPlot }) {
 
   // Filter devices that are NOT in an active test
   const unassignedDevices = devices?.filter(d => !d.active_test_id) || [];
+  // The gas card aligns its bottom to the first device card on the page —
+  // an Active Devices card when that section renders, else the first
+  // Available Devices card
+  const hasActiveDeviceCards = activeLogging > 0 && (devices?.some(d => d.active_test_id) || false);
   const filesLocalePrefix = getFilesLocalePrefix();
   const normalizedMemoryInfo = normalizeMemoryInfo(deviceMemoryInfo)
   const hasValidMemoryInfo = Boolean(
@@ -769,8 +796,8 @@ function Dashboard({ onViewPlot }) {
             {unassignedDevices.length > 0 ? (
               <div className="grid grid-cols-1 gap-4">
                 {unassignedDevices.map((device, index) => (
+                  <div key={device.id || index} ref={!hasActiveDeviceCards && index === 0 ? firstDeviceCardRef : null}>
                   <DeviceCard
-                    key={device.id || index}
                     deviceId={device.id}
                     deviceType={device.device_type}
                     title={device.device_type === "black-box" ? "Gas-flow meter" : "Chimera"}
@@ -789,6 +816,7 @@ function Dashboard({ onViewPlot }) {
                     onCalibrateAction={handleCalibrateAction}
                     globalDeviceModel={globalDeviceModel}
                   />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -848,7 +876,7 @@ function Dashboard({ onViewPlot }) {
                         <div className="flex flex-wrap gap-2">
                           {event.details.gases?.map((gas, idx) => (
                             <span key={idx} className="text-xs">
-                              {gas.gas}: {gas.peak.toFixed(2)}
+                              {formatGasName(gas.gas)}: {gas.peak.toFixed(2)}
                             </span>
                           ))}
                         </div>
