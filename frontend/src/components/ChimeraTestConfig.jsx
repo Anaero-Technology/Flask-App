@@ -321,6 +321,22 @@ function ChimeraTestConfig({
 
                         {/* Bulk Apply */}
                         <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setServiceChannelState(Array.from({ length: 15 }, (_, i) => i + 1), true)}
+                                    className="px-2 py-0.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                                >
+                                    {tPages('test_config.select_all')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setServiceChannelState(Array.from({ length: 15 }, (_, i) => i + 1), false)}
+                                    className="px-2 py-0.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                                >
+                                    {tPages('test_config.deselect_all')}
+                                </button>
+                            </div>
                             <span className="text-xs text-gray-500 hidden sm:inline">{tPages('chimera_config.set_all_open_times')}</span>
                             <div className="flex items-center gap-1">
                                 <input

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Upload, Download, Plus } from 'lucide-react';
+import { ChevronDown, Upload, Download, Plus, CheckSquare, Square } from 'lucide-react';
 import { useAuth } from './AuthContext';
 
 const sanitizeDecimalInput = (value) => {
@@ -539,23 +539,21 @@ function BlackBoxTestConfig({
         });
     }, [configurations, device.id, defaultChannelInService]);
 
-    const toggleActiveChannel = (channelNumber) => {
-        const targets = getTargetChannels(channelNumber);
-        const isCurrentlyActive = isChannelActive(channelNumber);
+    const setChannelsActive = (targets, nextActive) => {
         const nextConfigs = {};
 
         updateDraftConfigs(targets, (current, target) => {
-            if (isCurrentlyActive && allowClearOnToggle && getChannelConfig(target) !== null) {
+            if (!nextActive && allowClearOnToggle && getChannelConfig(target) !== null) {
                 const cleared = createDefaultBlackboxConfig(false);
                 nextConfigs[target] = cleared;
                 return cleared;
             }
-            const updated = { ...current, in_service: !isCurrentlyActive };
+            const updated = { ...current, in_service: nextActive };
             nextConfigs[target] = updated;
             return updated;
         });
 
-        if (isCurrentlyActive && allowClearOnToggle) {
+        if (!nextActive && allowClearOnToggle) {
             targets.forEach(target => {
                 if (getChannelConfig(target) !== null) {
                     onClearChannelConfig(device.id, target);
@@ -573,7 +571,7 @@ function BlackBoxTestConfig({
         if (shouldCommitOnToggle) {
             targets.forEach(target => {
                 const hasExisting = getChannelConfig(target) !== null;
-                if (isCurrentlyActive && allowClearOnToggle && hasExisting) {
+                if (!nextActive && allowClearOnToggle && hasExisting) {
                     onClearChannelConfig(device.id, target);
                     return;
                 }
@@ -581,6 +579,10 @@ function BlackBoxTestConfig({
                 onSaveChannelConfig(device.id, target, normalizeConfig(configToSave));
             });
         }
+    };
+
+    const toggleActiveChannel = (channelNumber) => {
+        setChannelsActive(getTargetChannels(channelNumber), !isChannelActive(channelNumber));
     };
 
     const handleSaveAll = async () => {
@@ -945,8 +947,30 @@ function BlackBoxTestConfig({
         handleRowSelection(channelNumber, event);
     };
 
+    const allChannels = Array.from({ length: 15 }, (_, i) => i + 1);
+
     const actionsContent = !hideActions ? (
         <div className="flex items-center gap-2">
+            {!isReadOnly && !disableActiveToggle && (
+                <>
+                    <button
+                        type="button"
+                        onClick={() => setChannelsActive(allChannels, true)}
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
+                    >
+                        <CheckSquare size={14} />
+                        {tPages('test_config.select_all')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setChannelsActive(allChannels, false)}
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:shadow-sm transition-all"
+                    >
+                        <Square size={14} />
+                        {tPages('test_config.deselect_all')}
+                    </button>
+                </>
+            )}
             {showSaveButton && (
                 <button
                     type="button"
