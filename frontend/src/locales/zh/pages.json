@@ -43,6 +43,9 @@
     "time_local": "本地时间",
     "time_utc": "UTC",
     "time_display_saved": "时间显示偏好设置已保存",
+    "localise_headers": "下载列标题语言",
+    "localise_headers_help": "选择下载测试数据时列标题使用的语言。",
+    "localise_headers_saved": "下载列标题语言已保存",
     "profile_picture": "头像",
     "profile_picture_help": "显示在侧边栏您的名字旁边（最大 2 MB）",
     "profile_picture_upload": "上传头像",
@@ -603,6 +606,8 @@
     "sec": "秒"
   },
   "test_config": {
+    "select_all": "全选",
+    "deselect_all": "取消全选",
     "gas_flow_meter": "气流计",
     "configure_channel": "配置通道",
     "inoculum_sample": "接种物样本",

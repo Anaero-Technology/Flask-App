@@ -43,6 +43,9 @@
     "time_local": "Lokale Zeit",
     "time_utc": "UTC",
     "time_display_saved": "Zeitanzeige-Einstellung gespeichert",
+    "localise_headers": "Sprache der Download-Überschriften",
+    "localise_headers_help": "Sprache für die Spaltenüberschriften beim Herunterladen von Testdaten wählen.",
+    "localise_headers_saved": "Sprache der Download-Überschriften gespeichert",
     "profile_picture": "Profilbild",
     "profile_picture_help": "Wird neben Ihrem Namen in der Seitenleiste angezeigt (max. 2 MB)",
     "profile_picture_upload": "Bild hochladen",
@@ -583,6 +586,8 @@
     "sec": "Sek"
   },
   "test_config": {
+    "select_all": "Alle auswählen",
+    "deselect_all": "Alle abwählen",
     "gas_flow_meter": "Gasdurchflussmesser",
     "configure_channel": "Kanal Konfigurieren",
     "inoculum_sample": "Inokulum-Probe",

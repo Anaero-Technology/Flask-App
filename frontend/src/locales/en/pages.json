@@ -43,6 +43,9 @@
     "time_local": "Local time",
     "time_utc": "UTC",
     "time_display_saved": "Time display preference saved",
+    "localise_headers": "Download Headers Language",
+    "localise_headers_help": "Choose the language for column headers when downloading test data.",
+    "localise_headers_saved": "Download header language saved",
     "profile_picture": "Profile Picture",
     "profile_picture_help": "Shown next to your name in the sidebar (max 2 MB)",
     "profile_picture_upload": "Upload picture",
@@ -613,6 +616,8 @@
     "sec": "sec"
   },
   "test_config": {
+    "select_all": "Select all",
+    "deselect_all": "Deselect all",
     "gas_flow_meter": "Gas-flow meter",
     "configure_channel": "Configure Channel",
     "inoculum_sample": "Inoculum Sample",

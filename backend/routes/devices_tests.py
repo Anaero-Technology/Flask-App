@@ -1941,6 +1941,61 @@ def delete_test(test_id):
         return internal_error(e)
 
 
+# Column-header translations for test data downloads. The frontend passes its
+# UI language as ?lang=..; keys match the English headers and unknown headers
+# or languages fall back to English.
+DOWNLOAD_HEADER_TRANSLATIONS = {
+    'de': {
+        'Timestamp': 'Zeitstempel', 'Device': 'Gerät', 'Channel': 'Kanal',
+        'Channel Name': 'Kanalname', 'Days': 'Tage', 'Hours': 'Stunden', 'Minutes': 'Minuten',
+        'Tumbler Volume': 'Tumbler-Volumen', 'Temperature (C)': 'Temperatur (C)',
+        'Pressure (mbar)': 'Druck (mbar)', 'Cumulative Tips': 'Kumulierte Kippungen',
+        'Volume This Tip STP': 'Volumen dieser Kippung STP', 'Total Volume STP': 'Gesamtvolumen STP',
+        'Tips This Day': 'Kippungen dieses Tages', 'Volume This Day STP': 'Volumen dieses Tages STP',
+        'Tips This Hour': 'Kippungen dieser Stunde', 'Volume This Hour STP': 'Volumen dieser Stunde STP',
+        'Net Volume Per Gram': 'Nettovolumen pro Gramm', 'Tip Number': 'Kippungsnummer',
+        'Seconds Elapsed': 'Verstrichene Sekunden', 'Gas': 'Gas', 'Peak Value': 'Spitzenwert',
+        'Sensor Number': 'Sensornummer'
+    },
+    'es': {
+        'Timestamp': 'Marca de tiempo', 'Device': 'Dispositivo', 'Channel': 'Canal',
+        'Channel Name': 'Nombre del canal', 'Days': 'Días', 'Hours': 'Horas', 'Minutes': 'Minutos',
+        'Tumbler Volume': 'Volumen del tambor', 'Temperature (C)': 'Temperatura (C)',
+        'Pressure (mbar)': 'Presión (mbar)', 'Cumulative Tips': 'Rotaciones acumuladas',
+        'Volume This Tip STP': 'Volumen de esta rotación STP', 'Total Volume STP': 'Volumen total STP',
+        'Tips This Day': 'Rotaciones del día', 'Volume This Day STP': 'Volumen del día STP',
+        'Tips This Hour': 'Rotaciones de la hora', 'Volume This Hour STP': 'Volumen de la hora STP',
+        'Net Volume Per Gram': 'Volumen neto por gramo', 'Tip Number': 'Número de rotación',
+        'Seconds Elapsed': 'Segundos transcurridos', 'Gas': 'Gas', 'Peak Value': 'Valor pico',
+        'Sensor Number': 'Número de sensor'
+    },
+    'fr': {
+        'Timestamp': 'Horodatage', 'Device': 'Appareil', 'Channel': 'Canal',
+        'Channel Name': 'Nom du canal', 'Days': 'Jours', 'Hours': 'Heures', 'Minutes': 'Minutes',
+        'Tumbler Volume': 'Volume du tambour', 'Temperature (C)': 'Température (C)',
+        'Pressure (mbar)': 'Pression (mbar)', 'Cumulative Tips': 'Basculements cumulés',
+        'Volume This Tip STP': 'Volume de ce basculement STP', 'Total Volume STP': 'Volume total STP',
+        'Tips This Day': 'Basculements du jour', 'Volume This Day STP': 'Volume du jour STP',
+        'Tips This Hour': "Basculements de l'heure", 'Volume This Hour STP': "Volume de l'heure STP",
+        'Net Volume Per Gram': 'Volume net par gramme', 'Tip Number': 'Numéro de basculement',
+        'Seconds Elapsed': 'Secondes écoulées', 'Gas': 'Gaz', 'Peak Value': 'Valeur de crête',
+        'Sensor Number': 'Numéro de capteur'
+    },
+    'zh': {
+        'Timestamp': '时间戳', 'Device': '设备', 'Channel': '通道',
+        'Channel Name': '通道名称', 'Days': '天', 'Hours': '小时', 'Minutes': '分钟',
+        'Tumbler Volume': '翻斗容积', 'Temperature (C)': '温度 (C)',
+        'Pressure (mbar)': '压力 (mbar)', 'Cumulative Tips': '累计翻斗次数',
+        'Volume This Tip STP': '本次翻斗体积 STP', 'Total Volume STP': '总体积 STP',
+        'Tips This Day': '当日翻斗次数', 'Volume This Day STP': '当日体积 STP',
+        'Tips This Hour': '当小时翻斗次数', 'Volume This Hour STP': '当小时体积 STP',
+        'Net Volume Per Gram': '每克净体积', 'Tip Number': '翻斗编号',
+        'Seconds Elapsed': '经过秒数', 'Gas': '气体', 'Peak Value': '峰值',
+        'Sensor Number': '传感器编号'
+    }
+}
+
+
 @devices_tests_bp.route("/api/v1/tests/<int:test_id>/download", methods=['GET'])
 @jwt_required()
 def download_test_data(test_id):
@@ -2080,18 +2135,25 @@ def download_test_data(test_id):
                 row.sensor_number
             ]
 
-        bb_event_header = [
-            'Timestamp', 'Device', 'Channel', 'Channel Name', 'Days', 'Hours', 'Minutes', 
-            'Tumbler Volume', 'Temperature (C)', 'Pressure (mbar)', 'Cumulative Tips', 
-            'Volume This Tip STP', 'Total Volume STP', 'Tips This Day', 
-            'Volume This Day STP', 'Tips This Hour', 'Volume This Hour STP', 'Net Volume Per Gram'
-        ]
-        
-        bb_raw_header = [
-            'Timestamp', 'Device', 'Channel', 'Tip Number', 'Seconds Elapsed', 'Temperature (C)', 'Pressure (mbar)'
-        ]
+        # Localise column headers to the user's chosen export-header language.
+        # English ('en') and any unknown header keep the original English text.
+        export_lang = user.export_header_language if user else 'en'
+        header_map = DOWNLOAD_HEADER_TRANSLATIONS.get(export_lang, {})
+        def tr_header(header):
+            return [header_map.get(col, col) for col in header]
 
-        chimera_header = ['Timestamp', 'Device', 'Channel', 'Gas', 'Peak Value', 'Sensor Number']
+        bb_event_header = tr_header([
+            'Timestamp', 'Device', 'Channel', 'Channel Name', 'Days', 'Hours', 'Minutes',
+            'Tumbler Volume', 'Temperature (C)', 'Pressure (mbar)', 'Cumulative Tips',
+            'Volume This Tip STP', 'Total Volume STP', 'Tips This Day',
+            'Volume This Day STP', 'Tips This Hour', 'Volume This Hour STP', 'Net Volume Per Gram'
+        ])
+
+        bb_raw_header = tr_header([
+            'Timestamp', 'Device', 'Channel', 'Tip Number', 'Seconds Elapsed', 'Temperature (C)', 'Pressure (mbar)'
+        ])
+
+        chimera_header = tr_header(['Timestamp', 'Device', 'Channel', 'Gas', 'Peak Value', 'Sensor Number'])
 
         # Logic for return
         # If multiple types exist, ZIP them.

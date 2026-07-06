@@ -43,6 +43,9 @@
     "time_local": "Heure locale",
     "time_utc": "UTC",
     "time_display_saved": "Préférence d'affichage de l'heure enregistrée",
+    "localise_headers": "Langue des en-têtes de téléchargement",
+    "localise_headers_help": "Choisissez la langue des en-têtes de colonne lors du téléchargement des données de test.",
+    "localise_headers_saved": "Langue des en-têtes de téléchargement enregistrée",
     "profile_picture": "Photo de profil",
     "profile_picture_help": "Affichée à côté de votre nom dans la barre latérale (max. 2 Mo)",
     "profile_picture_upload": "Téléverser une photo",
@@ -583,6 +586,8 @@
     "sec": "sec"
   },
   "test_config": {
+    "select_all": "Tout sélectionner",
+    "deselect_all": "Tout désélectionner",
     "gas_flow_meter": "Débitmètre de gaz",
     "configure_channel": "Configurer le Canal",
     "inoculum_sample": "Échantillon d'Inoculum",

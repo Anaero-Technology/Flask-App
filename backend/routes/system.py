@@ -211,6 +211,7 @@ def delete_database():
                 "csv_delimiter": admin.csv_delimiter,
                 "language": admin.language,
                 "time_display": admin.time_display,
+                "export_header_language": admin.export_header_language,
                 "profile_picture_filename": admin.profile_picture_filename,
             })
 
@@ -230,6 +231,7 @@ def delete_database():
                 csv_delimiter=admin_data["csv_delimiter"],
                 language=admin_data["language"],
                 time_display=admin_data["time_display"],
+                export_header_language=admin_data.get("export_header_language", 'en'),
                 profile_picture_filename=admin_data["profile_picture_filename"],
             )
             admin.id = admin_data["id"]

@@ -43,6 +43,9 @@
     "time_local": "Hora local",
     "time_utc": "UTC",
     "time_display_saved": "Preferencia de visualización de la hora guardada",
+    "localise_headers": "Idioma de los encabezados de descarga",
+    "localise_headers_help": "Elige el idioma de los encabezados de columna al descargar datos de prueba.",
+    "localise_headers_saved": "Idioma de encabezados de descarga guardado",
     "profile_picture": "Foto de perfil",
     "profile_picture_help": "Se muestra junto a tu nombre en la barra lateral (máx. 2 MB)",
     "profile_picture_upload": "Subir foto",
@@ -178,7 +181,7 @@
     "recent_activity": "Actividad Reciente",
     "gas_composition_title": "Último análisis de gas",
     "gas_other": "Otros",
-    "event_tip": "Punta",
+    "event_tip": "Rotación",
     "event_raw_data": "Datos Brutos",
     "event_gas_analysis": "Gas",
     "no_recent_activity": "Sin actividad reciente"
@@ -583,6 +586,8 @@
     "sec": "seg"
   },
   "test_config": {
+    "select_all": "Seleccionar todo",
+    "deselect_all": "Deseleccionar todo",
     "gas_flow_meter": "Medidor de flujo de gas",
     "configure_channel": "Configurar Canal",
     "inoculum_sample": "Muestra de Inóculo",
@@ -617,7 +622,7 @@
     "create_sample": "Crear muestra",
     "save_changes": "Guardar",
     "confirm_save": "¿Guardar cambios en la configuración de canales?",
-    "confirm_save_reprocess": "¿Guardar cambios en la configuración de canales? Esto reprocesará todas las puntas históricas del caudalímetro de esta prueba con los valores actualizados.",
+    "confirm_save_reprocess": "¿Guardar cambios en la configuración de canales? Esto reprocesará todas las rotaciones históricas del caudalímetro de esta prueba con los valores actualizados.",
     "save_reprocess_notice": "Guardar la configuración recalcula todos los valores históricos de eventos del caudalímetro para esta prueba.",
     "save_failed": "No se pudo guardar la configuración de canales.",
     "no_configurations_to_export": "No hay configuraciones para exportar.",

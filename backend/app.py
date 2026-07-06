@@ -69,6 +69,8 @@ with app.app_context():
             user_columns = {column['name'] for column in inspector.get_columns('users')}
             if 'time_display' not in user_columns:
                 migration_statements.append("ALTER TABLE users ADD COLUMN time_display VARCHAR(5) NOT NULL DEFAULT 'local'")
+            if 'export_header_language' not in user_columns:
+                migration_statements.append("ALTER TABLE users ADD COLUMN export_header_language VARCHAR(5) NOT NULL DEFAULT 'en'")
 
         if migration_statements:
             with db.engine.begin() as connection:

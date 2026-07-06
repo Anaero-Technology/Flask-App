@@ -76,6 +76,9 @@ function Settings() {
   const [timeDisplay, setTimeDisplay] = useState('local')
   const [savingTimeDisplay, setSavingTimeDisplay] = useState(false)
   const [timeDisplayMessage, setTimeDisplayMessage] = useState({ text: '', type: '' })
+  const [exportHeaderLanguage, setExportHeaderLanguage] = useState('en')
+  const [savingExportHeaderLang, setSavingExportHeaderLang] = useState(false)
+  const [exportHeaderLangMessage, setExportHeaderLangMessage] = useState({ text: '', type: '' })
   const [profilePicPreview, setProfilePicPreview] = useState(user?.profile_picture_url)
   const [savingProfilePic, setSavingProfilePic] = useState(false)
   const [profilePicMessage, setProfilePicMessage] = useState({ text: '', type: '' })
@@ -91,6 +94,7 @@ function Settings() {
   useAutoDismiss(networkMessage, setNetworkMessage)
   useAutoDismiss(delimiterMessage, setDelimiterMessage)
   useAutoDismiss(timeDisplayMessage, setTimeDisplayMessage)
+  useAutoDismiss(exportHeaderLangMessage, setExportHeaderLangMessage)
   useAutoDismiss(profilePicMessage, setProfilePicMessage)
   useAutoDismiss(languageMessage, setLanguageMessage)
   useAutoDismiss(brandingMessage, setBrandingMessage)
@@ -690,6 +694,7 @@ function Settings() {
         setCsvDelimiter(user.csv_delimiter || ',')
         setLanguage(user.language || 'en')
         setTimeDisplay(user.time_display || 'local')
+        setExportHeaderLanguage(user.export_header_language || 'en')
       }
     } catch (error) {
       console.error('Error loading user preferences:', error)
@@ -749,6 +754,33 @@ function Settings() {
       setTimeDisplayMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
     } finally {
       setSavingTimeDisplay(false)
+    }
+  }
+
+  const saveExportHeaderLanguagePreference = async () => {
+    setSavingExportHeaderLang(true)
+    setExportHeaderLangMessage({ text: '', type: '' })
+
+    try {
+      const response = await authFetch('/api/v1/user/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          export_header_language: exportHeaderLanguage
+        })
+      })
+
+      if (response.ok) {
+        setExportHeaderLangMessage({ text: tPages('settings.localise_headers_saved'), type: 'success' })
+        // Sync the cached user object so downloads reflect the new preference
+        refreshUser()
+      } else {
+        const data = await response.json()
+        setExportHeaderLangMessage({ text: data.error || tPages('settings.save_preference_failed'), type: 'error' })
+      }
+    } catch (error) {
+      setExportHeaderLangMessage({ text: 'Error saving preference: ' + error.message, type: 'error' })
+    } finally {
+      setSavingExportHeaderLang(false)
     }
   }
 
@@ -994,7 +1026,7 @@ function Settings() {
 
   return (
     <div className="flex min-h-full flex-col bg-gray-50 dark:bg-slate-950 lg:h-full lg:flex-row lg:overflow-hidden">
-        <aside className="shrink-0 border-b border-gray-200 bg-white dark:bg-slate-900 lg:flex lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
+        <aside className="shrink-0 border-b border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900 lg:flex lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
           <div className="p-4 pb-1 lg:p-6 lg:pb-2">
             <h1 className="text-base font-bold text-gray-900 tracking-tight">{tPages('settings.title')}</h1>
           </div>
@@ -1022,7 +1054,7 @@ function Settings() {
         {activeTab === 'preferences' && (
         <section className="space-y-3">
           <h2 className="text-base font-bold text-gray-900">{tCommon('preferences')}</h2>
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-slate-800">
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
                 <h3 className="text-sm font-medium text-gray-900">{tPages('settings.profile_picture')}</h3>
@@ -1110,6 +1142,33 @@ function Settings() {
 
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.localise_headers')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.localise_headers_help')}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={exportHeaderLanguage}
+                  onChange={(e) => setExportHeaderLanguage(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="en">{tCommon('english')}</option>
+                  <option value="es">{tCommon('spanish')}</option>
+                  <option value="fr">{tCommon('french')}</option>
+                  <option value="de">{tCommon('german')}</option>
+                  <option value="zh">{tCommon('chinese')}</option>
+                </select>
+                <button
+                  onClick={saveExportHeaderLanguagePreference}
+                  disabled={savingExportHeaderLang}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {savingExportHeaderLang ? tPages('settings.saving') : tCommon('save')}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
+              <div>
                 <h3 className="text-sm font-medium text-gray-900">{tPages('settings.csv_delimiter')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">{tPages('settings.csv_delimiter_help')}</p>
               </div>
@@ -1173,6 +1232,11 @@ function Settings() {
           {timeDisplayMessage.text && (
             <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(timeDisplayMessage.type)}`}>
               {timeDisplayMessage.text}
+            </div>
+          )}
+          {exportHeaderLangMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(exportHeaderLangMessage.type)}`}>
+              {exportHeaderLangMessage.text}
             </div>
           )}
           {profilePicMessage.text && (
