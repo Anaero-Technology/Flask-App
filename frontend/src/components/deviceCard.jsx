@@ -102,7 +102,7 @@ function DeviceCard(props) {
                         }
                     }
                 })
-                .catch(err => console.error("Failed to fetch sensor info", err));
+                .catch(err => console.error("Failed to fetch sensotr info", err));
         }
     }, [props.deviceId, props.deviceType, subscribeToDevice]);
 
@@ -171,11 +171,13 @@ function DeviceCard(props) {
             const now = new Date().getTime();
             const seconds = Math.floor((now - start) / 1000);
 
-            if (seconds < 0) return "0h 0m 0s";
+            if (seconds < 0) return "0h 00m 00s";
             const h = Math.floor(seconds / 3600);
             const m = Math.floor((seconds % 3600) / 60);
             const s = Math.floor(seconds % 60);
-            return `${h}h ${m}m ${s}s`;
+            // Zero-pad so the string width is constant — otherwise the pill
+            // resizes every second and the badge row reflows
+            return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
         };
 
         setDuration(calculateDuration());
@@ -340,8 +342,8 @@ function DeviceCard(props) {
                 </div>
 
                 <div className="flex-1 w-full min-w-0 relative">
-                    <div className="flex justify-between items-start">
-                        <div className="min-w-0">
+                    <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
                             <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-0.5 truncate">
                                 {getDeviceLabel()}
                             </h3>
@@ -376,8 +378,10 @@ function DeviceCard(props) {
                             <p className="text-xs text-gray-500 font-mono mt-0.5 truncate">{props.port}</p>
                         </div>
 
+                        {/* order-last keeps the menu pinned to the right edge even when
+                            the calibration panel joins the row after it in the DOM */}
                         {showDashboardActionsMenu && (
-                            <div className="relative shrink-0" ref={actionsMenuRef}>
+                            <div className="relative shrink-0 order-last" ref={actionsMenuRef}>
                                 <button
                                     type="button"
                                     onClick={() => setIsActionsMenuOpen(prev => !prev)}
@@ -624,9 +628,9 @@ function DeviceCard(props) {
                                     />
                                 ) : null}
                                 {props.testStartTime && (
-                                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
+                                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100 whitespace-nowrap">
                                         <Clock size={10} />
-                                        <span className="font-mono">{duration}</span>
+                                        <span className="font-mono tabular-nums">{duration}</span>
                                     </div>
                                 )}
                             </>
