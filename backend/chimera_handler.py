@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import threading
@@ -908,6 +909,23 @@ class ChimeraHandler(SerialHandler):
         """Get the local IP address (works on direct ethernet / link-local too)."""
         return wifi_manager.get_local_ip()
 
+    @staticmethod
+    def _get_frontend_url(ip: str) -> str:
+        """URL the device screen shows to users.
+
+        When the nginx front door from scripts/setup_https.sh is enabled,
+        point at port 80 with no port in the address; fall back to the
+        legacy :5173 preview server on unmigrated devices.
+
+        Always use the http:// scheme: it is the deliberate default (a
+        self-signed HTTPS cert shows a scary interstitial), and the screen
+        firmware strips exactly "http://" (7 chars) for display, so an
+        https:// URL renders as "/192.168.1.67" on the device.
+        """
+        if os.path.exists('/etc/nginx/sites-enabled/flaskapp'):
+            return f"http://{ip}"
+        return f"http://{ip}:5173"
+
     def _get_wifi_ssids(self) -> List[str]:
         """Get list of available WiFi SSIDs (strongest first, escaped-colon safe)."""
         try:
@@ -989,7 +1007,7 @@ class ChimeraHandler(SerialHandler):
                         # Send ipset command to chimera
                         if self.connection and self.connection.is_open:
                             try:
-                                response = self.send_command(f"ipset http://{current_ip}:5173", timeout=2.0)
+                                response = self.send_command(f"ipset {self._get_frontend_url(current_ip)}", timeout=2.0)
                                 if response == "done ipset":
                                     print(f"[CHIMERA IP MONITOR] ipset successful")
                                     self.last_known_ip = current_ip

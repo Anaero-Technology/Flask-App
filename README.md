@@ -10,7 +10,7 @@ Full-stack app for managing and monitoring device tests (Flask backend + React/V
 - Redis
 - USB/serial access for connected devices
 
-## Install (Steps 1 to 7)
+## Install (Steps 1 to 8)
 
 ### 1. Clone the repository
 
@@ -162,7 +162,26 @@ sudo systemctl enable flaskapp-backend flaskapp-frontend
 sudo systemctl restart flaskapp-backend flaskapp-frontend
 ```
 
-### 7. Reboot and verify
+### 7. Set up the nginx front door
+
+```bash
+sudo bash backend/scripts/setup_https.sh
+```
+
+This installs nginx on ports 80/443 in front of the app, so users browse to
+`http://<device>` with no port number. Port 80 serves the app directly —
+it deliberately does not force HTTPS, because a self-signed certificate
+makes browsers show a full-page "connection is not private" warning, which
+is worse for users than plain http. The script is idempotent and is also run
+automatically by the updater on every software update.
+
+Optional HTTPS (`https://<device>`) is also enabled, with a per-device CA
+and server certificate (a LAN appliance has no public domain, so a publicly
+trusted certificate is not possible). To use it without warnings, download
+`http://<device>/ca.crt` and install it as a trusted certificate authority
+on the client machines first.
+
+### 8. Reboot and verify
 
 ```bash
 sudo reboot
@@ -173,16 +192,20 @@ After reboot:
 ```bash
 systemctl status flaskapp-backend --no-pager
 systemctl status flaskapp-frontend --no-pager
+systemctl status nginx --no-pager
 journalctl -u flaskapp-backend -n 80 --no-pager
 journalctl -u flaskapp-frontend -n 80 --no-pager
 ```
 
 Access the app:
 
-- Local device: `http://localhost:5173`
-- Wi-Fi/LAN: `http://<pi_wifi_ip>:5173`
-- Ethernet fallback (if using `setup_ethernet_no_mdns.sh`): `http://169.254.50.1:5173`
-- mDNS mode (if using `setup_ethernet.sh`): `http://chimera.local:5173`
+- Local device: `http://localhost`
+- Wi-Fi/LAN: `http://<pi_wifi_ip>`
+- Ethernet fallback (if using `setup_ethernet_no_mdns.sh`): `http://169.254.50.1`
+- mDNS mode (if using `setup_ethernet.sh`): `http://chimera.local`
+- Optional HTTPS (after installing the device CA, see step 7): `https://<device>`
+- Legacy fallback (no nginx): `http://<device>:5173` still works via the
+  frontend preview service
 
 ## API docs
 

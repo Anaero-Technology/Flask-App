@@ -25,6 +25,12 @@ app.config['CHIMERA_DEVICE_MODEL'] = Config.CHIMERA_DEVICE_MODEL
 # header, never cookies, so credentialed cross-origin requests must not be
 # allowed (any-origin + credentials lets other sites ride a user's session).
 CORS(app)
+
+# Requests arrive via the local nginx front door (see scripts/setup_https.sh),
+# so trust exactly one X-Forwarded-For/-Proto hop — otherwise the login rate
+# limiter keys every client as 127.0.0.1.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 db.init_app(app)
 jwt = JWTManager(app)
 

@@ -34,6 +34,15 @@ start_services() {
   systemctl start flaskapp-frontend.service || true
 }
 
+ensure_https() {
+  # Idempotent: installs nginx / regenerates certs only when missing or
+  # expiring, but always rewrites the site config so fleet devices converge.
+  log "Ensuring nginx front door is configured"
+  if ! /bin/bash "${BACKEND_DIR}/scripts/setup_https.sh"; then
+    log "WARNING: nginx front door setup failed; app remains reachable on :5173"
+  fi
+}
+
 main() {
   log "Orchestrator started"
 
@@ -56,6 +65,7 @@ main() {
   fi
 
   start_services
+  ensure_https
 
   if [[ "${rc}" -ne 0 ]]; then
     log "Orchestrator completed with failure"

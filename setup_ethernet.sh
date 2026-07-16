@@ -77,7 +77,7 @@ sudo nmcli con up "$ETH_CONN" 2>/dev/null || true
 echo ""
 echo "=== Setup Complete ==="
 echo "Hostname    : ${HOSTNAME}"
-echo "mDNS URL    : http://${HOSTNAME}.local:5173"
+echo "mDNS URL    : http://${HOSTNAME}.local (legacy: http://${HOSTNAME}.local:5173)"
 echo "Fallback IP : 169.254.50.1 (link-local, for direct cable connections)"
 echo ""
 echo "Reboot recommended: sudo reboot"
