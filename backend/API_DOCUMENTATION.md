@@ -139,6 +139,11 @@
 - `POST /api/v1/chimera/<int:device_id>/send_command` - Send raw serial command.
 - `GET /api/v1/chimera/<int:device_id>/stream` - SSE stream for processed events.
 - `GET /api/v1/chimera/<int:device_id>/data_stream` - Data stream metadata.
+- `POST /api/v1/chimera/<int:device_id>/firmware_update` - Flash uploaded firmware `.bin` over serial (admin only).
+  - Multipart field: `firmware`. Returns 202; progress arrives on the SSE stream as `firmware_update_progress` events and the outcome as `firmware_update_complete`.
+- `GET /api/v1/chimera/<int:device_id>/firmware_check` - Compare the repo-bundled `firmware/chimera/firmware.bin` hash against the device's `firmwarehash` reply.
+  - Returns `update_available` (true/false, or null with a `reason`: `no_bundled`, `invalid_bundle`, `device_unknown`, `update_in_progress`), plus `device_hash`/`bundled_hash`.
+- `POST /api/v1/chimera/<int:device_id>/firmware_update_bundled` - Flash the bundled firmware.bin (admin only). Same SSE events as the upload route.
 
 ## Data and Outlier Endpoints
 - `GET /api/v1/tests/<int:test_id>/device/<int:device_id>/data` - Get time-series data.

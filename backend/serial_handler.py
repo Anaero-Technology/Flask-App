@@ -25,6 +25,9 @@ class SerialHandler:
         self._line_buffer = ""
         self._automatic_handlers = {}  # Dict of prefix -> handler function
         self.on_disconnect = None  # Callback for when connection is lost
+        # While a firmware update streams raw bytes, other callers must fail
+        # fast instead of blocking minutes on _command_lock.
+        self.firmware_update_in_progress = False
         
     
     def __del__(self):
@@ -185,6 +188,8 @@ class SerialHandler:
         """Send a command and wait for response"""
         if not self.connection.is_open:
             raise Exception("Device not connected")
+        if self.firmware_update_in_progress:
+            raise Exception("Device is busy with a firmware update")
 
         with self._command_lock:
             # Clear the response queue before sending
@@ -207,10 +212,43 @@ class SerialHandler:
             except queue.Empty:
                 return None
     
+    def _send_command_locked(self, command: str, timeout: float = 5.0,
+                             expect_prefix: Optional[str] = None) -> Optional[str]:
+        """Send a command and wait for a response while the caller already
+        holds _command_lock (send_command would deadlock). Used by long
+        operations (e.g. firmware update) that must keep the lock across
+        several exchanges. If expect_prefix is given, lines that don't match
+        are skipped (e.g. boot noise after a device reset).
+        """
+        while not self._command_response_queue.empty():
+            try:
+                self._command_response_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        with self._write_lock:
+            self.connection.write(f"{command}\n".encode())
+            self.connection.flush()
+            serial_logger.log_sent(self.port, command)
+
+        deadline = time.time() + timeout
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return None
+            try:
+                line = self._command_response_queue.get(timeout=remaining)
+            except queue.Empty:
+                return None
+            if expect_prefix is None or line.startswith(expect_prefix):
+                return line
+
     def send_command_no_wait(self, command: str) -> None:
         """Send a command without waiting for response"""
         if not self.connection.is_open:
             raise Exception("Device not connected")
+        if self.firmware_update_in_progress:
+            raise Exception("Device is busy with a firmware update")
 
         with self._write_lock:
             self.connection.write(f"{command}\n".encode())

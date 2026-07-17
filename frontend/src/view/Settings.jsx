@@ -70,6 +70,15 @@ function Settings() {
   })
   const passwordResolveRef = useRef(null)
   const updatePollRef = useRef(null)
+  const [chimeraDevices, setChimeraDevices] = useState([])
+  const [selectedChimeraId, setSelectedChimeraId] = useState(null)
+  const [firmwareFile, setFirmwareFile] = useState(null)
+  const [firmwareUpdating, setFirmwareUpdating] = useState(false)
+  const [firmwareProgress, setFirmwareProgress] = useState(null)
+  const [firmwareMessage, setFirmwareMessage] = useState({ text: '', type: '' })
+  const [firmwareCheck, setFirmwareCheck] = useState(null)
+  const [checkingFirmware, setCheckingFirmware] = useState(false)
+  const firmwareEventSourceRef = useRef(null)
   const [csvDelimiter, setCsvDelimiter] = useState(',')
   const [savingDelimiter, setSavingDelimiter] = useState(false)
   const [delimiterMessage, setDelimiterMessage] = useState({ text: '', type: '' })
@@ -1004,8 +1013,12 @@ function Settings() {
 
     fetchSerialLogInfo()
     fetchRunningTestsCount()
+    fetchConnectedChimeras()
     checkForUpdates()
-    const runningTestsInterval = setInterval(fetchRunningTestsCount, 10000)
+    const runningTestsInterval = setInterval(() => {
+      fetchRunningTestsCount()
+      fetchConnectedChimeras()
+    }, 10000)
     return () => clearInterval(runningTestsInterval)
   }, [isSystemAdmin])
 
@@ -1016,6 +1029,151 @@ function Settings() {
         updatePollRef.current = null
       }
     }
+  }, [])
+
+  const fetchConnectedChimeras = async () => {
+    try {
+      const response = await authFetch('/api/v1/chimera/connected')
+      if (response.ok) {
+        const list = await response.json()
+        setChimeraDevices(list)
+        setSelectedChimeraId(prev =>
+          list.some(d => d.device_id === prev) ? prev : (list[0]?.device_id ?? null)
+        )
+      }
+    } catch (error) {
+      // Ignore - the firmware section just shows "no devices"
+    }
+  }
+
+  const runFirmwareCheck = async (deviceId) => {
+    if (!deviceId) {
+      setFirmwareCheck(null)
+      return
+    }
+    setCheckingFirmware(true)
+    try {
+      const response = await authFetch(`/api/v1/chimera/${deviceId}/firmware_check`)
+      setFirmwareCheck(response.ok ? await response.json() : null)
+    } catch (error) {
+      setFirmwareCheck(null)
+    } finally {
+      setCheckingFirmware(false)
+    }
+  }
+
+  useEffect(() => {
+    runFirmwareCheck(selectedChimeraId)
+  }, [selectedChimeraId])
+
+  const handleFirmwareFileChange = (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.bin')) {
+      setFirmwareMessage({ text: tPages('settings.firmware_invalid_file'), type: 'error' })
+      return
+    }
+    setFirmwareFile(file)
+    setFirmwareMessage({ text: '', type: '' })
+  }
+
+  const closeFirmwareStream = () => {
+    if (firmwareEventSourceRef.current) {
+      firmwareEventSourceRef.current.close()
+      firmwareEventSourceRef.current = null
+    }
+  }
+
+  const startFirmwareUpdate = async () => {
+    // A manually chosen .bin takes priority; otherwise flash the repo-bundled
+    // firmware when the check says a newer one is available.
+    const useBundled = !firmwareFile && firmwareCheck?.update_available === true
+    if ((!firmwareFile && !useBundled) || !selectedChimeraId || firmwareUpdating) return
+
+    const deviceId = selectedChimeraId
+    setFirmwareUpdating(true)
+    setFirmwareProgress({
+      percent: 0,
+      sent: 0,
+      total: firmwareFile?.size ?? firmwareCheck?.bundled_size ?? 0,
+      phase: 'transferring'
+    })
+    setFirmwareMessage({ text: '', type: '' })
+
+    try {
+      // Open the SSE stream before starting so no progress events are missed
+      // (the stream endpoint authenticates with a short-lived ?token= because
+      // EventSource cannot send Authorization headers)
+      let streamUrl = `/api/v1/chimera/${deviceId}/stream`
+      try {
+        const tokenResponse = await authFetch('/api/v1/auth/stream-token')
+        if (tokenResponse.ok) {
+          const { stream_token } = await tokenResponse.json()
+          streamUrl += `?token=${encodeURIComponent(stream_token)}`
+        }
+      } catch (error) {
+        // Stream still works without progress if the token fetch fails
+      }
+
+      const eventSource = new EventSource(streamUrl)
+      firmwareEventSourceRef.current = eventSource
+
+      eventSource.addEventListener('firmware_update_progress', (event) => {
+        const data = JSON.parse(event.data)
+        if (data.device_id === deviceId) {
+          setFirmwareProgress({
+            percent: data.percent,
+            sent: data.sent,
+            total: data.total,
+            phase: data.phase
+          })
+        }
+      })
+
+      eventSource.addEventListener('firmware_update_complete', (event) => {
+        const data = JSON.parse(event.data)
+        if (data.device_id !== deviceId) return
+        closeFirmwareStream()
+        setFirmwareUpdating(false)
+        setFirmwareProgress(null)
+        setFirmwareMessage({ text: data.message, type: data.success ? 'success' : 'error' })
+        if (data.success) setFirmwareFile(null)
+        // Re-check so the banner flips to "up to date" (or reveals a failed flash)
+        runFirmwareCheck(deviceId)
+      })
+
+      let response
+      if (firmwareFile) {
+        const formData = new FormData()
+        formData.append('firmware', firmwareFile)
+        response = await authFetch(`/api/v1/chimera/${deviceId}/firmware_update`, {
+          method: 'POST',
+          body: formData
+        })
+      } else {
+        response = await authFetch(`/api/v1/chimera/${deviceId}/firmware_update_bundled`, {
+          method: 'POST'
+        })
+      }
+
+      if (!response.ok) {
+        const data = await response.json()
+        closeFirmwareStream()
+        setFirmwareUpdating(false)
+        setFirmwareProgress(null)
+        setFirmwareMessage({ text: data.error || tPages('settings.firmware_update_failed'), type: 'error' })
+      }
+    } catch (error) {
+      closeFirmwareStream()
+      setFirmwareUpdating(false)
+      setFirmwareProgress(null)
+      setFirmwareMessage({ text: tPages('settings.firmware_update_failed'), type: 'error' })
+    }
+  }
+
+  useEffect(() => {
+    return () => closeFirmwareStream()
   }, [])
 
   const getMessageClasses = (type) => {
@@ -1673,6 +1831,102 @@ function Settings() {
 
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
+                <h3 className="text-sm font-medium text-gray-900">{tPages('settings.firmware_update_title')}</h3>
+                <p className="mt-0.5 text-[13px] text-gray-500">
+                  {tPages('settings.firmware_update_help')}
+                  {firmwareFile && <span className="ml-1">({firmwareFile.name})</span>}
+                </p>
+                {chimeraDevices.length === 0 && (
+                  <p className="mt-1 text-[12px] text-amber-600">{tPages('settings.firmware_no_devices')}</p>
+                )}
+                {selectedChimeraId && !firmwareUpdating && (
+                  checkingFirmware ? (
+                    <p className="mt-1 text-[12px] text-gray-500">{tPages('settings.firmware_check_checking')}</p>
+                  ) : firmwareCheck?.update_available === true ? (
+                    <p className="mt-1 text-[12px] font-medium text-emerald-600">
+                      {tPages('settings.firmware_check_available', {
+                        device: firmwareCheck.device_hash?.slice(0, 12),
+                        bundled: firmwareCheck.bundled_hash?.slice(0, 12)
+                      })}
+                    </p>
+                  ) : firmwareCheck?.update_available === false ? (
+                    <p className="mt-1 text-[12px] text-gray-500">
+                      {tPages('settings.firmware_check_up_to_date', {
+                        hash: firmwareCheck.device_hash?.slice(0, 12)
+                      })}
+                    </p>
+                  ) : firmwareCheck?.reason === 'device_unknown' ? (
+                    <p className="mt-1 text-[12px] text-amber-600">{tPages('settings.firmware_check_unknown_device')}</p>
+                  ) : firmwareCheck?.reason === 'invalid_bundle' ? (
+                    <p className="mt-1 text-[12px] text-amber-600">{tPages('settings.firmware_check_invalid')}</p>
+                  ) : firmwareCheck?.reason === 'no_bundled' ? (
+                    <p className="mt-1 text-[12px] text-gray-500">{tPages('settings.firmware_check_none_bundled')}</p>
+                  ) : null
+                )}
+                {firmwareUpdating && (
+                  <>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-1.5 w-40 overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-emerald-600 transition-all"
+                          style={{ width: `${firmwareProgress?.percent ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-[12px] text-gray-500">
+                        {firmwareProgress?.percent ?? 0}%
+                        {' '}({Math.round((firmwareProgress?.sent ?? 0) / 1024)} / {Math.round((firmwareProgress?.total ?? 0) / 1024)} KB)
+                      </span>
+                    </div>
+                    {firmwareProgress?.phase === 'verifying' ? (
+                      <p className="mt-1 flex items-center gap-1.5 text-[12px] text-blue-600">
+                        <Loader2 size={12} className="animate-spin" />
+                        {tPages('settings.firmware_verifying')}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[12px] text-amber-600">{tPages('settings.firmware_update_warning')}</p>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {chimeraDevices.length > 0 && (
+                  <select
+                    value={selectedChimeraId ?? ''}
+                    onChange={(e) => setSelectedChimeraId(Number(e.target.value))}
+                    disabled={firmwareUpdating}
+                    className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                  >
+                    {chimeraDevices.map((d) => (
+                      <option key={d.device_id} value={d.device_id} disabled={!!d.active_test_id}>
+                        {d.name}{d.active_test_id ? ` (${tPages('settings.firmware_device_in_test')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100">
+                  <Upload size={14} />
+                  {tPages('settings.firmware_choose_file')}
+                  <input
+                    type="file"
+                    accept=".bin"
+                    onChange={handleFirmwareFileChange}
+                    className="hidden"
+                    disabled={firmwareUpdating}
+                  />
+                </label>
+                <button
+                  onClick={startFirmwareUpdate}
+                  disabled={firmwareUpdating || !selectedChimeraId || (!firmwareFile && firmwareCheck?.update_available !== true)}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {firmwareUpdating && <Loader2 size={14} className="animate-spin" />}
+                  {firmwareUpdating ? tPages('settings.firmware_updating') : tPages('settings.firmware_update_button')}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
+              <div>
                 <h3 className="text-sm font-medium text-gray-900">{tPages('settings.serial_log')}</h3>
                 <p className="mt-0.5 text-[13px] text-gray-500">
                   {tPages('settings.download_all_serial')}
@@ -1773,6 +2027,11 @@ function Settings() {
           {pullMessage.text && (
             <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(pullMessage.type)}`}>
               <pre className="whitespace-pre-wrap">{pullMessage.text}</pre>
+            </div>
+          )}
+          {firmwareMessage.text && (
+            <div className={`rounded-lg border px-3 py-2 text-xs ${getMessageClasses(firmwareMessage.type)}`}>
+              {firmwareMessage.text}
             </div>
           )}
           {serialLogMessage.text && (

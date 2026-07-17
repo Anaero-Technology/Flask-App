@@ -870,10 +870,185 @@ class ChimeraHandler(SerialHandler):
         """Send a raw command to the device"""
         return self.send_command(command)
 
+    def get_firmware_hash(self) -> Tuple[bool, Optional[str]]:
+        """Get the SHA-256 of the running firmware image.
+
+        The device replies "firmwarehash <64-char-hex>" - the digest esptool
+        appended to the flashed image, so it can be compared directly against
+        the last 32 bytes of a firmware.bin. Older firmware without the
+        command simply times out.
+        """
+        try:
+            response = self.send_command("firmwarehash", timeout=10.0)
+        except Exception:
+            return False, None
+
+        if response and response.startswith("firmwarehash "):
+            fw_hash = response.split()[1].strip().lower()
+            if len(fw_hash) == 64 and all(c in '0123456789abcdef' for c in fw_hash):
+                return True, fw_hash
+        return False, None
+
+    def update_firmware(self, firmware_data: bytes, progress_cb=None) -> Tuple[bool, str]:
+        """Flash new firmware onto the chimera over the serial link.
+
+        Protocol: send "startupdate [size]", wait for "done startupdate",
+        then stream the raw binary. The command lock is held for the whole
+        transfer so no other thread (IP monitor, request handlers) can
+        inject command bytes into the image mid-stream.
+
+        progress_cb, if given, is called as progress_cb(bytes_sent, total).
+        """
+        if not (self.connection and self.connection.is_open):
+            return False, "Device not connected"
+        if self.is_logging:
+            return False, "Cannot update firmware while logging"
+
+        total = len(firmware_data)
+        if total == 0:
+            return False, "Firmware file is empty"
+
+        # The IP monitor sends ipset/ssidadd commands on its own schedule;
+        # those bytes would corrupt the image if they landed mid-transfer.
+        self.stop_ip_monitor()
+        # Make every other send_command caller fail fast instead of queueing
+        # up behind the command lock for the whole multi-minute transfer.
+        self.firmware_update_in_progress = True
+
+        try:
+            with self._command_lock:
+                response = self._send_command_locked(f"startupdate {total}", timeout=10.0)
+                if response == "failed startupdate logging":
+                    return False, "Device refused: cannot update while logging"
+                elif response == "failed startupdate invalidsize":
+                    return False, "Device refused: invalid firmware size"
+                elif response is None:
+                    return False, "Device did not respond to startupdate"
+                elif response != "done startupdate":
+                    return False, f"Unexpected response: {response}"
+
+                # The firmware has been seen to reject the update in the same
+                # millisecond as the handshake, before any data was sent.
+                # Catch that here rather than streaming the whole image.
+                early = self.get_response(timeout=0.3)
+                if early and early.startswith("failed"):
+                    return False, (
+                        f"Device rejected the update immediately after the "
+                        f"handshake, before any data was sent ('{early}'). "
+                        f"This is a firmware-side issue in its startupdate "
+                        f"handler, not a transfer problem."
+                    )
+
+                # Stream the raw image. The default 0.5s write timeout is too
+                # tight for multi-minute sustained writes at 115200 baud.
+                original_write_timeout = self.connection.write_timeout
+                self.connection.write_timeout = 30.0
+                try:
+                    # Burst each 4KB block at full line rate, then pause with
+                    # the wire idle while the firmware writes the sector to
+                    # flash. During a flash write the ESP32 can't service its
+                    # UART (only the 128-byte hardware FIFO survives), so any
+                    # bytes on the wire at that moment would be lost - the
+                    # pause keeps the wire empty exactly when the stall hits.
+                    block_size = 4096
+                    block_gap = 0.2
+                    sent_total = 0
+                    for offset in range(0, total, block_size):
+                        block = firmware_data[offset:offset + block_size]
+                        with self._write_lock:
+                            written = self.connection.write(block)
+                        if written != len(block):
+                            return False, (
+                                f"Serial write incomplete at byte {offset}: "
+                                f"wrote {written} of {len(block)}"
+                            )
+                        # flush() blocks until the block has fully left the
+                        # UART, so the sleep is a true idle window for the
+                        # firmware's flash write.
+                        self.connection.flush()
+                        time.sleep(block_gap)
+                        sent_total += written
+                        # Hold back 100% until the final block has flushed, so
+                        # 100% means every byte physically left the UART.
+                        if progress_cb and sent_total < total:
+                            progress_cb(sent_total, total)
+                    print(f"[CHIMERA UPDATE] All {sent_total}/{total} bytes "
+                          f"written and drained to the UART")
+                    if progress_cb:
+                        progress_cb(total, total)
+                finally:
+                    try:
+                        self.connection.write_timeout = original_write_timeout
+                    except Exception:
+                        pass
+
+                print(f"[CHIMERA UPDATE] Sent {total} firmware bytes")
+
+                # The protocol doesn't define a completion message, so accept
+                # either an explicit done/failed line or any post-reboot output
+                # (the firmware prints on boot), then verify with "info".
+                result_line = None
+                saw_output = False
+                deadline = time.time() + 180.0
+                while time.time() < deadline:
+                    line = self.get_response(timeout=5.0)
+                    if line is None:
+                        continue
+                    if "update" in line and line.startswith("failed"):
+                        return False, f"Device reported update failure: {line}"
+                    if "update" in line and line.startswith("done"):
+                        result_line = line
+                        break
+                    # Any other line means the device is talking again
+                    # (most likely boot output after the restart).
+                    saw_output = True
+                    break
+
+                if saw_output:
+                    # Let the rest of the boot output settle before probing.
+                    time.sleep(3.0)
+
+                # Verify the device came back by asking for info.
+                verify_deadline = time.time() + 30.0
+                device_back = False
+                while time.time() < verify_deadline:
+                    info_response = self._send_command_locked(
+                        "info", timeout=3.0, expect_prefix="info"
+                    )
+                    if info_response:
+                        device_back = True
+                        break
+                    time.sleep(2.0)
+
+                if not device_back:
+                    return False, (
+                        "Firmware was sent but the device did not respond "
+                        "afterwards. It may still be flashing - check it in a "
+                        "minute before retrying."
+                    )
+
+                if result_line:
+                    return True, "Firmware updated and device is back online"
+                return True, "Firmware sent and device is back online"
+        except Exception as e:
+            return False, f"Firmware transfer failed: {e}"
+        finally:
+            self.firmware_update_in_progress = False
+            # Refresh cached state and resume monitoring if we're still connected.
+            if self.connection and self.connection.is_open:
+                try:
+                    self._get_device_info()
+                except Exception:
+                    pass
+                self.start_ip_monitor()
+
     def _handle_wifi_connect(self, line: str):
         """Handle WiFi connection request: connect [SSID] [Password]
         SSID may contain spaces. Last space separates SSID from password.
         """
+        if self.firmware_update_in_progress:
+            return
+
         try:
             # Remove "connect " prefix and split on last space
             remainder = line[8:]  # Remove "connect "
@@ -890,7 +1065,8 @@ class ChimeraHandler(SerialHandler):
             # Send response to chimera
             if self.connection and self.connection.is_open:
                 response = b"wificonnected\n" if success else b"wififailed\n"
-                self.connection.write(response)
+                with self._write_lock:
+                    self.connection.write(response)
                 print(f"[CHIMERA WIFI] {'Connected' if success else 'Failed'}: {message}")
 
         except Exception as e:

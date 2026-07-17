@@ -7,6 +7,8 @@ from database.models import *
 from utils.auth import require_role, check_stream_token
 import os
 import re
+import hashlib
+import threading
 from utils.errors import internal_error
 
 chimera_bp = Blueprint('chimera', __name__)
@@ -1103,5 +1105,233 @@ def get_data_stream_info(device_id):
             "stream_endpoint": f"/api/v1/chimera/{device_id}/stream"
         })
         
+    finally:
+        db.session.close()
+
+
+BUNDLED_FIRMWARE_PATH = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', '..', 'firmware', 'chimera', 'firmware.bin'
+))
+
+
+def _load_bundled_firmware():
+    """Read the repo-bundled firmware.bin and derive its expected device hash.
+
+    esptool appends a SHA-256 digest as the final 32 bytes of the image, and
+    the device's "firmwarehash" command reports exactly that digest - so the
+    expected hash IS those 32 bytes, validated here by recomputing
+    sha256(image minus digest).
+
+    Returns (data, hash_hex, error_reason); data is None when unavailable.
+    """
+    if not os.path.isfile(BUNDLED_FIRMWARE_PATH):
+        return None, None, 'no_bundled'
+    with open(BUNDLED_FIRMWARE_PATH, 'rb') as f:
+        data = f.read()
+    if len(data) < 33 or data[0] != 0xE9:
+        return None, None, 'invalid_bundle'
+    appended_digest = data[-32:]
+    if hashlib.sha256(data[:-32]).digest() != appended_digest:
+        return None, None, 'invalid_bundle'
+    return data, appended_digest.hex(), None
+
+
+def _firmware_update_preflight(device_id):
+    """Shared validation for the firmware update routes.
+
+    Returns (handler, error_response); exactly one is None.
+    """
+    device = Device.query.get(device_id)
+    if not device or not device.connected:
+        return None, (jsonify({"error": "Device not found or not connected"}), 404)
+
+    if device.device_type not in ['chimera', 'chimera-max']:
+        return None, (jsonify({"error": "Device is not a chimera"}), 400)
+
+    handler = device_manager.get_chimera(device_id)
+    if not handler:
+        return None, (jsonify({"error": "Device handler not found"}), 404)
+
+    if device.active_test_id:
+        test = Test.query.get(device.active_test_id)
+        if test and test.status == 'running':
+            return None, (jsonify({
+                "error": "Cannot update firmware while a test is running on this device"
+            }), 409)
+
+    if handler.is_logging:
+        return None, (jsonify({"error": "Cannot update firmware while the device is logging"}), 409)
+
+    if getattr(handler, 'firmware_update_in_progress', False):
+        return None, (jsonify({"error": "A firmware update is already in progress"}), 409)
+
+    return handler, None
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/firmware_update', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def firmware_update(device_id):
+    """Upload a .bin file and flash it onto the chimera over serial.
+
+    Runs in a background thread; progress is published via SSE as
+    'firmware_update_progress' events and the outcome as
+    'firmware_update_complete'.
+    """
+    try:
+        handler, error = _firmware_update_preflight(device_id)
+        if error:
+            return error
+
+        if 'firmware' not in request.files:
+            return jsonify({"error": "No firmware file uploaded (expected field 'firmware')"}), 400
+
+        file = request.files['firmware']
+        if not file.filename or not file.filename.lower().endswith('.bin'):
+            return jsonify({"error": "Firmware must be a .bin file"}), 400
+
+        firmware_data = file.read()
+        if len(firmware_data) < 100 * 1024 or len(firmware_data) > 8 * 1024 * 1024:
+            return jsonify({"error": "Firmware file size looks wrong (expected 100KB-8MB)"}), 400
+
+        # Every ESP32 app image starts with the 0xE9 magic byte; catches
+        # uploads of the wrong file before anything is sent to the device.
+        if firmware_data[0] != 0xE9:
+            return jsonify({"error": "Not a valid ESP32 firmware image"}), 400
+
+        _launch_firmware_update(handler, device_id, firmware_data)
+
+        return jsonify({
+            "success": True,
+            "message": "Firmware update started",
+            "size": len(firmware_data)
+        }), 202
+
+    finally:
+        db.session.close()
+
+
+def _launch_firmware_update(handler, device_id, firmware_data):
+    """Start the background flash thread; caller must have run preflight."""
+    handler.firmware_update_in_progress = True
+    app = current_app._get_current_object()
+
+    def run_update():
+        try:
+            with app.app_context():
+                last_percent = [-1]
+
+                def progress(sent, total):
+                    percent = int(sent * 100 / total)
+                    if percent == last_percent[0]:
+                        return
+                    last_percent[0] = percent
+                    try:
+                        sse.publish({
+                            "device_id": device_id,
+                            "sent": sent,
+                            "total": total,
+                            "percent": percent,
+                            # 100% only fires after the serial flush, so
+                            # from there the device is flashing/rebooting
+                            "phase": "verifying" if sent >= total else "transferring"
+                        }, type='firmware_update_progress')
+                    except Exception:
+                        pass
+
+                success, message = handler.update_firmware(firmware_data, progress_cb=progress)
+                print(f"[FIRMWARE UPDATE] Device {device_id}: success={success} - {message}")
+                try:
+                    sse.publish({
+                        "device_id": device_id,
+                        "success": success,
+                        "message": message
+                    }, type='firmware_update_complete')
+                except Exception:
+                    pass
+        finally:
+            handler.firmware_update_in_progress = False
+
+    threading.Thread(
+        target=run_update,
+        daemon=True,
+        name=f"ChimeraFirmwareUpdate-{device_id}"
+    ).start()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/firmware_check', methods=['GET'])
+@jwt_required()
+def firmware_check(device_id):
+    """Compare the repo-bundled firmware.bin against the device's running
+    firmware (via the firmwarehash serial command)."""
+    try:
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        if device.device_type not in ['chimera', 'chimera-max']:
+            return jsonify({"error": "Device is not a chimera"}), 400
+
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data, bundled_hash, reason = _load_bundled_firmware()
+        if data is None:
+            return jsonify({"update_available": None, "reason": reason})
+
+        if getattr(handler, 'firmware_update_in_progress', False):
+            return jsonify({
+                "update_available": None,
+                "reason": "update_in_progress",
+                "bundled_hash": bundled_hash
+            })
+
+        success, device_hash = handler.get_firmware_hash()
+        if not success:
+            return jsonify({
+                "update_available": None,
+                "reason": "device_unknown",
+                "bundled_hash": bundled_hash,
+                "bundled_size": len(data)
+            })
+
+        return jsonify({
+            "update_available": device_hash != bundled_hash,
+            "device_hash": device_hash,
+            "bundled_hash": bundled_hash,
+            "bundled_size": len(data)
+        })
+
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/firmware_update_bundled', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def firmware_update_bundled(device_id):
+    """Flash the firmware.bin bundled with this software release."""
+    try:
+        handler, error = _firmware_update_preflight(device_id)
+        if error:
+            return error
+
+        data, bundled_hash, reason = _load_bundled_firmware()
+        if data is None:
+            return jsonify({"error": "No valid bundled firmware available", "reason": reason}), 404
+
+        _launch_firmware_update(handler, device_id, data)
+
+        return jsonify({
+            "success": True,
+            "message": "Firmware update started",
+            "size": len(data),
+            "bundled_hash": bundled_hash
+        }), 202
+
     finally:
         db.session.close()
