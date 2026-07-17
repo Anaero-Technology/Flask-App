@@ -36,6 +36,7 @@ class ChimeraHandler(SerialHandler):
         self.is_network_connected = False
         self.last_known_ip = None
         self.last_known_ssids = set()  # Track SSIDs we've already sent
+        self.last_sent_ssid = None  # Connected SSID last pushed via ssidset
 
         self.register_automatic_handler("datapoint", self._print_datapoint)
         self.register_automatic_handler("recirculate ", self._handle_recirculate)  # Note: trailing space to avoid matching "recirculateflag"
@@ -1162,6 +1163,42 @@ class ChimeraHandler(SerialHandler):
         else:
             print("[CHIMERA IP MONITOR] SSID sync incomplete; will retry")
 
+    def _sync_connected_ssid_to_device(self):
+        """Push the Pi's currently connected WiFi SSID to the chimera.
+
+        Sends "ssidset [ssid]" when the connected network changes and
+        "ssidreset" when WiFi drops - only on change, like the SSID list
+        sync. The tracking resets whenever the monitor restarts (device
+        reconnect or firmware update), so the device is re-synced after
+        it reboots and loses the state.
+        """
+        if not (self.connection and self.connection.is_open):
+            return
+
+        try:
+            current_ssid = wifi_manager.get_connected_ssid()
+        except Exception as e:
+            print(f"[CHIMERA IP MONITOR] Error reading connected SSID: {e}")
+            return
+
+        try:
+            if current_ssid and current_ssid != self.last_sent_ssid:
+                response = self.send_command(f"ssidset {current_ssid}", timeout=2.0)
+                if response == "done ssidset":
+                    self.last_sent_ssid = current_ssid
+                    print(f"[CHIMERA IP MONITOR] ssidset '{current_ssid}'")
+                else:
+                    print(f"[CHIMERA IP MONITOR] ssidset unexpected response: {response}")
+            elif not current_ssid and self.last_sent_ssid:
+                response = self.send_command("ssidreset", timeout=2.0)
+                if response == "done ssidreset":
+                    self.last_sent_ssid = None
+                    print("[CHIMERA IP MONITOR] ssidreset sent")
+                else:
+                    print(f"[CHIMERA IP MONITOR] ssidreset unexpected response: {response}")
+        except Exception as e:
+            print(f"[CHIMERA IP MONITOR] Failed to sync connected SSID: {e}")
+
     def _ip_monitor_daemon(self):
         """Background daemon that monitors IP connection and sends ipset command to chimera"""
         print(f"[CHIMERA IP MONITOR] Started monitoring thread for {self.device_name}")
@@ -1201,6 +1238,10 @@ class ChimeraHandler(SerialHandler):
                         self.last_known_ip = None
                         self.last_known_ssids.clear()
 
+                # Tell the chimera which WiFi network the Pi is on so its
+                # screen can highlight it (ssidset / ssidreset).
+                self._sync_connected_ssid_to_device()
+
                 # Always scan and sync SSIDs regardless of internet connectivity so
                 # the chimera board can show available networks even before connecting.
                 ssids = self._get_wifi_ssids()
@@ -1236,4 +1277,5 @@ class ChimeraHandler(SerialHandler):
             self.is_network_connected = False
             self.last_known_ip = None
             self.last_known_ssids.clear()
+            self.last_sent_ssid = None
             print(f"[CHIMERA IP MONITOR] IP monitoring stopped for {self.device_name}")
