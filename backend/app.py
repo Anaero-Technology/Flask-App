@@ -78,6 +78,11 @@ with app.app_context():
             if 'export_header_language' not in user_columns:
                 migration_statements.append("ALTER TABLE users ADD COLUMN export_header_language VARCHAR(5) NOT NULL DEFAULT 'en'")
 
+        if inspector.has_table('chimera_configurations'):
+            chimera_config_columns = {column['name'] for column in inspector.get_columns('chimera_configurations')}
+            if 'recirculation_duration_seconds' not in chimera_config_columns:
+                migration_statements.append("ALTER TABLE chimera_configurations ADD COLUMN recirculation_duration_seconds INTEGER")
+
         if migration_statements:
             with db.engine.begin() as connection:
                 for statement in migration_statements:

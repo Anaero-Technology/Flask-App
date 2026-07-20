@@ -227,6 +227,7 @@
     "at_least_one_device": "至少选择一个设备",
     "blackbox_config_required": "BlackBox 通道的配置",
     "recirculation_delay_required": "循环延迟时间",
+    "recirculation_duration_required": "循环运行时长",
     "test_name_placeholder": "例如：BMP_Test_Batch_1",
     "description_placeholder": "可选详情...",
     "test_start_failed": "无法启动测试"
@@ -614,6 +615,7 @@
     "every": "每",
     "hrs": "小时",
     "mins": "分钟",
+    "for_duration": "持续",
     "channels": "通道配置",
     "set_all_open_times": "设置所有打开时间：",
     "apply_all": "全部应用",

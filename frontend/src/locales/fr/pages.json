@@ -227,6 +227,7 @@
     "at_least_one_device": "au moins un appareil sélectionné",
     "blackbox_config_required": "configuration pour les canaux BlackBox",
     "recirculation_delay_required": "temps de délai de recirculation",
+    "recirculation_duration_required": "durée de recirculation",
     "test_name_placeholder": "ex., BMP_Test_Batch_1",
     "description_placeholder": "Détails facultatifs...",
     "test_start_failed": "Impossible de démarrer le test"
@@ -594,6 +595,7 @@
     "every": "Tous les",
     "hrs": "hrs",
     "mins": "mins",
+    "for_duration": "Pendant",
     "channels": "Configuration des Canaux",
     "set_all_open_times": "Définir les temps d'ouverture de tous les canaux:",
     "apply_all": "Appliquer à Tous",

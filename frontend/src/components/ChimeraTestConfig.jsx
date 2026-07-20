@@ -101,6 +101,8 @@ function ChimeraTestConfig({
     setRecirculationMode,
     recirculationDelaySeconds,
     setRecirculationDelaySeconds,
+    recirculationDurationSeconds,
+    setRecirculationDurationSeconds,
     serviceSequence,
     setServiceSequence,
     channelSettings,
@@ -309,6 +311,17 @@ function ChimeraTestConfig({
                                     className="w-12 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
                                 <span className="text-xs text-blue-800">{tPages('chimera_config.mins')}</span>
+                            </div>
+                            <div className="flex items-center gap-2 border-l border-blue-200 pl-4">
+                                <span className="text-xs font-medium text-blue-800">{tPages('chimera_config.for_duration')}</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={recirculationDurationSeconds}
+                                    onChange={(e) => setRecirculationDurationSeconds(parseInt(e.target.value) || 0)}
+                                    className="w-16 px-1 py-0.5 border border-blue-200 rounded text-center text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-blue-800">{tPages('chimera_config.sec')}</span>
                             </div>
                         </div>
                     )}

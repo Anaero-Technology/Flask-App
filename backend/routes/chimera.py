@@ -874,6 +874,44 @@ def set_recirculation_delay(device_id):
         db.session.close()
 
 
+@chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/duration', methods=['POST'])
+@jwt_required()
+@require_role(['admin', 'operator'])
+def set_recirculation_duration(device_id):
+    """Set the duration of each periodic recirculation run in seconds."""
+    try:
+        # Get device from database
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        # Recirculation is only available for chimera-max devices (check global config)
+        device_model = current_app.config.get('CHIMERA_DEVICE_MODEL', 'chimera')
+        if device_model != 'chimera-max':
+            return jsonify({"error": "Recirculation is only available for chimera-max devices"}), 400
+
+        # Get handler
+        handler = device_manager.get_chimera(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data = request.get_json()
+        seconds = data.get('seconds')
+
+        if seconds is None:
+            return jsonify({"error": "seconds is required"}), 400
+
+        success, message = handler.set_recirculation_duration(seconds)
+
+        return jsonify({
+            "success": success,
+            "message": message
+        })
+
+    finally:
+        db.session.close()
+
+
 @chimera_bp.route('/api/v1/chimera/<int:device_id>/recirculation/mode', methods=['POST'])
 @jwt_required()
 @require_role(['admin', 'operator'])

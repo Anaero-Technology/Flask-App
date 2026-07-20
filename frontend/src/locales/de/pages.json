@@ -227,6 +227,7 @@
     "at_least_one_device": "mindestens ein Gerät ausgewählt",
     "blackbox_config_required": "Konfiguration für BlackBox-Kanäle",
     "recirculation_delay_required": "Recirkulationsverzögerungszeit",
+    "recirculation_duration_required": "Rezirkulationsdauer",
     "test_name_placeholder": "z.B. BMP_Test_Batch_1",
     "description_placeholder": "Optionale Angaben...",
     "test_start_failed": "Test konnte nicht gestartet werden"
@@ -594,6 +595,7 @@
     "every": "Alle",
     "hrs": "Std.",
     "mins": "Min.",
+    "for_duration": "Für",
     "channels": "Kanalkonfiguration",
     "set_all_open_times": "Alle Öffnungszeiten festlegen:",
     "apply_all": "Auf Alle Anwenden",

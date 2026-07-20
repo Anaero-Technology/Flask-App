@@ -25,6 +25,7 @@ class ChimeraHandler(SerialHandler):
         self.service_sequence = "111111111111111"  # 15 channels
         self.recirculation_mode = 0  # 0=disabled, 1=automatic, 2=manual
         self.recirculation_delay_seconds = None  # Seconds between periodic recirculation runs (must be set for periodic mode)
+        self.recirculation_duration_seconds = None  # Length of each periodic recirculation run (must be set for periodic mode)
         self.sensor_types = {}
         self.past_data = {}
         self.app = None  # Flask app context for database operations
@@ -807,7 +808,28 @@ class ChimeraHandler(SerialHandler):
             return False, "Invalid seconds value"
         else:
             return False, f"Unexpected response: {response}"
-    
+
+    def set_recirculation_duration(self, seconds: int) -> Tuple[bool, str]:
+        """Set the duration of each periodic recirculation run in automatic mode.
+
+        Args:
+            seconds: Length of each recirculation run (must be > 0)
+        """
+        if seconds <= 0:
+            return False, "Seconds must be greater than 0"
+
+        response = self.send_command(f"recirculateduration {seconds}")
+
+        if response == "done recirculateduration":
+            self.recirculation_duration_seconds = seconds
+            return True, "Recirculation duration set successfully"
+        elif response == "failed recirculateduration nosdcard":
+            return False, "SD card not working"
+        elif response == "failed recirculateduration invalidduration":
+            return False, "Invalid duration value"
+        else:
+            return False, f"Unexpected response: {response}"
+
     def recirculate_flag(self, channel: int, duration: int, pump_power: int) -> Tuple[bool, str]:
         """Flag a channel for recirculation (manual mode only)
         

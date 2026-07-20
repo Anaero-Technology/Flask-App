@@ -36,6 +36,7 @@ function TestForm() {
     const [recirculationMode, setRecirculationMode] = useState('off'); // 'off', 'volume', or 'periodic'
     const [serviceSequence, setServiceSequence] = useState('111111111111111'); // 15 channels
     const [recirculationDelaySeconds, setRecirculationDelaySeconds] = useState(0); // Seconds between periodic recirculation (0 = not set)
+    const [recirculationDurationSeconds, setRecirculationDurationSeconds] = useState(60); // Length of each periodic recirculation run (defaults to a sensible starting point; 0 = not set)
     // Per-channel settings: { 1: { volumeThreshold: 1000, openTime: 1 }, 2: {...}, ... }
     const [channelSettings, setChannelSettings] = useState({});
     const [applyAllOpenTimeValue, setApplyAllOpenTimeValue] = useState(600);
@@ -54,6 +55,7 @@ function TestForm() {
             if (typeof parsed.recirculationMode === 'string') setRecirculationMode(parsed.recirculationMode);
             if (typeof parsed.serviceSequence === 'string') setServiceSequence(parsed.serviceSequence);
             if (typeof parsed.recirculationDelaySeconds === 'number') setRecirculationDelaySeconds(parsed.recirculationDelaySeconds);
+            if (typeof parsed.recirculationDurationSeconds === 'number') setRecirculationDurationSeconds(parsed.recirculationDurationSeconds);
             if (parsed.channelSettings && typeof parsed.channelSettings === 'object') setChannelSettings(parsed.channelSettings);
             if (parsed.applyAllOpenTimeValue !== undefined) setApplyAllOpenTimeValue(parsed.applyAllOpenTimeValue);
             if (typeof parsed.flushTime === 'number') setFlushTime(parsed.flushTime);
@@ -75,6 +77,7 @@ function TestForm() {
                 recirculationMode,
                 serviceSequence,
                 recirculationDelaySeconds,
+                recirculationDurationSeconds,
                 channelSettings,
                 applyAllOpenTimeValue,
                 flushTime
@@ -92,6 +95,7 @@ function TestForm() {
         recirculationMode,
         serviceSequence,
         recirculationDelaySeconds,
+        recirculationDurationSeconds,
         channelSettings,
         applyAllOpenTimeValue,
         flushTime
@@ -389,9 +393,12 @@ function TestForm() {
             }
         }
 
-        // Validate periodic recirculation has a delay set
+        // Validate periodic recirculation has a delay and a run duration set
         if (recirculationMode === 'periodic' && recirculationDelaySeconds <= 0) {
             missing.push(tPages('test_form.recirculation_delay_required'));
+        }
+        if (recirculationMode === 'periodic' && recirculationDurationSeconds <= 0) {
+            missing.push(tPages('test_form.recirculation_duration_required'));
         }
 
         return {
@@ -516,6 +523,7 @@ function TestForm() {
                         flush_time_seconds: flushTime,
                         recirculation_mode: recirculationMode,
                         recirculation_delay_seconds: recirculationMode === 'periodic' ? recirculationDelaySeconds : null,
+                        recirculation_duration_seconds: recirculationMode === 'periodic' ? recirculationDurationSeconds : null,
                         service_sequence: serviceSequence,
                         channel_settings: channelSettings
                     })
@@ -699,6 +707,8 @@ function TestForm() {
                         setRecirculationMode={setRecirculationMode}
                         recirculationDelaySeconds={recirculationDelaySeconds}
                         setRecirculationDelaySeconds={setRecirculationDelaySeconds}
+                        recirculationDurationSeconds={recirculationDurationSeconds}
+                        setRecirculationDurationSeconds={setRecirculationDurationSeconds}
                         serviceSequence={serviceSequence}
                         setServiceSequence={setServiceSequence}
                         channelSettings={channelSettings}

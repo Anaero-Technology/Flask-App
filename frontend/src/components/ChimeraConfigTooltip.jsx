@@ -128,6 +128,15 @@ const ChimeraConfigTooltip = ({ testId, activeTestName, currentChannel, isFlushi
                                             : tPages('chimera_config.volume')}
                                     </span>
                                 </div>
+
+                                {chimera.recirculation_mode === 'periodic' && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">{tPages('chimera_config.for_duration')}:</span>
+                                        <span className="font-semibold text-gray-900">
+                                            {formatTime(chimera.recirculation_duration_seconds)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Channels Grouped by Sample with Opening Times */}

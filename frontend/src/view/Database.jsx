@@ -1027,6 +1027,10 @@ const Database = ({ onViewPlot, initialParams }) => {
                                     <span className="text-xs uppercase text-gray-400 block">{tPages('chimera_config.every')}</span>
                                     <span>{getDisplayValue(chimeraConfig.chimera_config.recirculation_delay_seconds)} {tPages('chimera_config.sec')}</span>
                                 </div>
+                                <div>
+                                    <span className="text-xs uppercase text-gray-400 block">{tPages('chimera_config.for_duration')}</span>
+                                    <span>{getDisplayValue(chimeraConfig.chimera_config.recirculation_duration_seconds)} {tPages('chimera_config.sec')}</span>
+                                </div>
                             </div>
                         ) : (
                             <div className="text-sm text-gray-500 mb-3">{tPages('database.no_channels')}</div>

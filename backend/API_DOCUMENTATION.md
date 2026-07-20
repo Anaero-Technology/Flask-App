@@ -132,6 +132,7 @@
 - `POST /api/v1/chimera/<int:device_id>/recirculation/enable` - Enable recirculation.
 - `POST /api/v1/chimera/<int:device_id>/recirculation/disable` - Disable recirculation.
 - `POST /api/v1/chimera/<int:device_id>/recirculation/delay` - Set recirculation delay.
+- `POST /api/v1/chimera/<int:device_id>/recirculation/duration` - Set recirculation run duration.
 - `POST /api/v1/chimera/<int:device_id>/recirculation/mode` - Set recirculation mode.
 - `POST /api/v1/chimera/<int:device_id>/recirculation/flag` - Set recirculation flag.
 - `GET /api/v1/chimera/<int:device_id>/recirculation/info` - Get recirculation status.
