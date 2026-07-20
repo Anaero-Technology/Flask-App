@@ -818,14 +818,14 @@ class ChimeraHandler(SerialHandler):
         if seconds <= 0:
             return False, "Seconds must be greater than 0"
 
-        response = self.send_command(f"recirculateduration {seconds}")
+        response = self.send_command(f"recirculatedurationset {seconds}")
 
-        if response == "done recirculateduration":
+        if response == "done recirculatedurationset":
             self.recirculation_duration_seconds = seconds
             return True, "Recirculation duration set successfully"
-        elif response == "failed recirculateduration nosdcard":
+        elif response == "failed recirculatedurationset nosdcard":
             return False, "SD card not working"
-        elif response == "failed recirculateduration invalidduration":
+        elif response == "failed recirculatedurationset invalidduration":
             return False, "Invalid duration value"
         else:
             return False, f"Unexpected response: {response}"
