@@ -9,7 +9,7 @@ Full-stack app for managing and monitoring device tests (Flask backend + React/V
 - Node.js 20+
 - Redis
 - USB/serial access for connected devices
-- avrdude (only for PLC firmware updates; `start.sh` installs it if missing)
+- avrdude (only for PLC firmware updates; installed in step 6)
 
 ## Install (Steps 1 to 8)
 
@@ -154,9 +154,11 @@ sudo visudo -f /etc/sudoers.d/flaskapp-nmcli
 anaero ALL=(root) NOPASSWD: /usr/bin/nmcli
 ```
 
-Load and start services:
+Install system packages and start services:
 
 ```bash
+# redis for SSE; avrdude only if this device flashes PLC firmware
+sudo apt install -y redis-server avrdude
 sudo systemctl enable --now redis-server
 sudo systemctl daemon-reload
 sudo systemctl enable flaskapp-backend flaskapp-frontend
