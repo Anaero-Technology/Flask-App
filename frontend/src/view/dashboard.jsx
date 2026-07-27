@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import DeviceCard from '../components/deviceCard'
 import GFM from '../assets/gfm.png'
 import Chimera from "../assets/chimera.jpg"
+import Plc from "../assets/plc.jpeg"
 import { RefreshCw, Server, FlaskConical, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -598,6 +599,11 @@ function Dashboard({ onViewPlot }) {
     if (deviceType === 'plc') return 'PLC'
     return 'Chimera'
   }
+  const deviceImage = (deviceType) => {
+    if (deviceType === 'black-box') return GFM
+    if (deviceType === 'plc') return Plc
+    return Chimera
+  }
 
   const runningTests = activeTests?.length || 0;
 
@@ -776,7 +782,7 @@ function Dashboard({ onViewPlot }) {
                       name={device.name}
                       logging={device.logging}
                       port={device.port}
-                      image={device.device_type === "black-box" ? GFM : Chimera}
+                      image={deviceImage(device.device_type)}
                       activeTestName={device.active_test_name}
                       activeTestId={device.active_test_id}
                       testStartTime={device.test_start_time}
@@ -813,7 +819,7 @@ function Dashboard({ onViewPlot }) {
                     name={device.name}
                     logging={device.logging}
                     port={device.port}
-                    image={device.device_type === "black-box" ? GFM : Chimera}
+                    image={deviceImage(device.device_type)}
                     onNameUpdate={handleNameUpdate}
                     onViewPlot={onViewPlot}
                     onViewFiles={handleViewFiles}
