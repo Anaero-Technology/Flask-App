@@ -10,6 +10,7 @@ class DeviceManager:
     _instance = None
     _lock = threading.Lock()
     _active_handlers = {}  # Keyed by device_id (not port) for robustness
+    _reserved_ports = set()  # Ports held for exclusive use (e.g. avrdude flashing)
     _app = None  # Flask app reference
 
     def __new__(cls):
@@ -26,6 +27,19 @@ class DeviceManager:
     def set_app(cls, app):
         """Set the Flask app reference for database operations"""
         cls._app = app
+
+    def reserve_port(self, port: str):
+        """Claim a port for exclusive external use, e.g. flashing firmware.
+
+        While reserved, connect() refuses it so neither the auto-connect scanner
+        nor a user request can open the port from under avrdude.
+        """
+        with self._lock:
+            self._reserved_ports.add(port)
+
+    def release_port(self, port: str):
+        with self._lock:
+            self._reserved_ports.discard(port)
 
     def _handle_disconnect(self, device_id: int):
         """Handle device disconnection - update database and remove from active handlers"""
@@ -59,6 +73,11 @@ class DeviceManager:
 
         with self._lock, self._app.app_context():
             print(f"[DeviceManager] DEBUG: Acquired lock for {port}")
+
+            # Refuse a port that is held for flashing - avrdude needs it alone.
+            if port in self._reserved_ports:
+                print(f"[DeviceManager] Port {port} is reserved (firmware flash)")
+                return False
 
             # Check if port is already connected
             if self.is_port_connected(port):
@@ -300,6 +319,8 @@ class DeviceManager:
                 handler = BlackBoxHandler(device.serial_port)
             elif device.device_type in ["chimera", "chimera-max"]:
                 handler = ChimeraHandler(device.serial_port)
+            elif device.device_type == "plc":
+                handler = PlcHandler(device.serial_port)
             else:
                 return None
 
@@ -333,13 +354,14 @@ class DeviceManager:
 
     def list_devices(self) -> Dict:
         if not self._app:
-            return {"black_boxes": [], "chimeras": []}
+            return {"black_boxes": [], "chimeras": [], "plcs": []}
 
         with self._app.app_context():
             devices = Device.query.all()
 
             black_box_list = []
             chimera_list = []
+            plc_list = []
 
             for device in devices:
                 if device.device_type == "black-box":
@@ -379,15 +401,39 @@ class DeviceManager:
 
                     chimera_list.append(device_info)
 
+                elif device.device_type == "plc":
+                    device_info = {
+                        "device_id": device.id,
+                        "port": device.serial_port,
+                        "name": device.name or "Unknown",
+                        "mac_address": device.mac_address,
+                        "connected": device.connected,
+                        "status": "logging" if device.logging else "idle"
+                    }
+
+                    if device.connected:
+                        handler = self.get_plc(device.id)
+                        if handler:
+                            device_info["status"] = "logging" if handler.is_logging else "idle"
+                            device_info["machine_type"] = getattr(handler, 'machine_type', None)
+                            device_info["machine_counts"] = getattr(handler, 'machine_counts', None)
+                            device_info["maintenance_mode"] = getattr(handler, 'maintenance_mode', False)
+
+                    plc_list.append(device_info)
+
             return {
                 "black_boxes": black_box_list,
-                "chimeras": chimera_list
+                "chimeras": chimera_list,
+                "plcs": plc_list
             }
 
     def get_black_box(self, device_id: int):
         return self.get_device(device_id)
 
     def get_chimera(self, device_id: int):
+        return self.get_device(device_id)
+
+    def get_plc(self, device_id: int):
         return self.get_device(device_id)
 
     def list_connected_ports(self) -> list:

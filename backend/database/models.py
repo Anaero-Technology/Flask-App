@@ -255,3 +255,67 @@ class Outlier(db.Model):
    __table_args__ = (
        db.UniqueConstraint('test_id', 'device_id', 'data_point_id', 'data_type', name='unique_outlier'),
    )
+
+
+class PlcProfile(db.Model):
+   """A saved, reusable PLC configuration.
+
+   Holds a machine type plus every unit setting as the same command script the
+   PLC itself saves, so applying a profile is a replay rather than a translation.
+   Not tied to a test or a device - it is a template an operator can reuse.
+   """
+   __tablename__ = "plc_profiles"
+
+   id = Column(Integer, primary_key=True)
+   name = Column(String(120), nullable=False, unique=True)
+   machine_type = Column(String(32), nullable=False)      # firmware personality token
+   model_id = Column(String(32), nullable=True)           # product build, e.g. "ray-i"
+   settings = Column(String, nullable=False)              # JSON: heaters/mixers/feeders/agitators
+   description = Column(String, nullable=True)
+   created_by = Column(String, nullable=True)
+   created_at = Column(DateTime, default=datetime.utcnow)
+   updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PlcConfiguration(db.Model):
+   """One entry in a test's PLC configuration timeline.
+
+   A test starts with the configuration applied at start, and gains another row
+   every time the settings are changed while it runs. Rows are snapshots, never
+   updated, so the record of what the machine was doing at any point cannot be
+   rewritten later. Exported with the test's data.
+   """
+   __tablename__ = "plc_configurations"
+
+   id = Column(Integer, primary_key=True)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=False)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+
+   sequence = Column(Integer, nullable=False, default=1)    # 1 = applied at start
+   machine_type = Column(String(32), nullable=False)
+   model_id = Column(String(32), nullable=True)
+   settings = Column(String, nullable=False)                # JSON, same shape as PlcProfile
+   profile_name = Column(String(120), nullable=True)        # profile it came from, if any
+   change_note = Column(String, nullable=True)              # what changed, for the timeline
+   recorded_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PlcCalibration(db.Model):
+   """A per-heater temperature offset for a PLC.
+
+   The firmware reports the sensor's raw reading. A user checks the true
+   temperature with an external thermometer and the difference is stored here;
+   the backend adds it so the reading the app shows and logs matches reality.
+   Kept per physical device, independent of machine type or test.
+   """
+   __tablename__ = "plc_calibrations"
+
+   id = Column(Integer, primary_key=True)
+   device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   heater_number = Column(Integer, nullable=False)      # 1-based reactor/heater
+   offset = Column(Float, nullable=False, default=0.0)   # degrees C added to the raw reading
+   updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+   __table_args__ = (
+       db.UniqueConstraint('device_id', 'heater_number', name='unique_device_heater_cal'),
+   )

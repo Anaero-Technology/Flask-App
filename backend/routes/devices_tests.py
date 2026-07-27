@@ -1344,6 +1344,21 @@ def stop_test(test_id):
                         "success": False,
                         "message": "Device handler unavailable; marked as stopped in database"
                     }
+                elif device.device_type == 'plc':
+                    # A PLC is not logging rows, it is driving a machine. Stopping
+                    # the test closes its configuration timeline and deliberately
+                    # leaves the outputs alone - the machine keeps running.
+                    from routes.plc import _record_version
+                    try:
+                        _record_version(test_id, device.id, handler,
+                                        "test stopped - machine left running")
+                    except Exception:
+                        pass
+                    result = {
+                        "device": device.name,
+                        "success": True,
+                        "message": "Stopped recording; machine left running"
+                    }
                 else:
                     # Always issue a stop command for every device in this test.
                     # Relying on cached handler.is_logging can miss devices that are still logging.
@@ -2084,7 +2099,54 @@ def download_test_data(test_id):
         if has_bb_events:
             has_bb_raw = False
 
-        if not has_bb_events and not has_bb_raw and not has_chimera:
+        # The PLC contributes settings rather than rows: how the machine was
+        # driven for this test. Exported as CSV like everything else in the
+        # bundle, so it opens in the same spreadsheet rather than needing a JSON
+        # parser; the structured form stays available from the API endpoint.
+        # One row per unit per configuration version, so the timeline reads top
+        # to bottom.
+        from routes.plc import plc_configurations_for_test
+        plc_configs = plc_configurations_for_test(test_id)
+        has_plc = len(plc_configs) > 0
+
+        def _plc_setting_text(unit_type, u):
+            if unit_type == 'heater':
+                return f"{u.get('target', 0)} C" if u.get('target') else 'off'
+            if unit_type == 'mixer':
+                mode = u.get('mode', 0)
+                if mode == 0:
+                    return 'off'
+                if mode == 1:
+                    return 'always on'
+                return f"timed {u.get('on_for', 0)}s on / {u.get('off_for', 0)}s off"
+            if unit_type == 'feeder':
+                return (f"{u.get('on_for', 0)}s every {u.get('off_for_minutes', 0)} min"
+                        if u.get('on_for') else 'paused')
+            return f"{u.get('pre_feed', 0)}s pre-feed" if u.get('pre_feed') else 'paused'
+
+        def build_plc_rows():
+            rows = []
+            for cfg in plc_configs:
+                for version in cfg.get('history', []):
+                    settings = version.get('settings', {})
+                    for unit_type, key in (('heater', 'heaters'), ('mixer', 'mixers'),
+                                           ('feeder', 'feeders'), ('agitator', 'agitators')):
+                        for u in settings.get(key, []):
+                            rows.append([
+                                cfg.get('device_name'),
+                                version.get('sequence'),
+                                version.get('recorded_at'),
+                                version.get('change'),
+                                unit_type,
+                                u.get('number'),
+                                _plc_setting_text(unit_type, u),
+                            ])
+            return rows
+
+        plc_header = ['device', 'version', 'recorded_at', 'change',
+                      'unit_type', 'unit_number', 'setting']
+
+        if not has_bb_events and not has_bb_raw and not has_chimera and not has_plc:
              return jsonify({"error": "No data found for this test"}), 404
 
         # Helper to create CSV string
@@ -2167,12 +2229,16 @@ def download_test_data(test_id):
         # If multiple types exist, ZIP them.
         # If only one type exists, return single CSV.
         
-        sources_count = sum([has_bb_events, has_bb_raw, has_chimera])
+        sources_count = sum([has_bb_events, has_bb_raw, has_chimera, has_plc])
 
         if sources_count > 1:
             # Create ZIP
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                if has_plc:
+                    csv_data = create_csv_string(plc_header, build_plc_rows(), lambda r: r, csv_delimiter)
+                    zf.writestr(f"{test.name}_plc_configuration.csv", csv_data)
+
                 if has_bb_events:
                     csv_data = create_csv_string(bb_event_header, bb_events, map_bb_event, csv_delimiter)
                     zf.writestr(f"{test.name}_gfm_events.csv", csv_data)
@@ -2191,6 +2257,15 @@ def download_test_data(test_id):
                 mimetype='application/zip',
                 as_attachment=True,
                 download_name=f"{test.name}_data.zip"
+            )
+
+        elif has_plc and sources_count == 1:
+            csv_content = create_csv_string(plc_header, build_plc_rows(), lambda r: r, csv_delimiter)
+            return send_file(
+                io.BytesIO(csv_content.encode()),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f"{test.name}_plc_configuration.csv"
             )
 
         elif has_bb_events:

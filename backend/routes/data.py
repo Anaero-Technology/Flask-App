@@ -243,23 +243,41 @@ def get_test_devices(test_id):
                 devices_map[dev_id] = {'channels': set()}
             devices_map[dev_id]['channels'].add(chan_num)
 
-        # 3. Check for devices actively logging to this test
+        # 3. PLCs contribute a configuration rather than channels, so they are
+        # found through the settings recorded when they were attached.
+        plc_configs = {c.device_id: c for c in PlcConfiguration.query.filter_by(test_id=test_id).all()}
+        for dev_id in plc_configs:
+            if dev_id not in devices_map:
+                devices_map[dev_id] = {'channels': set()}
+
+        # 4. Check for devices actively logging to this test
         active_devices = Device.query.filter_by(active_test_id=test_id).all()
         for device in active_devices:
             if device.id not in devices_map:
                 devices_map[device.id] = {'channels': set()}
 
-        # 4. Fetch Device details and format response
+        # 5. Fetch Device details and format response
         response_data = []
         for device_id, info in devices_map.items():
             device = Device.query.get(device_id)
             if device:
-                response_data.append({
+                entry = {
                     "id": device.id,
                     "name": device.name,
                     "device_type": device.device_type,
                     "channels": sorted(list(info['channels']))
-                })
+                }
+                config = plc_configs.get(device_id)
+                if config:
+                    import json as _json
+                    entry["plc_configuration"] = {
+                        "machine_type": config.machine_type,
+                        "model_id": config.model_id,
+                        "profile_name": config.profile_name,
+                        "recorded_at": config.recorded_at.isoformat() if config.recorded_at else None,
+                        "settings": _json.loads(config.settings) if config.settings else {},
+                    }
+                response_data.append(entry)
 
         return jsonify(response_data)
 

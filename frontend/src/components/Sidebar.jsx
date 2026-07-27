@@ -11,6 +11,7 @@ import {
   Database,
   LineChart,
   Upload,
+  Cpu,
   Settings,
   PlusCircle,
   User,
@@ -51,12 +52,32 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
     );
   }, [user]);
 
+  // The PLC entry only earns its place when one is actually plugged in.
+  const [hasPlc, setHasPlc] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await authFetch('/api/v1/plc/connected');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setHasPlc((data.plcs || []).some((p) => p.connected));
+      } catch { /* leave the entry hidden */ }
+    };
+    check();
+    // Cheap DB-only query, so poll often enough that the entry appears and
+    // disappears promptly when a PLC is plugged in or pulled out.
+    const timer = setInterval(check, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [authFetch]);
+
   const menuItems = [
     { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
     { id: 'test', labelKey: 'start_test', icon: FlaskConical, permission: 'start_test' },
     { id: 'database', labelKey: 'database', icon: Database },
     { id: 'plot', labelKey: 'plot', icon: LineChart },
     { id: 'upload', labelKey: 'upload_data', icon: Upload, permission: 'modify_test' },
+    ...(hasPlc ? [{ id: 'plc', labelKey: 'plc', icon: Cpu, permission: 'modify_test' }] : []),
     { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
 

@@ -260,8 +260,10 @@ function Dashboard({ onViewPlot }) {
     }
   }
 
-  const loadData = async () => {
-    setLoading(true)
+  const loadData = async (silent = false) => {
+    // Background polls run silent so the Refresh button doesn't flicker
+    // "Scanning…" on every tick.
+    if (!silent) setLoading(true)
     try {
       // The three requests are independent — fetch them in parallel so the
       // page is ready after one round-trip instead of three
@@ -325,7 +327,7 @@ function Dashboard({ onViewPlot }) {
       console.error('Error loading dashboard data:', error)
       return null
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -461,8 +463,9 @@ function Dashboard({ onViewPlot }) {
     }
     initialLoad()
 
-    // Poll for updates every 30 seconds as backup
-    const interval = setInterval(loadData, 30000)
+    // Poll often (and silently) so a device plugged in or pulled out shows on
+    // its card about as fast as it does in the sidebar. The reads are light.
+    const interval = setInterval(() => loadData(true), 5000)
 
     // Setup SSE connection. The stream endpoint authenticates with a
     // short-lived ?token= (EventSource cannot send Authorization headers),
@@ -590,7 +593,12 @@ function Dashboard({ onViewPlot }) {
 
   // Calculate stats
   const totalDevices = devices?.length || 0;
-  const activeLogging = devices?.filter(d => d.logging).length || 0;
+  const deviceTitle = (deviceType) => {
+    if (deviceType === 'black-box') return 'Gas-flow meter'
+    if (deviceType === 'plc') return 'PLC'
+    return 'Chimera'
+  }
+
   const runningTests = activeTests?.length || 0;
 
   // Filter devices that are NOT in an active test
@@ -598,7 +606,8 @@ function Dashboard({ onViewPlot }) {
   // The gas card aligns its bottom to the first device card on the page —
   // an Active Devices card when that section renders, else the first
   // Available Devices card
-  const hasActiveDeviceCards = activeLogging > 0 && (devices?.some(d => d.active_test_id) || false);
+  const hasAssignedDevices = devices?.some(d => d.active_test_id) || false;
+  const hasActiveDeviceCards = hasAssignedDevices;
   const filesLocalePrefix = getFilesLocalePrefix();
   const normalizedMemoryInfo = normalizeMemoryInfo(deviceMemoryInfo)
   const hasValidMemoryInfo = Boolean(
@@ -750,7 +759,7 @@ function Dashboard({ onViewPlot }) {
           </div>
 
           {/* Active Devices Section */}
-          {activeLogging > 0 && (
+          {hasAssignedDevices && (
             <section>
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 {tPages('dashboard.active_devices')}
@@ -763,7 +772,7 @@ function Dashboard({ onViewPlot }) {
                     <DeviceCard
                       deviceId={device.id}
                       deviceType={device.device_type}
-                      title={device.device_type === "black-box" ? "Gas-flow meter" : "Chimera"}
+                      title={deviceTitle(device.device_type)}
                       name={device.name}
                       logging={device.logging}
                       port={device.port}
@@ -800,7 +809,7 @@ function Dashboard({ onViewPlot }) {
                   <DeviceCard
                     deviceId={device.id}
                     deviceType={device.device_type}
-                    title={device.device_type === "black-box" ? "Gas-flow meter" : "Chimera"}
+                    title={deviceTitle(device.device_type)}
                     name={device.name}
                     logging={device.logging}
                     port={device.port}
@@ -822,7 +831,7 @@ function Dashboard({ onViewPlot }) {
             ) : (
               <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
                 <p className="text-gray-500">{tPages('dashboard.no_available_devices')}</p>
-                {activeLogging > 0 && <p className="text-sm text-gray-400 mt-1">{tPages('dashboard.all_devices_assigned')}</p>}
+                {hasAssignedDevices && <p className="text-sm text-gray-400 mt-1">{tPages('dashboard.all_devices_assigned')}</p>}
               </div>
             )}
           </section>

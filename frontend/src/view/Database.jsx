@@ -739,10 +739,16 @@ const Database = ({ onViewPlot, initialParams }) => {
 
             const testConfigPromise = fetchJson(`/api/v1/tests/${testId}`);
 
-            const [blackboxConfigs, chimeraConfig, testConfig] = await Promise.all([
+            // A PLC records settings rather than channels, so its configuration
+            // is fetched whether or not it appears in the device list.
+            const plcPromise = fetchJson(`/api/v1/plc/test/${testId}/configuration`)
+                .catch(() => ({ plc_configurations: [] }));
+
+            const [blackboxConfigs, chimeraConfig, testConfig, plcResult] = await Promise.all([
                 blackboxPromise,
                 chimeraPromise,
-                testConfigPromise
+                testConfigPromise,
+                plcPromise
             ]);
 
             setTestDetails(prev => ({
@@ -752,6 +758,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                     error: null,
                     blackboxConfigs,
                     chimeraConfig,
+                    plcConfigurations: plcResult?.plc_configurations || [],
                     channelConfigurations: Array.isArray(testConfig?.configurations)
                         ? testConfig.configurations
                         : []
@@ -764,7 +771,8 @@ const Database = ({ onViewPlot, initialParams }) => {
                     loading: false,
                     error: error.message || tPages('database.details_failed'),
                     blackboxConfigs: [],
-                    chimeraConfig: null
+                    chimeraConfig: null,
+                    plcConfigurations: []
                 }
             }));
         }
@@ -854,6 +862,7 @@ const Database = ({ onViewPlot, initialParams }) => {
 
         const blackboxConfigs = details.blackboxConfigs || [];
         const chimeraConfig = details.chimeraConfig;
+        const plcConfigurations = details.plcConfigurations || [];
 
         const channelConfigLookup = (details.channelConfigurations || []).reduce((acc, config) => {
             const deviceId = config.device_id ?? config.deviceId;
@@ -1003,6 +1012,44 @@ const Database = ({ onViewPlot, initialParams }) => {
                         })}
                     </div>
                 )}
+
+                {plcConfigurations.map((plc) => (
+                    <div key={plc.device_id} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <h4 className="text-sm font-semibold text-gray-800">
+                                PLC — {plc.device_name || `device ${plc.device_id}`}
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                                {plc.model_id || plc.machine_type}
+                                {plc.profile_name ? ` · profile ${plc.profile_name}` : ''}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            {[
+                                ['Heaters', plc.settings?.heaters, (u) => `${u.target}°C`],
+                                ['Mixers', plc.settings?.mixers,
+                                    (u) => ['always off', 'always on', `timed ${u.on_for}s / ${u.off_for}s`][u.mode] ?? `mode ${u.mode}`],
+                                ['Feeders', plc.settings?.feeders,
+                                    (u) => (u.on_for ? `${u.on_for}s every ${u.off_for_minutes} min` : 'paused')],
+                                ['Agitators', plc.settings?.agitators,
+                                    (u) => (u.pre_feed ? `${u.pre_feed}s pre-feed` : 'paused')],
+                            ].filter(([, units]) => units && units.length > 0).map(([label, units, describe]) => (
+                                <div key={label}>
+                                    <span className="text-xs uppercase text-gray-400 block mb-1">{label}</span>
+                                    <ul className="text-sm text-gray-700 space-y-0.5">
+                                        {units.map((u) => (
+                                            <li key={u.number} className="flex justify-between gap-3">
+                                                <span className="text-gray-500">{u.number}</span>
+                                                <span>{describe(u)}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
 
                 {chimeraConfig && (
                     <div className="bg-white border border-gray-200 rounded-lg p-4">

@@ -66,17 +66,30 @@ class SerialHandler:
             raise Exception(f"Failed to connect to {self.port}: {str(e)}")
         
 
-    def get_type(self, port: str, timeout: float = 2.0) -> str:
+    def get_type(self, port: str, timeout: float = 6.0) -> str:
         if not self.connection.is_open:
             self.connect(port=port)
 
         self.clear_buffer()
-        self.send_command_no_wait("info")
-        # Wait up to timeout, checking for responses that start with "info"
-        # Skip any other messages that come first (like "Setup completed sucessfully")
+        # Opening the port resets boards that auto-reset on DTR. The ESP32 based
+        # devices are back within a fraction of a second, but the AVR based PLC
+        # sits in its bootloader for around two seconds - and traffic arriving
+        # during that window keeps the bootloader listening instead of handing
+        # over to the sketch, so the board would stay silent indefinitely.
+        #
+        # Ask once for anything already running, then leave a deliberate quiet
+        # gap for the bootloader to time out before asking again.
+        request_times = [0.0, 2.2, 3.0, 3.8, 4.6, 5.4]
         start_time = time.time()
         response = None
         while time.time() - start_time < timeout:
+            elapsed = time.time() - start_time
+            if request_times and elapsed >= request_times[0]:
+                request_times.pop(0)
+                try:
+                    self.send_command_no_wait("info")
+                except Exception:
+                    pass
             resp = self.read_line(timeout=0.2)
             if resp and resp.startswith("info"):
                 response = resp

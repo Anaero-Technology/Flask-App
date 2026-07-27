@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity, MoreVertical, FolderOpen, FlaskConical, Play, Square } from 'lucide-react';
+import { Settings, Edit2, Save, Circle, Clock, LineChart, Wind, Activity, MoreVertical, FolderOpen, FlaskConical, Play, Square, Cpu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import CalibrationProgressBar from './CalibrationProgressBar';
 import ChimeraConfigTooltip from './ChimeraConfigTooltip';
 import BlackBoxConfigTooltip from './BlackBoxConfigTooltip';
+import PlcConfigTooltip from './PlcConfigTooltip';
 import { useCalibration } from './ChimeraContext';
 import { useAuth } from './AuthContext';
 import { formatGasName } from '../utils/gasNames';
@@ -264,7 +265,7 @@ function DeviceCard(props) {
     const isCompact = props.compact;
     const supportsCalibration = props.deviceType === 'chimera' || props.deviceType === 'chimera-max';
     const supportsFiles = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
-    const supportsTestControl = ['black-box', 'chimera', 'chimera-max'].includes(props.deviceType);
+    const supportsTestControl = ['black-box', 'chimera', 'chimera-max', 'plc'].includes(props.deviceType);
     const showDashboardActionsMenu = Boolean(props.showDashboardActions) && !isCompact;
     const actionsDisabled = Boolean(props.actionsDisabled);
     const getMenuItemClass = (disabled) => (
@@ -407,6 +408,22 @@ function DeviceCard(props) {
 
                                 {isActionsMenuOpen && (
                                     <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+                                        {props.deviceType === 'plc' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsActionsMenuOpen(false);
+                                                    window.dispatchEvent(new CustomEvent('app:navigate', {
+                                                        detail: { view: 'plc', params: { deviceId: props.deviceId } },
+                                                    }));
+                                                }}
+                                                className={getMenuItemClass(false)}
+                                            >
+                                                <Cpu size={14} />
+                                                <span>Configure PLC</span>
+                                            </button>
+                                        )}
+
                                         {supportsTestControl && !props.activeTestId && props.onStartTest && (
                                             <button
                                                 type="button"
@@ -636,6 +653,12 @@ function DeviceCard(props) {
                                     />
                                 ) : props.deviceType === 'black-box' ? (
                                     <BlackBoxConfigTooltip
+                                        testId={props.activeTestId}
+                                        deviceId={props.deviceId}
+                                        activeTestName={props.activeTestName}
+                                    />
+                                ) : props.deviceType === 'plc' ? (
+                                    <PlcConfigTooltip
                                         testId={props.activeTestId}
                                         deviceId={props.deviceId}
                                         activeTestName={props.activeTestName}

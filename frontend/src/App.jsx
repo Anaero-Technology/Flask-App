@@ -15,6 +15,7 @@ import TestForm from './view/TestForm'
 import Settings from './view/Settings'
 import Login from './view/Login'
 import UserManagement from './view/UserManagement'
+import PLC from './view/PLC'
 import './App.css'
 
 import Plot from './view/Plot'
@@ -121,7 +122,7 @@ function AppContent() {
       case 'upload':
         return <div className="p-6">Upload Data - Coming Soon</div>
       case 'plc':
-        return <div className="p-6">PLC - Coming Soon</div>
+        return <PLC initialParams={viewParams} />
       case 'settings':
         return <Settings />
       case 'users':

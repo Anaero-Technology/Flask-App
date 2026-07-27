@@ -130,10 +130,13 @@ def auto_connect_devices():
 
         return False
 
-    # Back off between scans so BlackBox-only or bench setups don't probe
-    # serial ports every 5s forever, competing with user-initiated connects.
-    retry_delay = 5
-    max_retry_delay = 60
+    # Back off between scans so BlackBox-only or bench setups don't probe serial
+    # ports every few seconds forever. The ceiling is kept low, though: a
+    # replugged device is only noticed on the next sweep, so a 60s ceiling made
+    # reconnects feel dead for up to a minute. Already-connected ports are
+    # skipped, so a steady ~10s sweep costs almost nothing at rest.
+    retry_delay = 3
+    max_retry_delay = 10
 
     while not chimera_found:
         print('[AUTO-CONNECT] Scanning for Chimera device...')
@@ -196,6 +199,7 @@ from routes.auth import auth_bp
 from routes.users import users_bp
 from routes.black_box import black_box_bp
 from routes.chimera import chimera_bp
+from routes.plc import plc_bp
 from routes.wifi import wifi_bp
 from routes.network import network_bp
 from routes.data import data_bp
@@ -207,6 +211,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(users_bp)
 app.register_blueprint(black_box_bp)
 app.register_blueprint(chimera_bp)
+app.register_blueprint(plc_bp)
 app.register_blueprint(wifi_bp)
 app.register_blueprint(network_bp)
 app.register_blueprint(data_bp)

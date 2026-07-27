@@ -535,6 +535,34 @@ function TestForm() {
                 }
             }
 
+            // Record what any selected PLC is set to. A PLC contributes settings
+            // rather than channels, so this snapshots how the machine was driven
+            // for the test - it is not fatal if it fails, the measurements still
+            // stand on their own.
+            const plcDevices = devices.filter(d =>
+                selectedDevices.includes(d.id) && d.device_type === 'plc'
+            );
+
+            for (const plcDevice of plcDevices) {
+                try {
+                    const modelId = plcDevice.mac_address
+                        ? window.localStorage.getItem(`plc-model:${plcDevice.mac_address}`)
+                        : null;
+                    const profileName = plcDevice.mac_address
+                        ? window.localStorage.getItem(`plc-profile:${plcDevice.mac_address}`)
+                        : null;
+                    const plcResponse = await authFetch(`/api/v1/plc/${plcDevice.id}/test/${testId}`, {
+                        method: 'POST',
+                        body: JSON.stringify({ model_id: modelId, profile_name: profileName })
+                    });
+                    if (!plcResponse.ok) {
+                        console.warn('Could not record the PLC configuration for this test');
+                    }
+                } catch {
+                    console.warn('Could not record the PLC configuration for this test');
+                }
+            }
+
             // Start the test immediately, passing selected devices explicitly
             const startResponse = await authFetch(`/api/v1/tests/${testId}/start`, {
                 method: 'POST',
@@ -678,7 +706,9 @@ function TestForm() {
                                                 <span className="text-gray-500 capitalize">
                                                     {['chimera', 'chimera-max'].includes(device.device_type)
                                                         ? (globalDeviceModel === 'chimera-max' ? 'Chimera-Max' : 'Chimera')
-                                                        : device.device_type}
+                                                        : device.device_type === 'plc'
+                                                            ? 'PLC'
+                                                            : device.device_type}
                                                 </span>
                                                 <span className={`flex items-center gap-1 ${device.status === 'connected' ? 'text-green-600' : 'text-gray-400'}`}>
                                                     <div className={`w-1.5 h-1.5 rounded-full ${device.status === 'connected' ? 'bg-green-500' : 'bg-gray-300'}`} />

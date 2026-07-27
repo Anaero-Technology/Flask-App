@@ -182,7 +182,10 @@ def verify_password():
         return jsonify({"error": "Too many attempts. Try again in a few minutes."}), 429
 
     if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
-        return jsonify({"error": "Password is incorrect"}), 401
+        # 403, not 401: the session is perfectly valid, it is the re-entered
+        # password that is wrong. A 401 here makes the client treat the session
+        # as dead and sign the user out for a typo.
+        return jsonify({"error": "Password is incorrect"}), 403
 
     auth_limiter.reset(rate_key)
     return jsonify({"valid": True})
