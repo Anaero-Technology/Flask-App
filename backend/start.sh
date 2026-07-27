@@ -36,5 +36,16 @@ if ! pgrep -x "redis-server" > /dev/null; then
     redis-server --daemonize yes
 fi
 
+# avrdude flashes PLC firmware over serial. Like redis it is a system package
+# expected from the image; try a one-time, best-effort install if it is missing.
+# Non-fatal and non-interactive (sudo -n never prompts): PLC firmware updates
+# just stay unavailable until avrdude exists.
+if ! command -v avrdude > /dev/null 2>&1; then
+    echo "avrdude not found (needed only for PLC firmware updates); attempting install..."
+    sudo -n apt-get install -y avrdude > /dev/null 2>&1 \
+        && echo "  installed avrdude" \
+        || echo "  skipped - install avrdude manually to enable PLC firmware updates"
+fi
+
 echo "Starting Flask server..."
 gunicorn --worker-class gevent --worker-connections 1000 --timeout 30 -w 1 -b :6000 app:app

@@ -90,76 +90,91 @@ with app.app_context():
     except Exception as exc:
         print(f"[DB MIGRATION] Failed to patch schema: {exc}")
 
+def auto_connect_sweep(manager, ports, port_state, probe_attempts=5):
+    """One scan pass. Mutates port_state; returns nothing.
+
+    port_state maps a port path to either 'connected' or the number of probe
+    attempts still allowed. The rules keep it from touching live connections or
+    hammering unrelated serial ports:
+
+      - an already-connected port is marked and skipped (never re-probed, so a
+        working device is never disturbed)
+      - a port reserved for flashing is left alone
+      - a port that never identifies is probed a few times then dropped until it
+        re-enumerates
+      - a port that drops from connected is retried
+      - a vanished port is forgotten, so re-plugging starts fresh
+    """
+    def is_bluetooth(p):
+        return 'Bluetooth' in p.device or 'Bluetooth' in (p.description or '')
+
+    visible = [p for p in ports if not is_bluetooth(p)]
+    current = {p.device for p in visible}
+
+    for gone in set(port_state) - current:
+        del port_state[gone]
+
+    for p in visible:
+        dev = p.device
+        if dev in manager._reserved_ports:
+            continue                              # held for flashing - hands off
+        if manager.is_port_connected(dev):
+            port_state[dev] = 'connected'         # live device - do not disturb
+            continue
+        if port_state.get(dev) == 'connected':
+            port_state[dev] = probe_attempts      # was connected, dropped - re-probe
+        attempts = port_state.get(dev, probe_attempts)   # new port -> full attempts
+        if attempts <= 0:
+            continue                              # gave up until it re-enumerates
+
+        connected = False
+        try:
+            if manager.connect(dev):
+                device = manager.get_device_by_port(dev)
+                dtype = getattr(device, 'device_type', 'device') if device else 'device'
+                print(f'[AUTO-CONNECT] ✓ Connected to {dtype} on {dev}')
+                connected = True
+        except Exception:
+            pass
+        port_state[dev] = 'connected' if connected else attempts - 1
+
+
 def auto_connect_devices():
-    """Auto-scan and connect to devices on startup until a Chimera is found."""
+    """Continuously scan serial ports and connect Anaero devices as they appear.
+
+    This must never stop: the Pi's Chimera is on the hardware UART and comes up
+    first, but a BlackBox or PLC can be hot-plugged on USB seconds or hours
+    later, so a loop that exited once the Chimera was found would never see them
+    (which is exactly what happened - the USB PLC enumerated after the first
+    sweep and was never probed again).
+
+    To keep scanning cheaply without hammering unrelated serial ports, probing is
+    edge-triggered: a port is only tried when it first appears, until it either
+    connects or a few attempts fail. A device that is already connected is
+    skipped, a port that never identifies is left alone until it re-enumerates,
+    and a port reserved for flashing is not touched.
+    """
     import time
-    import concurrent.futures
 
     time.sleep(2)
 
-    # Reset stale connected flags from previous run (atexit may not have run)
+    # Reset stale connected flags from a previous run (atexit may not have run).
     with app.app_context():
         Device.query.update({Device.connected: False})
         db.session.commit()
 
-    chimera_found = False
-
-    def check_port(port_info):
-        nonlocal chimera_found
-
-        if 'Bluetooth' in port_info.device or 'Bluetooth' in port_info.description:
-            return False
-
-        try:
-            connected = device_manager.connect(port_info.device)
-            if not connected:
-                return False
-
-            device = device_manager.get_device_by_port(port_info.device)
-            if device and hasattr(device, 'device_type'):
-                if device.device_type in ['chimera', 'chimera-max']:
-                    print(f'[AUTO-CONNECT] ✓ Connected to Chimera on {port_info.device}')
-                    chimera_found = True
-                    return True
-                if device.device_type in ['black-box', 'black_box']:
-                    print(f'[AUTO-CONNECT] ✓ Connected to BlackBox on {port_info.device}')
-                else:
-                    print(f'[AUTO-CONNECT] ✓ Connected to {device.device_type} on {port_info.device}')
-        except Exception:
-            pass
-
-        return False
-
-    # Back off between scans so BlackBox-only or bench setups don't probe serial
-    # ports every few seconds forever. The ceiling is kept low, though: a
-    # replugged device is only noticed on the next sweep, so a 60s ceiling made
-    # reconnects feel dead for up to a minute. Already-connected ports are
-    # skipped, so a steady ~10s sweep costs almost nothing at rest.
-    retry_delay = 3
-    max_retry_delay = 10
-
-    while not chimera_found:
-        print('[AUTO-CONNECT] Scanning for Chimera device...')
-
+    port_state = {}             # port path -> 'connected' or attempts remaining
+    delay = 3
+    while True:
         with app.app_context():
             try:
                 ports = list(serial.tools.list_ports.comports())
-                max_workers = min(8, len(ports) or 1)
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    executor.map(check_port, ports)
-
-                if chimera_found:
-                    print('[AUTO-CONNECT] Chimera found, stopping scan')
-                else:
-                    print(f'[AUTO-CONNECT] No Chimera found, retrying in {retry_delay} seconds...')
+                auto_connect_sweep(device_manager, ports, port_state)
             except Exception as exc:
-                print(f'[AUTO-CONNECT] Error during auto-connect: {exc}')
+                print(f'[AUTO-CONNECT] Error during scan: {exc}')
 
-        if not chimera_found:
-            time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, max_retry_delay)
-
-    print('[AUTO-CONNECT] Device scan complete')
+        time.sleep(delay)
+        delay = min(delay * 2, 10)   # ramp to a steady ~10s sweep, then hold - forever
 
 
 def _should_start_auto_connect():

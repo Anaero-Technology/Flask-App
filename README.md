@@ -9,6 +9,7 @@ Full-stack app for managing and monitoring device tests (Flask backend + React/V
 - Node.js 20+
 - Redis
 - USB/serial access for connected devices
+- avrdude (only for PLC firmware updates; `start.sh` installs it if missing)
 
 ## Install (Steps 1 to 8)
 
