@@ -83,6 +83,21 @@ with app.app_context():
             if 'recirculation_duration_seconds' not in chimera_config_columns:
                 migration_statements.append("ALTER TABLE chimera_configurations ADD COLUMN recirculation_duration_seconds INTEGER")
 
+        # The first cut of automation rules held a single condition inline on
+        # the rule. Conditions now live in their own table so a rule can
+        # combine several with AND/OR, which no ALTER can express. The feature
+        # has never shipped, so the old-shape tables are rebuilt rather than
+        # migrated - detected by the source_type column that moved away.
+        if inspector.has_table('automation_rules'):
+            rule_columns = {column['name'] for column in inspector.get_columns('automation_rules')}
+            if 'source_type' in rule_columns:
+                with db.engine.begin() as connection:
+                    connection.execute(text("DROP TABLE IF EXISTS automation_events"))
+                    connection.execute(text("DROP TABLE IF EXISTS automation_conditions"))
+                    connection.execute(text("DROP TABLE IF EXISTS automation_rules"))
+                db.create_all()
+                print("[DB MIGRATION] Rebuilt automation tables for multi-condition rules")
+
         if migration_statements:
             with db.engine.begin() as connection:
                 for statement in migration_statements:

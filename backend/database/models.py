@@ -301,17 +301,15 @@ class PlcConfiguration(db.Model):
 
 
 class AutomationRule(db.Model):
-   """A closed-loop control rule: watch a measurement, drive a PLC output.
+   """A closed-loop control rule: watch measurements, drive a PLC output.
 
    Turns a manual observe-then-adjust workflow into an automated dynamic
-   experiment, e.g. "if the methane level on chimera channel 3 stays above
-   55% for the averaging window, increase feeder 1's feed time by 5 seconds,
-   but never beyond 60". The rule holds three parts:
+   experiment, e.g. "while methane on chimera channel 3 is above 55% AND the
+   reactor is at temperature, increase feeder 1's feed time by 5 seconds, but
+   never beyond 60". A rule is:
 
-   - source: which measurement to watch (a chimera gas concentration, the
-     gas volume a black box channel produced over a window, or a PLC
-     reactor temperature)
-   - condition: comparison operator and threshold over that measurement
+   - conditions: one or more measurements with a comparison each, held in
+     AutomationCondition rows and combined with condition_logic
    - action: which PLC unit parameter to change and by how much, bounded by
      hard min/max clamps so a runaway loop can never drive the machine
      outside the range the operator signed off on
@@ -327,16 +325,8 @@ class AutomationRule(db.Model):
    name = Column(String(120), nullable=False)
    enabled = Column(Boolean, nullable=False, default=True)
 
-   # Source measurement
-   source_type = Column(String(20), nullable=False)   # 'chimera_gas', 'blackbox_volume', 'plc_temperature'
-   source_device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
-   source_channel = Column(Integer, nullable=False)   # chimera/blackbox channel, or PLC heater number
-   gas_name = Column(String(50), nullable=True)       # chimera_gas only, e.g. 'CH4'
-   window_minutes = Column(Integer, nullable=False, default=0)  # 0 = latest reading; else average (gas) / sum (volume)
-
-   # Condition
-   operator = Column(String(3), nullable=False)       # 'gt', 'lt', 'gte', 'lte'
-   threshold = Column(Float, nullable=False)
+   # How the conditions combine: 'all' = AND, 'any' = OR
+   condition_logic = Column(String(3), nullable=False, default='all')
 
    # Action on a PLC unit
    target_device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
@@ -357,6 +347,34 @@ class AutomationRule(db.Model):
    created_at = Column(DateTime, default=datetime.utcnow)
    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+   conditions = db.relationship(
+       'AutomationCondition', backref='rule', order_by='AutomationCondition.position',
+       cascade='all, delete-orphan', lazy='selectin')
+
+
+class AutomationCondition(db.Model):
+   """One measurement test inside a rule.
+
+   Split from the rule so a rule can watch several things at once - gas level
+   and temperature, or two channels - combined with the rule's AND/OR logic.
+   Rows are replaced wholesale when a rule is saved, so position is just the
+   order the operator wrote them in.
+   """
+   __tablename__ = "automation_conditions"
+
+   id = Column(Integer, primary_key=True)
+   rule_id = Column(Integer, ForeignKey('automation_rules.id'), nullable=False)
+   position = Column(Integer, nullable=False, default=0)
+
+   source_type = Column(String(20), nullable=False)   # 'chimera_gas', 'blackbox_volume', 'plc_temperature'
+   source_device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   source_channel = Column(Integer, nullable=False)   # chimera/blackbox channel, or PLC heater number
+   gas_name = Column(String(50), nullable=True)       # chimera_gas only, e.g. 'CH4'
+   window_minutes = Column(Integer, nullable=False, default=0)  # 0 = latest reading; else average (gas) / sum (volume)
+
+   operator = Column(String(3), nullable=False)       # 'gt', 'lt', 'gte', 'lte'
+   threshold = Column(Float, nullable=False)
+
 
 class AutomationEvent(db.Model):
    """Append-only record of everything a rule did (or could not do).
@@ -371,7 +389,10 @@ class AutomationEvent(db.Model):
    rule_id = Column(Integer, ForeignKey('automation_rules.id'), nullable=False)
    test_id = Column(Integer, ForeignKey('tests.id'), nullable=True)  # test running on the target PLC, if any
 
-   observed_value = Column(Float, nullable=True)
+   # JSON list, one entry per condition: value, whether it was met, and the
+   # description it was read under - so an event explains itself even after
+   # the rule that produced it has been edited.
+   observed_values = Column(String, nullable=True)
    outcome = Column(String(10), nullable=False)       # 'fired', 'clamped', 'failed'
    old_value = Column(Float, nullable=True)           # parameter before / after, for 'fired'
    new_value = Column(Float, nullable=True)

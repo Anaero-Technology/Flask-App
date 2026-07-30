@@ -1,13 +1,14 @@
+import json
 import time
-from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from automation_engine import (AutomationEngine, validate_rule_fields,
-                               UNIT_PARAMETERS)
-from database.models import (db, AutomationRule, AutomationEvent,
-                             ChimeraRawData, Device)
+from automation_engine import (AutomationEngine, simulate, validate_rule_fields,
+                               rule_from_spec, condition_description,
+                               UNIT_PARAMETERS, MAX_SIMULATION_STEPS)
+from database.models import (db, AutomationRule, AutomationCondition,
+                             AutomationEvent, ChimeraRawData, Device)
 from device_manager import DeviceManager
 from utils.auth import require_role
 from utils.errors import internal_error
@@ -18,12 +19,29 @@ device_manager = DeviceManager()
 WRITE_ROLES = ['admin', 'operator', 'technician']
 
 RULE_FIELDS = (
-    'name', 'enabled',
-    'source_type', 'source_device_id', 'source_channel', 'gas_name',
-    'window_minutes', 'operator', 'threshold',
+    'name', 'enabled', 'condition_logic',
     'target_device_id', 'unit_type', 'unit_number', 'parameter',
     'action_type', 'amount', 'min_value', 'max_value', 'cooldown_seconds',
 )
+CONDITION_FIELDS = (
+    'source_type', 'source_device_id', 'source_channel', 'gas_name',
+    'window_minutes', 'operator', 'threshold',
+)
+
+
+def _condition_json(condition):
+    return {
+        "id": condition.id,
+        "position": condition.position,
+        "source_type": condition.source_type,
+        "source_device_id": condition.source_device_id,
+        "source_channel": condition.source_channel,
+        "gas_name": condition.gas_name,
+        "window_minutes": condition.window_minutes,
+        "operator": condition.operator,
+        "threshold": condition.threshold,
+        "description": condition_description(condition),
+    }
 
 
 def _rule_json(rule):
@@ -31,13 +49,8 @@ def _rule_json(rule):
         "id": rule.id,
         "name": rule.name,
         "enabled": rule.enabled,
-        "source_type": rule.source_type,
-        "source_device_id": rule.source_device_id,
-        "source_channel": rule.source_channel,
-        "gas_name": rule.gas_name,
-        "window_minutes": rule.window_minutes,
-        "operator": rule.operator,
-        "threshold": rule.threshold,
+        "condition_logic": rule.condition_logic,
+        "conditions": [_condition_json(c) for c in rule.conditions],
         "target_device_id": rule.target_device_id,
         "unit_type": rule.unit_type,
         "unit_number": rule.unit_number,
@@ -58,7 +71,7 @@ def _event_json(event):
         "id": event.id,
         "rule_id": event.rule_id,
         "test_id": event.test_id,
-        "observed_value": event.observed_value,
+        "observed_values": json.loads(event.observed_values) if event.observed_values else [],
         "outcome": event.outcome,
         "old_value": event.old_value,
         "new_value": event.new_value,
@@ -67,25 +80,53 @@ def _event_json(event):
     }
 
 
-def _validated_body():
-    """The request body as a rule dict, or (None, error response)."""
-    body = request.get_json(silent=True) or {}
-    data = {f: body.get(f) for f in RULE_FIELDS if f in body}
-    error = validate_rule_fields({**data,
-                                  # defaults so a partial body validates the
-                                  # same values that will be stored
-                                  "window_minutes": data.get("window_minutes", 0),
-                                  "cooldown_seconds": data.get("cooldown_seconds", 3600)})
+def _check_devices(spec):
+    """Every device a rule references must exist, and the target must be a PLC."""
+    target = Device.query.get(spec.get('target_device_id'))
+    if not target:
+        return "target_device_id does not exist"
+    if target.device_type != 'plc':
+        return "target_device_id must be a PLC"
+    for index, condition in enumerate(spec.get('conditions') or [], start=1):
+        if not Device.query.get(condition.get('source_device_id')):
+            return f"condition {index}: source_device_id does not exist"
+    return None
+
+
+def _spec_from_body(body, existing=None):
+    """Merge a request body over an existing rule and validate the result.
+
+    Updates are merged before validation so a partial body can never leave the
+    rule internally inconsistent - a new unit_type with the old parameter, say,
+    or logic that no longer matches the conditions.
+    """
+    base = _rule_json(existing) if existing else {}
+    spec = {**base, **{f: body[f] for f in RULE_FIELDS if f in body}}
+    if 'conditions' in body:
+        spec['conditions'] = body['conditions']
+    spec.setdefault('condition_logic', 'all')
+    spec.setdefault('cooldown_seconds', 3600)
+
+    error = validate_rule_fields(spec) or _check_devices(spec)
     if error:
         return None, (jsonify({"error": error}), 400)
+    return spec, None
 
-    for device_field, expect in (("source_device_id", None), ("target_device_id", "plc")):
-        device = Device.query.get(data.get(device_field))
-        if not device:
-            return None, (jsonify({"error": f"{device_field} does not exist"}), 400)
-        if expect and device.device_type != expect:
-            return None, (jsonify({"error": "target_device_id must be a PLC"}), 400)
-    return data, None
+
+def _write_conditions(rule, conditions):
+    """Replace a rule's conditions wholesale.
+
+    Editing a rule is editing one idea, not managing a sub-collection, so the
+    API takes the whole set every time and the old rows go with the cascade.
+    """
+    rule.conditions.clear()
+    for position, data in enumerate(conditions):
+        row = AutomationCondition(position=position)
+        for field in CONDITION_FIELDS:
+            if field in data:
+                setattr(row, field, data[field])
+        row.window_minutes = int(data.get('window_minutes', 0) or 0)
+        rule.conditions.append(row)
 
 
 # ----------------------------------------------------------------------
@@ -108,13 +149,15 @@ def list_rules():
 @require_role(WRITE_ROLES)
 def create_rule():
     try:
-        data, error = _validated_body()
+        spec, error = _spec_from_body(request.get_json(silent=True) or {})
         if error:
             return error
 
         rule = AutomationRule(created_by=get_jwt_identity())
-        for field, value in data.items():
-            setattr(rule, field, value)
+        for field in RULE_FIELDS:
+            if field in spec:
+                setattr(rule, field, spec[field])
+        _write_conditions(rule, spec['conditions'])
         db.session.add(rule)
         db.session.commit()
         return jsonify({"success": True, "rule": _rule_json(rule)}), 201
@@ -134,17 +177,16 @@ def update_rule(rule_id):
         if not rule:
             return jsonify({"error": "Rule not found"}), 404
 
-        # Validate the merged result, so a partial update cannot leave the
-        # rule internally inconsistent (e.g. new unit_type, old parameter).
         body = request.get_json(silent=True) or {}
-        merged = {**_rule_json(rule), **{f: body[f] for f in RULE_FIELDS if f in body}}
-        error = validate_rule_fields(merged)
+        spec, error = _spec_from_body(body, existing=rule)
         if error:
-            return jsonify({"error": error}), 400
+            return error
 
         for field in RULE_FIELDS:
             if field in body:
                 setattr(rule, field, body[field])
+        if 'conditions' in body:
+            _write_conditions(rule, body['conditions'])
         db.session.commit()
         return jsonify({"success": True, "rule": _rule_json(rule)})
     except Exception as e:
@@ -179,18 +221,76 @@ def delete_rule(rule_id):
 @jwt_required()
 @require_role(WRITE_ROLES)
 def dry_run(rule_id):
-    """Evaluate the rule right now without touching the machine.
+    """Evaluate the rule against live measurements without touching the machine.
 
-    Shows the live measurement, whether the condition holds, and exactly what
-    the action would change - so a rule can be sanity-checked before it is
-    trusted with hardware.
+    Shows each condition's current reading, whether the combined logic holds,
+    and exactly what the action would change - so a rule can be checked against
+    the real process before it is trusted with hardware.
     """
     try:
         rule = AutomationRule.query.get(rule_id)
         if not rule:
             return jsonify({"error": "Rule not found"}), 404
-        result = AutomationEngine().evaluate_rule(rule, act=False)
-        return jsonify(result)
+        return jsonify(AutomationEngine().evaluate_rule(rule, act=False))
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+# ----------------------------------------------------------------------
+# Simulation
+# ----------------------------------------------------------------------
+@automation_bp.route('/api/v1/automation/simulate', methods=['POST'])
+@jwt_required()
+def simulate_rule():
+    """Run a rule against synthetic measurements over simulated time.
+
+    Takes either a saved rule (`rule_id`) or an unsaved draft (`rule`), plus
+    one scenario per condition describing how that measurement behaves - a
+    ramp, a step change, an oscillation, noise, a dropout, or explicit values.
+    Nothing is read from a device and nothing is written anywhere: this drives
+    the same decision functions the live engine uses, so it shows how the rule
+    would really behave, including cooldowns, clamping and AND/OR logic.
+
+    A scenario may also set `response_per_unit` to close the loop - how much
+    the measurement moves per unit the parameter changes - which is what
+    reveals a rule that overshoots and oscillates.
+    """
+    try:
+        body = request.get_json(silent=True) or {}
+
+        if body.get('rule_id'):
+            saved = AutomationRule.query.get(body['rule_id'])
+            if not saved:
+                return jsonify({"error": "Rule not found"}), 404
+            rule = rule_from_spec(_rule_json(saved))
+        else:
+            spec = body.get('rule') or {}
+            error = validate_rule_fields({**spec,
+                                          "condition_logic": spec.get("condition_logic", "all"),
+                                          "cooldown_seconds": spec.get("cooldown_seconds", 3600)})
+            if error:
+                return jsonify({"error": error}), 400
+            rule = rule_from_spec(spec)
+
+        scenarios = body.get('scenarios') or []
+        if len(scenarios) != len(rule.conditions):
+            return jsonify({"error": f"expected {len(rule.conditions)} scenario(s), "
+                                     f"one per condition, got {len(scenarios)}"}), 400
+
+        steps = int(body.get('steps', 48))
+        if steps < 1 or steps > MAX_SIMULATION_STEPS:
+            return jsonify({"error": f"steps must be between 1 and {MAX_SIMULATION_STEPS}"}), 400
+
+        return jsonify(simulate(
+            rule, scenarios,
+            steps=steps,
+            minutes_per_step=float(body.get('minutes_per_step', 60)),
+            starting_value=float(body.get('starting_value', 0)),
+            seed=int(body.get('seed', 0))))
+    except (TypeError, ValueError) as e:
+        return jsonify({"error": f"Invalid simulation input: {e}"}), 400
     except Exception as e:
         return internal_error(e)
     finally:

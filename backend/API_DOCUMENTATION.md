@@ -157,12 +157,18 @@
 - `DELETE /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - Remove outlier labels.
 
 ## Automation Endpoints
-Closed-loop rules that watch a measurement (chimera gas concentration, black box gas production over a window, or a PLC reactor temperature) and adjust a PLC unit parameter in response, bounded by hard min/max clamps and a per-rule cooldown.
-- `GET /api/v1/automation/rules` - List all rules.
+Closed-loop rules that watch one or more measurements (chimera gas concentration, black box gas production over a window, or a PLC reactor temperature) and adjust a PLC unit parameter in response, bounded by hard min/max clamps and a per-rule cooldown.
+
+A rule carries a `conditions` array (1-5 entries, each with `source_type`, `source_device_id`, `source_channel`, `gas_name`, `window_minutes`, `operator`, `threshold`) combined by `condition_logic`: `all` (AND) or `any` (OR). Conditions are sent with the rule and replaced wholesale on update. An unreadable measurement is treated as unknown, not false: it blocks an AND rule and is ignored by an OR rule that has something positive to act on.
+
+- `GET /api/v1/automation/rules` - List all rules with their conditions.
 - `POST /api/v1/automation/rules` - Create a rule (`admin`, `operator`, `technician`).
-- `PUT /api/v1/automation/rules/<int:rule_id>` - Update a rule; partial bodies are validated against the merged result.
-- `DELETE /api/v1/automation/rules/<int:rule_id>` - Delete a rule (its events are kept).
-- `POST /api/v1/automation/rules/<int:rule_id>/dry_run` - Evaluate now without touching the machine; reports the live value and what would change.
+- `PUT /api/v1/automation/rules/<int:rule_id>` - Update a rule; partial bodies are merged onto the stored rule and validated as a whole, so an update cannot leave it inconsistent.
+- `DELETE /api/v1/automation/rules/<int:rule_id>` - Delete a rule and its conditions (its events are kept).
+- `POST /api/v1/automation/rules/<int:rule_id>/dry_run` - Evaluate against live data without touching the machine; reports every condition's reading and what would change.
+- `POST /api/v1/automation/simulate` - Run a rule against synthetic measurements over simulated time. Takes `rule_id` (saved) or `rule` (unsaved draft), plus one `scenarios` entry per condition and `steps`, `minutes_per_step`, `starting_value`, `seed`. Reads no device and writes nothing.
+  - Scenario `pattern`: `ramp`, `step` (`at`), `sine` (`period`), `constant`, `noise`, `custom` (`values`). `dropout_every` makes every nth reading unavailable; `response_per_unit` closes the loop by moving the measurement as the parameter changes.
+  - Returns a per-step timeline (readings, `conditions_met`, outcome, parameter value) and a summary (`fired`, `clamped`, `final_value`, `crossings`, `hit_limit`).
 - `GET /api/v1/automation/events` - Recent automation activity, newest first. Query params: `rule_id`, `limit`.
 - `GET /api/v1/automation/options` - Connected devices, recently seen gas names, PLC unit counts, and adjustable parameters for the rule editor.
 
