@@ -6,11 +6,31 @@ from utils.auth import require_role, log_audit
 from device_manager import DeviceManager
 from werkzeug.utils import secure_filename
 import io
+import re
 import serial.tools.list_ports
 from utils.errors import internal_error
 
 
 devices_tests_bp = Blueprint('devices_tests', __name__)
+
+# Chars that are illegal in a Windows filename (a superset of the POSIX ones).
+_UNSAFE_FILENAME_CHARS = re.compile(r'[/\\<>:"|?*\x00-\x1f]+')
+
+
+def safe_name(name, fallback='test'):
+    """Turn a user-supplied test name into a filename component.
+
+    Test names are free text, so they routinely contain '/' (dates like
+    "CSTR 18/07") and occasionally quotes. Interpolated straight into
+    download_name those leak into Content-Disposition, and the browser then
+    substitutes '_' for each illegal char — including any trailing one, which
+    leaves the file with no recognisable extension ("...chimera.csv_") and
+    stalls the download behind the browser's unknown-file-type prompt.
+    """
+    cleaned = _UNSAFE_FILENAME_CHARS.sub('_', name or '')
+    # Trailing dots/spaces are also illegal on Windows; leading ones hide the file.
+    cleaned = cleaned.strip('. ').strip()
+    return cleaned[:120] or fallback
 
 
 def get_device_manager():
@@ -2229,6 +2249,7 @@ def download_test_data(test_id):
         # If multiple types exist, ZIP them.
         # If only one type exists, return single CSV.
         
+        base_name = safe_name(test.name)
         sources_count = sum([has_bb_events, has_bb_raw, has_chimera, has_plc])
 
         if sources_count > 1:
@@ -2237,26 +2258,26 @@ def download_test_data(test_id):
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                 if has_plc:
                     csv_data = create_csv_string(plc_header, build_plc_rows(), lambda r: r, csv_delimiter)
-                    zf.writestr(f"{test.name}_plc_configuration.csv", csv_data)
+                    zf.writestr(f"{base_name}_plc_configuration.csv", csv_data)
 
                 if has_bb_events:
                     csv_data = create_csv_string(bb_event_header, bb_events, map_bb_event, csv_delimiter)
-                    zf.writestr(f"{test.name}_gfm_events.csv", csv_data)
+                    zf.writestr(f"{base_name}_gfm_events.csv", csv_data)
 
                 if has_bb_raw:
                     csv_data = create_csv_string(bb_raw_header, bb_raw, map_bb_raw, csv_delimiter)
-                    zf.writestr(f"{test.name}_gfm_raw.csv", csv_data)
+                    zf.writestr(f"{base_name}_gfm_raw.csv", csv_data)
 
                 if has_chimera:
                     csv_data = create_csv_string(chimera_header, chimera_data, map_chimera, csv_delimiter)
-                    zf.writestr(f"{test.name}_chimera.csv", csv_data)
+                    zf.writestr(f"{base_name}_chimera.csv", csv_data)
 
             zip_buffer.seek(0)
             return send_file(
                 zip_buffer,
                 mimetype='application/zip',
                 as_attachment=True,
-                download_name=f"{test.name}_data.zip"
+                download_name=f"{base_name}_data.zip"
             )
 
         elif has_plc and sources_count == 1:
@@ -2265,7 +2286,7 @@ def download_test_data(test_id):
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
                 as_attachment=True,
-                download_name=f"{test.name}_plc_configuration.csv"
+                download_name=f"{base_name}_plc_configuration.csv"
             )
 
         elif has_bb_events:
@@ -2275,7 +2296,7 @@ def download_test_data(test_id):
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
                 as_attachment=True,
-                download_name=f"{test.name}_gfm_events.csv"
+                download_name=f"{base_name}_gfm_events.csv"
             )
 
         elif has_bb_raw:
@@ -2285,7 +2306,7 @@ def download_test_data(test_id):
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
                 as_attachment=True,
-                download_name=f"{test.name}_gfm_raw.csv"
+                download_name=f"{base_name}_gfm_raw.csv"
             )
 
         elif has_chimera:
@@ -2295,7 +2316,7 @@ def download_test_data(test_id):
                 io.BytesIO(csv_content.encode()),
                 mimetype='text/csv',
                 as_attachment=True,
-                download_name=f"{test.name}_chimera.csv"
+                download_name=f"{base_name}_chimera.csv"
             )
 
     except Exception as e:

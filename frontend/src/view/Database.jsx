@@ -13,6 +13,46 @@ import BlackBoxTestConfig from '../components/BlackBoxTestConfig';
 import { useTranslation } from 'react-i18next';
 import { formatDate, tzQueryParam } from '../utils/timeFormat';
 
+// Read the filename out of a Content-Disposition header for use as `a.download`.
+// Naively matching /filename=(.+)/ keeps the quotes Werkzeug wraps the value in;
+// the browser then substitutes '_' for each illegal char, so the file arrives as
+// _My Test_data.csv_ — no recognisable extension, which stalls the download
+// behind the browser's unknown-file-type prompt.
+function filenameFromDisposition(disposition, fallback) {
+    const d = disposition || '';
+    let raw = null;
+
+    const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(d);
+    if (encoded) {
+        try {
+            raw = decodeURIComponent(encoded[1]);
+        } catch {
+            raw = encoded[1];
+        }
+    } else {
+        // RFC 2616 quoted-string, so filename="a\"b" parses rather than truncating
+        const quoted = /filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(d);
+        if (quoted) raw = quoted[1].replace(/\\(.)/g, '$1');
+        else {
+            const bare = /filename\s*=\s*([^;\s]+)/i.exec(d);
+            if (bare) raw = bare[1];
+        }
+    }
+    if (!raw) return fallback;
+
+    raw = raw.replace(/[/\\]+/g, '_')                  // path separators, keeping the name
+             .replace(/[<>:"|?*]+/g, '_');             // other chars illegal in filenames
+    // eslint-disable-next-line no-control-regex -- discarding control chars is the intent
+    raw = raw.replace(/[\x00-\x1f]+/g, '')
+             .replace(/^[.\s]+/, '').replace(/[.\s]+$/, '');
+    if (raw.length > 150) {
+        const dot = raw.lastIndexOf('.');
+        const ext = dot > 0 ? raw.slice(dot) : '';
+        raw = raw.slice(0, 150 - ext.length) + ext;
+    }
+    return raw || fallback;
+}
+
 const Database = ({ onViewPlot, initialParams }) => {
     const MAX_SAMPLE_IMAGE_BYTES = 2 * 1024 * 1024;
     const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -1633,8 +1673,7 @@ const Database = ({ onViewPlot, initialParams }) => {
                                                 a.href = url;
                                                 // Use filename from Content-Disposition header if available
                                                 const disposition = response.headers.get('Content-Disposition');
-                                                const filenameMatch = disposition && disposition.match(/filename=(.+)/);
-                                                a.download = filenameMatch ? filenameMatch[1] : `test_${test.id}_data.csv`;
+                                                a.download = filenameFromDisposition(disposition, `test_${test.id}_data.csv`);
                                                 document.body.appendChild(a);
                                                 a.click();
                                                 window.URL.revokeObjectURL(url);
