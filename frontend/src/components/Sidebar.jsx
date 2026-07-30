@@ -12,6 +12,7 @@ import {
   LineChart,
   Upload,
   Cpu,
+  Zap,
   Settings,
   PlusCircle,
   User,
@@ -78,6 +79,9 @@ function Sidebar({ onNavigate, currentView, isOpen, onClose }) {
     { id: 'plot', labelKey: 'plot', icon: LineChart },
     { id: 'upload', labelKey: 'upload_data', icon: Upload, permission: 'modify_test' },
     ...(hasPlc ? [{ id: 'plc', labelKey: 'plc', icon: Cpu, permission: 'modify_test' }] : []),
+    // Automation drives PLC outputs, so like the PLC page it only earns its
+    // place while one is plugged in.
+    ...(hasPlc ? [{ id: 'automation', labelKey: 'automation', icon: Zap, permission: 'modify_test' }] : []),
     { id: 'settings', labelKey: 'settings', icon: Settings },
   ];
 

@@ -16,6 +16,7 @@ import Settings from './view/Settings'
 import Login from './view/Login'
 import UserManagement from './view/UserManagement'
 import PLC from './view/PLC'
+import Automation from './view/Automation'
 import './App.css'
 
 import Plot from './view/Plot'
@@ -123,6 +124,8 @@ function AppContent() {
         return <div className="p-6">Upload Data - Coming Soon</div>
       case 'plc':
         return <PLC initialParams={viewParams} />
+      case 'automation':
+        return <Automation />
       case 'settings':
         return <Settings />
       case 'users':

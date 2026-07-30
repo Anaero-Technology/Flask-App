@@ -196,6 +196,12 @@ if _should_start_auto_connect():
     auto_connect_thread = threading.Thread(target=auto_connect_devices, daemon=True)
     auto_connect_thread.start()
 
+    # Closed-loop experiment automation shares the auto-connect gate: it acts
+    # on hardware, so utility commands must never start it, and the single
+    # gunicorn worker (-w 1) means exactly one engine runs.
+    from automation_engine import AutomationEngine
+    AutomationEngine().start(app)
+
     # Only the real server process may mark devices disconnected on exit.
     # Utility scripts and CLI commands also import this module, and an
     # unconditional atexit hook made every one of them clobber the connected
@@ -221,6 +227,7 @@ from routes.data import data_bp
 from routes.devices_tests import devices_tests_bp
 from routes.system import system_bp
 from routes.app_settings import app_settings_bp
+from routes.automation import automation_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(users_bp)
@@ -233,6 +240,7 @@ app.register_blueprint(data_bp)
 app.register_blueprint(devices_tests_bp)
 app.register_blueprint(system_bp)
 app.register_blueprint(app_settings_bp)
+app.register_blueprint(automation_bp)
 
 from utils.auth import check_stream_token
 

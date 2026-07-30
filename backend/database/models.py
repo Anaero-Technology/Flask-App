@@ -300,6 +300,85 @@ class PlcConfiguration(db.Model):
    recorded_at = Column(DateTime, default=datetime.utcnow)
 
 
+class AutomationRule(db.Model):
+   """A closed-loop control rule: watch a measurement, drive a PLC output.
+
+   Turns a manual observe-then-adjust workflow into an automated dynamic
+   experiment, e.g. "if the methane level on chimera channel 3 stays above
+   55% for the averaging window, increase feeder 1's feed time by 5 seconds,
+   but never beyond 60". The rule holds three parts:
+
+   - source: which measurement to watch (a chimera gas concentration, the
+     gas volume a black box channel produced over a window, or a PLC
+     reactor temperature)
+   - condition: comparison operator and threshold over that measurement
+   - action: which PLC unit parameter to change and by how much, bounded by
+     hard min/max clamps so a runaway loop can never drive the machine
+     outside the range the operator signed off on
+
+   Rules act on the machine whenever they are enabled, independent of tests
+   (machine control and test recording are separate lifecycles); a change
+   made while the target PLC is attached to a running test is appended to
+   that test's configuration timeline like any hand edit.
+   """
+   __tablename__ = "automation_rules"
+
+   id = Column(Integer, primary_key=True)
+   name = Column(String(120), nullable=False)
+   enabled = Column(Boolean, nullable=False, default=True)
+
+   # Source measurement
+   source_type = Column(String(20), nullable=False)   # 'chimera_gas', 'blackbox_volume', 'plc_temperature'
+   source_device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   source_channel = Column(Integer, nullable=False)   # chimera/blackbox channel, or PLC heater number
+   gas_name = Column(String(50), nullable=True)       # chimera_gas only, e.g. 'CH4'
+   window_minutes = Column(Integer, nullable=False, default=0)  # 0 = latest reading; else average (gas) / sum (volume)
+
+   # Condition
+   operator = Column(String(3), nullable=False)       # 'gt', 'lt', 'gte', 'lte'
+   threshold = Column(Float, nullable=False)
+
+   # Action on a PLC unit
+   target_device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
+   unit_type = Column(String(10), nullable=False)     # 'heater', 'mixer', 'feeder', 'agitator'
+   unit_number = Column(Integer, nullable=False)
+   parameter = Column(String(20), nullable=False)     # 'target', 'on_for', 'off_for', 'off_for_minutes', 'pre_feed'
+   action_type = Column(String(10), nullable=False)   # 'increase', 'decrease', 'set'
+   amount = Column(Float, nullable=False)
+   min_value = Column(Float, nullable=False)          # hard clamps the action can never leave
+   max_value = Column(Float, nullable=False)
+
+   # One adjustment, then hands off for this long - the process needs time to
+   # respond before the measurement is worth acting on again.
+   cooldown_seconds = Column(Integer, nullable=False, default=3600)
+   last_triggered_at = Column(DateTime, nullable=True)
+
+   created_by = Column(String, nullable=True)
+   created_at = Column(DateTime, default=datetime.utcnow)
+   updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AutomationEvent(db.Model):
+   """Append-only record of everything a rule did (or could not do).
+
+   One row per triggered evaluation: what was measured, what the rule decided,
+   and what actually happened to the machine. Never rewritten, so an exported
+   experiment can show exactly when and why the automation intervened.
+   """
+   __tablename__ = "automation_events"
+
+   id = Column(Integer, primary_key=True)
+   rule_id = Column(Integer, ForeignKey('automation_rules.id'), nullable=False)
+   test_id = Column(Integer, ForeignKey('tests.id'), nullable=True)  # test running on the target PLC, if any
+
+   observed_value = Column(Float, nullable=True)
+   outcome = Column(String(10), nullable=False)       # 'fired', 'clamped', 'failed'
+   old_value = Column(Float, nullable=True)           # parameter before / after, for 'fired'
+   new_value = Column(Float, nullable=True)
+   message = Column(String(500), nullable=True)
+   created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class PlcCalibration(db.Model):
    """A per-heater temperature offset for a PLC.
 

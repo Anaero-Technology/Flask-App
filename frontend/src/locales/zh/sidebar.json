@@ -10,6 +10,7 @@
   "blackbox": "BlackBox",
   "chimera": "Chimera",
   "plc": "PLC",
+  "automation": "自动化",
   "settings": "设置",
   "user_management": "用户管理",
   "create_sample": "创建样本",

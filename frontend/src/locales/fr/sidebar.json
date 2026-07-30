@@ -10,6 +10,7 @@
   "blackbox": "BlackBox",
   "chimera": "Chimera",
   "plc": "PLC",
+  "automation": "Automatisation",
   "settings": "Paramètres",
   "user_management": "Gestion des Utilisateurs",
   "create_sample": "Créer un Échantillon",

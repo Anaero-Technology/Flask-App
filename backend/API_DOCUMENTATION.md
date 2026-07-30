@@ -156,6 +156,16 @@
 - `POST /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - Add outlier labels.
 - `DELETE /api/v1/tests/<int:test_id>/device/<int:device_id>/outliers` - Remove outlier labels.
 
+## Automation Endpoints
+Closed-loop rules that watch a measurement (chimera gas concentration, black box gas production over a window, or a PLC reactor temperature) and adjust a PLC unit parameter in response, bounded by hard min/max clamps and a per-rule cooldown.
+- `GET /api/v1/automation/rules` - List all rules.
+- `POST /api/v1/automation/rules` - Create a rule (`admin`, `operator`, `technician`).
+- `PUT /api/v1/automation/rules/<int:rule_id>` - Update a rule; partial bodies are validated against the merged result.
+- `DELETE /api/v1/automation/rules/<int:rule_id>` - Delete a rule (its events are kept).
+- `POST /api/v1/automation/rules/<int:rule_id>/dry_run` - Evaluate now without touching the machine; reports the live value and what would change.
+- `GET /api/v1/automation/events` - Recent automation activity, newest first. Query params: `rule_id`, `limit`.
+- `GET /api/v1/automation/options` - Connected devices, recently seen gas names, PLC unit counts, and adjustable parameters for the rule editor.
+
 ## Wi-Fi Endpoints
 - `GET /api/v1/wifi/scan` - Scan available Wi-Fi networks.
 - `POST /api/v1/wifi/connect` - Connect host machine to a Wi-Fi SSID.
