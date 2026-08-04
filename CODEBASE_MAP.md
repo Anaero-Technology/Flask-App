@@ -23,6 +23,17 @@ flask create-admin                 # first admin user
 ```
 System deps (from the image / provisioning, not pip): `redis-server`, `avrdude` (only for PLC firmware flashing) — README step 6.
 
+**Rebuilding the bundled PLC firmware** (dev machine only; the sketch folder must be named `Kittiwake_134` to match the `.ino`, so build from a copy if the repo folder is named otherwise):
+```bash
+CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
+"$CLI" compile --fqbn industrialshields:avr:mduino:cpu=mduino57rplus \
+  --libraries "$HOME/Documents/Arduino Libs/libraries","$HOME/Documents/Arduino/libraries",<dir-with-SD> \
+  --output-dir out <sketch-dir>
+# then, renamed to the variant filename the backend looks for:
+cp out/Kittiwake_134.ino.hex firmware/plc/Kittiwake_134/Kittiwake_134.ino.mduinoplus.hex
+```
+Non-obvious bits: the libraries live in `~/Documents/Arduino Libs/libraries`, **not** the default sketchbook; `SD` is not installed at all and has to come from a staged zip (`~/Library/Arduino15/staging/libraries/SD-1.3.0.zip`); and arduino-cli emits `Kittiwake_134.ino.hex` while the backend expects the IDE's `…ino.mduinoplus.hex` name. A correct build reports **50202 bytes flash / 3281 bytes RAM** for the lobster-i/ray-i firmware — check that against the firmware commit message before shipping it.
+
 ## 2. Device subsystem (the core abstraction)
 
 Everything device-related flows through these three layers. Learn them first.
@@ -115,7 +126,7 @@ Model choice (Ray vs Ray-I etc.) is remembered in `localStorage` keyed `plc-mode
 - **avrdude non-TTY buffering** — needs a PTY for live progress (see `plc_firmware.flash`).
 - **Feeder timing units** — firmware stores feeder off-time in **seconds** but the setter/UI use **minutes**; `PlcHandler` converts both ways (`off_for_minutes`). The firmware's own `set_feeder` comment claims minutes but never multiplied — do not "fix" by removing the handler conversion.
 - **Machine personalities are 1:1 with product models** — the firmware names every build exactly (`ray` = 1 feeder, `ray-i` = 2, `lobster-i` = the machine formerly called `max`), so a connected PLC identifies itself with no guesswork. **Pre-rename firmware is deliberately not supported**: `max` is rejected as an unknown machine rather than translated, because the software targets current firmware on fresh devices only. The `plc-model:<mac>` localStorage choice and `resolveModel`'s `preferredId`/`feederCount` arguments are leftovers from when Ray and Ray-I shared a personality, and no longer decide anything.
-- **The bundled `.hex` is not rebuilt automatically** — `_bundled_plc_firmware()` serves whatever `.hex` sits in `firmware/plc/Kittiwake_134/`, a separate checkout that can lag the source. Flashing a stale one puts a PLC on a machine list the software no longer accepts, so keep it in step with the firmware repo.
+- **The bundled `.hex` is never committed and never rebuilt automatically** — `_bundled_plc_firmware()` serves whatever `.hex` sits in `firmware/plc/Kittiwake_134/`, a separate checkout of the firmware repo. That repo's own `.gitignore` excludes `*.hex`, and `firmware/plc/` is kept out of commits by convention, so **a deployed Pi has no bundled firmware unless the file is provisioned onto it by hand** (`firmware_check` reports `bundled_available: false` and the UI hides the option). Rebuild recipe in §1; flashing a stale image puts a PLC on a machine list the software no longer accepts.
 - **Black Swan** is two-stage: 4 fed reactors each overflow into a second-stage reactor (`downstream` in `plcLayouts.js`); reactors 9–10 are unmapped (open question).
 - **`systemset` runs sensor discovery** and (in older firmware) could halt with no sensors — now degrades gracefully; heater control is inhibited (not fatal) when no sensor.
 - **Stop-test ≠ stop-machine** for PLCs — stopping a test ends the config timeline but leaves outputs running. Machine control and recording are separate lifecycles.
