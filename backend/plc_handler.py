@@ -18,10 +18,20 @@ class PlcHandler(SerialHandler):
     held in a table here, so the two can never disagree.
     """
 
-    # The six personalities the firmware implements. The old "hungry" slot is
-    # deliberately absent - it never configured anything, so selecting it left
-    # the PLC with no personality and every later command rejected.
-    machine_types = ["lobster", "ray", "max", "caterpillar", "blackswan", "medusa"]
+    # The personalities the firmware implements, in its own systemType order.
+    # The old "hungry" slot is deliberately absent - it never configured
+    # anything, so selecting it left the PLC with no personality and every
+    # later command rejected.
+    machine_types = ["lobster", "ray", "lobster-i", "caterpillar", "blackswan",
+                     "medusa", "ray-i"]
+
+    # "max" was renamed to "lobster-i" when ray-i was added; the machine and its
+    # systemType are unchanged. Profiles and test snapshots captured before the
+    # rename still carry the old token, and a PLC that has not been reflashed
+    # still answers to it, so it is translated rather than rejected. Applies in
+    # both directions - see set_machine_type.
+    machine_type_aliases = {"max": "lobster-i"}
+    legacy_machine_types = {"lobster-i": "max"}
 
     def __init__(self, port: str):
         super().__init__(baudrate=115200)
@@ -293,16 +303,29 @@ class PlcHandler(SerialHandler):
 
         Sensor discovery runs as part of this, so it is slow and emits progress
         lines before the ack - hence the long timeout.
+
+        A PLC on firmware from before the max/lobster-i rename only knows the
+        old token, and a saved profile from that era only carries the old token.
+        Rather than make the caller work out which side is stale, the current
+        name is tried first and the other spelling is used as a fallback when
+        the device says it does not recognise it.
         """
-        if machine_type not in PlcHandler.machine_types:
+        wanted = PlcHandler.machine_type_aliases.get(machine_type, machine_type)
+        if wanted not in PlcHandler.machine_types:
             return False, f"Unknown machine type: {machine_type}"
 
-        success, reason = self._acked(f"systemset {machine_type}", timeout=45.0)
+        success, reason = self._acked(f"systemset {wanted}", timeout=45.0)
+
+        if not success and reason == "invalid":
+            legacy = PlcHandler.legacy_machine_types.get(wanted)
+            if legacy:
+                success, reason = self._acked(f"systemset {legacy}", timeout=45.0)
+
         if not success:
             return False, f"Failed to set machine type: {reason}"
 
         self._get_system()
-        return True, f"Machine type set to {machine_type}"
+        return True, f"Machine type set to {self.machine_type or wanted}"
 
     # ------------------------------------------------------------------
     # Status
@@ -555,10 +578,17 @@ class PlcHandler(SerialHandler):
         current machine does not have are skipped rather than failing the lot.
         """
         wanted = machine_type or settings.get("machine_type")
-        if wanted and wanted != self.machine_type:
-            success, message = self.set_machine_type(wanted)
-            if not success:
-                return False, message
+        # Compare canonically, so a profile saved as "max" against a PLC now
+        # reporting "lobster-i" is recognised as the same machine and does not
+        # trigger a needless systemset - which would re-run sensor discovery.
+        if wanted:
+            canonical = PlcHandler.machine_type_aliases.get(wanted, wanted)
+            current = PlcHandler.machine_type_aliases.get(
+                self.machine_type, self.machine_type)
+            if canonical != current:
+                success, message = self.set_machine_type(wanted)
+                if not success:
+                    return False, message
 
         applied, skipped = 0, 0
 
