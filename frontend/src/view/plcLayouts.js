@@ -1,18 +1,13 @@
 //
 // The machines as they are sold, and how each one is plumbed.
 //
-//   firmware:       the token systemset accepts
-//   legacyFirmware: tokens older firmware used for this same machine
-//   feeders:        [feeder number, [reactors it serves]]
-//   downstream:     { downstream reactor: upstream reactor }
+//   firmware:   the token systemset accepts
+//   feeders:    [feeder number, [reactors it serves]]
+//   downstream: { downstream reactor: upstream reactor }
 //
-// Every model now has its own firmware personality, so a connected PLC
-// identifies itself exactly. That was not always so: before ray-i was added
-// the firmware had one "ray" covering both builds, and Lobster-I ran a
-// personality called "max". A PLC that has not been reflashed still reports
-// those older tokens, which is what legacyFirmware is for - and on that
-// firmware Ray and Ray-I are genuinely indistinguishable, so the remembered
-// per-device choice still decides between them.
+// Every model has its own firmware personality, so a connected PLC identifies
+// itself exactly - Ray drives one feeder for both reactors, Ray-I one each,
+// and the firmware reports which it is.
 //
 export const machineModels = [
   {
@@ -25,7 +20,6 @@ export const machineModels = [
     id: 'ray-i',
     label: 'Ray-I',
     firmware: 'ray-i',
-    legacyFirmware: ['ray'],
     feeders: [[1, [1]], [2, [2]]],
   },
   {
@@ -44,7 +38,6 @@ export const machineModels = [
     id: 'lobster-i',
     label: 'Lobster-I',
     firmware: 'lobster-i',
-    legacyFirmware: ['max'],
     feeders: [[1, [1]], [2, [2]], [3, [3]], [4, [4]]],
   },
   {
@@ -67,23 +60,11 @@ export const machineModels = [
   },
 ]
 
-// Every model that answers to a firmware token, current spelling first so it
-// wins when both match.
-function candidatesFor(firmwareType) {
-  const exact = machineModels.filter((m) => m.firmware === firmwareType)
-  const legacy = machineModels.filter(
-    (m) => m.legacyFirmware?.includes(firmwareType) && !exact.includes(m))
-  return [...exact, ...legacy]
-}
-
 // Models the connected PLC can actually run, given the personalities its
-// firmware reports. Older firmware is matched through legacyFirmware, so a
-// unit that has not been reflashed still offers the machine it really is.
+// firmware reports.
 export function modelsAvailable(firmwareTypes) {
   if (!firmwareTypes || firmwareTypes.length === 0) return machineModels
-  return machineModels.filter((m) =>
-    firmwareTypes.includes(m.firmware) ||
-    m.legacyFirmware?.some((token) => firmwareTypes.includes(token)))
+  return machineModels.filter((m) => firmwareTypes.includes(m.firmware))
 }
 
 export function modelById(id) {
@@ -91,14 +72,13 @@ export function modelById(id) {
 }
 
 //
-// Work out which model is running. Current firmware names the machine exactly,
-// so this is usually a single candidate. Pre-rename firmware is ambiguous for
-// Ray and Ray-I, which both reported "ray"; there an explicit choice wins and
-// the current spelling is the fallback.
+// Work out which model is running. The firmware names the machine exactly, so
+// there is one candidate; preferredId is honoured only if a future firmware
+// ever puts two products back on one personality.
 //
 export function resolveModel(firmwareType, feederCount, preferredId) {
   if (!firmwareType) return null
-  const candidates = candidatesFor(firmwareType)
+  const candidates = machineModels.filter((m) => m.firmware === firmwareType)
   if (candidates.length === 0) return null
 
   if (preferredId) {

@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Machine-type handling across the max -> lobster-i firmware rename.
+"""Machine-type handling against the current firmware personality list.
 
-The firmware's personality list gained ray-i and renamed max to lobster-i. Both
-sides of the fleet exist in the field - reflashed PLCs know the new tokens, un
-reflashed ones only the old - and profiles captured before the rename still
-carry "max". These check the handler copes with either without the caller
-having to know which.
+The list is hardcoded in the handler and must stay in step with the firmware's
+own systemNames table - it is the one thing that silently stops every later
+command working if it drifts. These pin it down, along with the setter's
+behaviour for machines the firmware does not have.
+
+Deliberately no backward compatibility for the pre-rename "max" spelling: the
+software targets current firmware only.
 
 No hardware: PlcHandler is driven through a stub that records the commands it
-would have sent and answers the way each firmware generation would.
+would have sent and answers the way the firmware would.
 
 Run from backend/: venv/bin/python tests/test_plc_machine_types.py
 """
@@ -60,9 +62,7 @@ class StubPlc(PlcHandler):
         return True
 
     def _set_current(self, token):
-        # A PLC reports whatever its own firmware calls the machine.
-        _, heaters, mixers, agitators, feeders = FIRMWARE_MACHINES[
-            PlcHandler.machine_type_aliases.get(token, token)]
+        _, heaters, mixers, agitators, feeders = FIRMWARE_MACHINES[token]
         self.machine_type = token
         self.machine_counts = {"heaters": heaters, "mixers": mixers,
                                "agitators": agitators, "feeders": feeders}
@@ -91,8 +91,7 @@ class StubPlc(PlcHandler):
         return True, "ok"
 
 
-NEW_FIRMWARE = set(FIRMWARE_MACHINES)
-OLD_FIRMWARE = {"lobster", "ray", "max", "caterpillar", "blackswan", "medusa"}
+FIRMWARE = set(FIRMWARE_MACHINES)
 
 
 def test_machine_type_list():
@@ -100,90 +99,71 @@ def test_machine_type_list():
     assert PlcHandler.machine_types == [
         "lobster", "ray", "lobster-i", "caterpillar", "blackswan",
         "medusa", "ray-i"], PlcHandler.machine_types
-    assert "max" not in PlcHandler.machine_types
-    assert set(PlcHandler.machine_types) == NEW_FIRMWARE
+    assert "max" not in PlcHandler.machine_types, "max was renamed to lobster-i"
+    assert set(PlcHandler.machine_types) == FIRMWARE
     print("machine_types matches the firmware ok")
 
 
-def test_current_firmware():
+def test_every_machine_sets():
     for token in FIRMWARE_MACHINES:
-        plc = StubPlc(NEW_FIRMWARE)
+        plc = StubPlc(FIRMWARE)
         ok, message = plc.set_machine_type(token)
         assert ok, (token, message)
         assert plc.sent == [f"systemset {token}"], plc.sent
         assert plc.machine_type == token
-    print("every current machine type sets ok")
+    print("every machine type sets ok")
 
 
-def test_legacy_profile_on_new_firmware():
-    """A profile saved as "max" must still configure a reflashed PLC."""
-    plc = StubPlc(NEW_FIRMWARE)
-    ok, message = plc.set_machine_type("max")
-    assert ok, message
-    assert plc.sent == ["systemset lobster-i"], plc.sent
-    assert plc.machine_type == "lobster-i"
-    assert plc.machine_counts["feeders"] == 4
-    print("legacy 'max' profile applies to new firmware ok")
+def test_unit_counts_follow_the_machine():
+    """The handler must take counts from the device, not a table of its own.
 
-
-def test_new_name_on_old_firmware():
-    """Choosing Lobster-I must still work on a PLC that has not been reflashed."""
-    plc = StubPlc(OLD_FIRMWARE)
-    ok, message = plc.set_machine_type("lobster-i")
-    assert ok, message
-    # tries the current name, falls back to the one that firmware knows
-    assert plc.sent == ["systemset lobster-i", "systemset max"], plc.sent
-    assert plc.machine_type == "max"
-    print("new 'lobster-i' name falls back on old firmware ok")
-
-
-def test_ray_i_unavailable_on_old_firmware():
-    """ray-i genuinely does not exist on old firmware - fail, do not fall back."""
-    plc = StubPlc(OLD_FIRMWARE)
-    ok, message = plc.set_machine_type("ray-i")
-    assert not ok
-    assert "invalid" in message, message
-    assert plc.sent == ["systemset ray-i"], plc.sent
-    print("ray-i correctly rejected by old firmware ok")
-
-
-def test_unknown_machine_rejected():
-    plc = StubPlc(NEW_FIRMWARE)
-    ok, message = plc.set_machine_type("hungry")
-    assert not ok and "Unknown machine type" in message
-    assert plc.sent == [], "an unknown machine must never reach the device"
-    print("unknown machine rejected before the wire ok")
-
-
-def test_apply_settings_skips_redundant_systemset():
-    """A "max" profile on a PLC already reporting lobster-i is the same machine.
-
-    systemset re-runs sensor discovery and takes tens of seconds, so applying a
-    profile must not trigger one just because the token was spelled the old way.
+    Ray and Ray-I differ only in feeder count, so this is what stops the two
+    being confused once a personality is set.
     """
-    plc = StubPlc(NEW_FIRMWARE)
+    for token, (_, heaters, mixers, agitators, feeders) in FIRMWARE_MACHINES.items():
+        plc = StubPlc(FIRMWARE)
+        plc.set_machine_type(token)
+        assert plc.machine_counts == {
+            "heaters": heaters, "mixers": mixers,
+            "agitators": agitators, "feeders": feeders}, (token, plc.machine_counts)
+    assert StubPlc(FIRMWARE).machine_counts["feeders"] == 0
+    print("unit counts follow the machine ok")
+
+
+def test_retired_and_unknown_machines_rejected():
+    """Anything the firmware does not implement must fail before the wire."""
+    for token in ("max", "hungry", ""):
+        plc = StubPlc(FIRMWARE)
+        ok, message = plc.set_machine_type(token)
+        assert not ok, token
+        assert "Unknown machine type" in message, message
+        assert plc.sent == [], f"{token} must never reach the device"
+    print("retired and unknown machines rejected before the wire ok")
+
+
+def test_apply_settings_only_switches_when_needed():
+    """systemset re-runs sensor discovery, so it must not fire needlessly."""
+    plc = StubPlc(FIRMWARE)
     plc.set_machine_type("lobster-i")
     plc.sent.clear()
 
     ok, message = plc.apply_settings(
-        {"machine_type": "max", "heaters": [{"number": 1, "target": 37}]})
+        {"machine_type": "lobster-i", "heaters": [{"number": 1, "target": 37}]})
     assert ok, message
     assert not any(str(c).startswith("systemset") for c in plc.sent), plc.sent
     assert ("heater", 1, 37) in plc.sent, plc.sent
 
     # ...but a genuinely different machine still switches
     plc.sent.clear()
-    ok, _ = plc.apply_settings({"machine_type": "ray", "heaters": []})
-    assert "systemset ray" in plc.sent, plc.sent
-    print("apply_settings avoids a redundant systemset ok")
+    ok, _ = plc.apply_settings({"machine_type": "ray-i", "heaters": []})
+    assert "systemset ray-i" in plc.sent, plc.sent
+    print("apply_settings only switches when needed ok")
 
 
 if __name__ == "__main__":
     test_machine_type_list()
-    test_current_firmware()
-    test_legacy_profile_on_new_firmware()
-    test_new_name_on_old_firmware()
-    test_ray_i_unavailable_on_old_firmware()
-    test_unknown_machine_rejected()
-    test_apply_settings_skips_redundant_systemset()
+    test_every_machine_sets()
+    test_unit_counts_follow_the_machine()
+    test_retired_and_unknown_machines_rejected()
+    test_apply_settings_only_switches_when_needed()
     print("\nAll PLC machine-type tests passed")
