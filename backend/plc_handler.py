@@ -61,10 +61,26 @@ class PlcHandler(SerialHandler):
     # passed.
     boot_settle_seconds = 2.5
 
+    # Only the USB path pulls DTR. On the M-Duino the RS232 side is UART2 with
+    # no reset line, so opening it does not restart the board and there is no
+    # bootloader window to sit out - the full settle is dead time there.
+    native_uart_settle_seconds = 0.2
+
+    # Native UARTs, as opposed to USB CDC and USB-serial bridges. Matching is
+    # deliberately conservative: anything unrecognised keeps the full settle, so
+    # an unfamiliar port can never connect faster than it does today.
+    _NATIVE_UART_PREFIXES = ("/dev/serial", "/dev/ttyama", "/dev/ttys")
+
+    def _settle_seconds(self) -> float:
+        port = (self.port or "").lower()
+        if any(port.startswith(prefix) for prefix in self._NATIVE_UART_PREFIXES):
+            return self.native_uart_settle_seconds
+        return self.boot_settle_seconds
+
     def connect(self) -> bool:
         try:
             super().connect(self.port)
-            time.sleep(self.boot_settle_seconds)
+            time.sleep(self._settle_seconds())
             self.clear_buffer()
             if not self._get_device_info():
                 self.disconnect()
@@ -151,6 +167,15 @@ class PlcHandler(SerialHandler):
     # ------------------------------------------------------------------
     # Command helpers
     # ------------------------------------------------------------------
+    # The firmware rejects any command whose terminating newline did not arrive
+    # within its 8 ms read window, and having rejected it will never answer it.
+    # Treating that as an end-of-reply turns a full timeout into an immediate
+    # return, which is what makes a retry cheap instead of costing the caller its
+    # entire budget. Older firmware sent this to USB even for a command that came
+    # in over RS232, so on that path it is only seen once the PLC is running a
+    # build that replies on the port the command arrived on.
+    _REJECTED = "Command not properly terminated"
+
     def _command_lines(self, command: str, terminators: Tuple[str, ...],
                        timeout: float = 10.0) -> List[str]:
         """Send a command and collect reply lines up to and including the first
@@ -187,7 +212,7 @@ class PlcHandler(SerialHandler):
                 except queue.Empty:
                     return lines
                 lines.append(line)
-                if line.startswith(terminators):
+                if line.startswith(terminators) or line.startswith(self._REJECTED):
                     return lines
 
     def _acked(self, command: str, timeout: float = 10.0) -> Tuple[bool, str]:
@@ -204,6 +229,10 @@ class PlcHandler(SerialHandler):
             if line.startswith(f"failed {root}"):
                 parts = line.split()
                 return False, parts[2] if len(parts) > 2 else "failed"
+            if line.startswith(self._REJECTED):
+                # The command never reached the parser, so this is worth
+                # distinguishing from a timeout - it is retryable as-is.
+                return False, "notterminated"
 
         return False, "timeout"
 
@@ -215,8 +244,16 @@ class PlcHandler(SerialHandler):
         # couple of seconds in its bootloader. Anything sent during that window
         # is lost, and the firmware only replies when asked, so the request is
         # repeated rather than simply waited on.
-        for _ in range(attempts):
+        for attempt in range(attempts):
             lines = self._command_lines("info", ("info ",), timeout=1.5)
+
+            # A rejected command returns immediately rather than burning the
+            # 1.5 s budget, so without a pause the whole retry allowance could be
+            # spent in a few milliseconds and give the board no chance to settle.
+            if lines and any(l.startswith(self._REJECTED) for l in lines):
+                if attempt < attempts - 1:
+                    time.sleep(0.15)
+                continue
 
             for line in lines:
                 if not line.startswith("info "):
