@@ -1000,10 +1000,10 @@ class BlackBoxHandler(SerialHandler):
                                 f"Serial write incomplete at byte {offset}: "
                                 f"wrote {written} of {len(block)}"
                             )
-                        # flush() blocks until the block has fully left the
+                        # Draining blocks until the block has fully left the
                         # UART, so the sleep is a true idle window for the
                         # firmware's flash write.
-                        self.connection.flush()
+                        self.drain_write_buffer()
                         time.sleep(block_gap)
                         sent_total += written
                         # Hold back 100% until the final block has flushed, so
