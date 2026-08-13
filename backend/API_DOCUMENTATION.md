@@ -105,7 +105,11 @@
 - `POST /api/v1/black_box/<int:device_id>/name` - Set device name.
 - `GET /api/v1/black_box/<int:device_id>/hourly_tips` - Read hourly tip counters.
 - `POST /api/v1/black_box/<int:device_id>/send_command` - Send raw serial command.
-- `GET /api/v1/black_box/<int:device_id>/stream` - SSE stream for tip events.
+- `GET /api/v1/black_box/<int:device_id>/stream` - SSE stream for tip events. Authenticated via `?token=`.
+- `POST /api/v1/black_box/<int:device_id>/firmware_update` - Flash uploaded firmware `.bin` over serial (admin only).
+  - Multipart field: `firmware`. Returns 202; progress arrives on the SSE stream as `black_box_firmware_progress` events and the outcome as `black_box_firmware_complete`.
+- `GET /api/v1/black_box/<int:device_id>/firmware_check` - Compare the repo-bundled `firmware/blackbox/firmware.bin` hash against the device's `firmwareHash` reply.
+- `POST /api/v1/black_box/<int:device_id>/firmware_update_bundled` - Flash the bundled firmware.bin (admin only). Same SSE events as the upload route.
 
 ## Chimera Endpoints
 - `GET /api/v1/chimera/config/model` - Get global Chimera model config.

@@ -171,7 +171,12 @@
     "firmware_check_up_to_date": "Le firmware est à jour ({{hash}})",
     "firmware_check_unknown_device": "Le firmware de l'appareil ne signale pas encore sa version - effectuez une mise à jour manuelle pour activer les vérifications automatiques.",
     "firmware_check_none_bundled": "Aucun firmware n'est inclus dans cette version du logiciel.",
-    "firmware_check_invalid": "Le fichier de firmware inclus n'est pas valide."
+    "firmware_check_invalid": "Le fichier de firmware inclus n'est pas valide.",
+    "blackbox_firmware_title": "Mise à jour du firmware Black Box",
+    "blackbox_firmware_help": "Flashez un enregistreur connecté via la liaison série. Utilise le firmware fourni avec cette version, ou téléversez un fichier .bin. Prend quelques minutes.",
+    "blackbox_firmware_no_devices": "Aucun enregistreur Black Box connecté.",
+    "blackbox_firmware_confirm": "Flasher le nouveau firmware sur {{name}} ? L'enregistreur s'arrête et redémarre pendant la reprogrammation.",
+    "blackbox_firmware_this_logger": "cet enregistreur"
   },
   "login": {
     "title": "Connexion",

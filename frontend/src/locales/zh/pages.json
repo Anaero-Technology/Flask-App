@@ -171,7 +171,12 @@
     "firmware_check_up_to_date": "固件已是最新（{{hash}}）",
     "firmware_check_unknown_device": "设备固件尚未报告版本——请先手动更新一次以启用自动检查。",
     "firmware_check_none_bundled": "此软件版本未附带固件。",
-    "firmware_check_invalid": "附带的固件文件无效。"
+    "firmware_check_invalid": "附带的固件文件无效。",
+    "blackbox_firmware_title": "Black Box 固件更新",
+    "blackbox_firmware_help": "通过串行连接为已连接的记录仪刷写固件。使用此版本附带的固件，或上传 .bin 文件。需要几分钟。",
+    "blackbox_firmware_no_devices": "没有连接的 Black Box 记录仪。",
+    "blackbox_firmware_confirm": "要将新固件刷入 {{name}} 吗？重新编程期间记录仪会停止并重启。",
+    "blackbox_firmware_this_logger": "此记录仪"
   },
   "login": {
     "title": "登录",

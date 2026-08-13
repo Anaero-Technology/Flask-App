@@ -171,7 +171,12 @@
     "firmware_check_up_to_date": "Firmware is up to date ({{hash}})",
     "firmware_check_unknown_device": "Device firmware doesn't report its version yet - run one manual update to enable automatic checks.",
     "firmware_check_none_bundled": "No firmware is bundled with this software release.",
-    "firmware_check_invalid": "Bundled firmware file is invalid."
+    "firmware_check_invalid": "Bundled firmware file is invalid.",
+    "blackbox_firmware_title": "Black Box Firmware Update",
+    "blackbox_firmware_help": "Flash a connected logger over the serial link. Uses the firmware bundled with this release, or upload a .bin file. Takes a few minutes.",
+    "blackbox_firmware_no_devices": "No Black Box loggers connected.",
+    "blackbox_firmware_confirm": "Flash new firmware onto {{name}}? The logger stops and restarts while it is reprogrammed.",
+    "blackbox_firmware_this_logger": "this logger"
   },
   "login": {
     "title": "Login",

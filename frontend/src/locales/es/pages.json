@@ -171,7 +171,12 @@
     "firmware_check_up_to_date": "El firmware está actualizado ({{hash}})",
     "firmware_check_unknown_device": "El firmware del dispositivo aún no informa su versión: realiza una actualización manual para habilitar las comprobaciones automáticas.",
     "firmware_check_none_bundled": "No hay firmware incluido en esta versión del software.",
-    "firmware_check_invalid": "El archivo de firmware incluido no es válido."
+    "firmware_check_invalid": "El archivo de firmware incluido no es válido.",
+    "blackbox_firmware_title": "Actualización de firmware de Black Box",
+    "blackbox_firmware_help": "Grabe el firmware en un registrador conectado a través del enlace serie. Usa el firmware incluido en esta versión, o suba un archivo .bin. Tarda unos minutos.",
+    "blackbox_firmware_no_devices": "No hay registradores Black Box conectados.",
+    "blackbox_firmware_confirm": "¿Grabar el nuevo firmware en {{name}}? El registrador se detiene y se reinicia mientras se reprograma.",
+    "blackbox_firmware_this_logger": "este registrador"
   },
   "login": {
     "title": "Iniciar Sesión",

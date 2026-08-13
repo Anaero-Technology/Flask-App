@@ -171,7 +171,12 @@
     "firmware_check_up_to_date": "Firmware ist aktuell ({{hash}})",
     "firmware_check_unknown_device": "Die Gerätefirmware meldet ihre Version noch nicht - führen Sie einmal ein manuelles Update durch, um automatische Prüfungen zu aktivieren.",
     "firmware_check_none_bundled": "Dieser Software-Version liegt keine Firmware bei.",
-    "firmware_check_invalid": "Die mitgelieferte Firmware-Datei ist ungültig."
+    "firmware_check_invalid": "Die mitgelieferte Firmware-Datei ist ungültig.",
+    "blackbox_firmware_title": "Black-Box-Firmware-Update",
+    "blackbox_firmware_help": "Firmware über die serielle Verbindung auf einen verbundenen Logger schreiben. Verwendet die mit dieser Version gelieferte Firmware oder eine hochgeladene .bin-Datei. Dauert einige Minuten.",
+    "blackbox_firmware_no_devices": "Keine Black-Box-Logger verbunden.",
+    "blackbox_firmware_confirm": "Neue Firmware auf {{name}} schreiben? Der Logger stoppt und startet während der Neuprogrammierung neu.",
+    "blackbox_firmware_this_logger": "diesen Logger"
   },
   "login": {
     "title": "Anmelden",

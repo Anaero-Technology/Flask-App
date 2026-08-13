@@ -6,6 +6,7 @@ import { useAppSettings } from '../components/AppSettingsContext';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../components/ThemeContext';
 import PlcSettings from './PlcSettings';
+import BlackBoxFirmware from './BlackBoxFirmware';
 import {
   Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
   Lock, Search, Download, Trash2, ShieldAlert, User,
@@ -1935,6 +1936,8 @@ function Settings() {
                 </button>
               </div>
             </div>
+
+            <BlackBoxFirmware requirePassword={requirePassword} />
 
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>
