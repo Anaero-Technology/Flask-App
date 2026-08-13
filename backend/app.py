@@ -90,20 +90,27 @@ with app.app_context():
     except Exception as exc:
         print(f"[DB MIGRATION] Failed to patch schema: {exc}")
 
-def auto_connect_sweep(manager, ports, port_state, probe_attempts=5):
+def auto_connect_sweep(manager, ports, port_state, probe_attempts=5, cooldown_sweeps=30):
     """One scan pass. Mutates port_state; returns nothing.
 
-    port_state maps a port path to either 'connected' or the number of probe
-    attempts still allowed. The rules keep it from touching live connections or
-    hammering unrelated serial ports:
+    port_state maps a port path to 'connected', the number of probe attempts
+    still allowed, or a negative number counting out a cooldown. The rules keep
+    it from touching live connections or hammering unrelated serial ports:
 
       - an already-connected port is marked and skipped (never re-probed, so a
         working device is never disturbed)
       - a port reserved for flashing is left alone
-      - a port that never identifies is probed a few times then dropped until it
-        re-enumerates
+      - a port that never identifies is probed a few times, then left alone for
+        a cooldown before being tried again
       - a port that drops from connected is retried
       - a vanished port is forgotten, so re-plugging starts fresh
+
+    The cooldown matters because "vanished" is only noticed if a sweep happens
+    to run while the port is gone. A device power-cycled between two sweeps
+    looks identical to one that never left, so without it an exhausted port
+    would never be probed again - which is exactly how a logger that was
+    rebooted after a failed firmware flash stayed invisible until the backend
+    was restarted.
     """
     def is_bluetooth(p):
         return 'Bluetooth' in p.device or 'Bluetooth' in (p.description or '')
@@ -125,7 +132,10 @@ def auto_connect_sweep(manager, ports, port_state, probe_attempts=5):
             port_state[dev] = probe_attempts      # was connected, dropped - re-probe
         attempts = port_state.get(dev, probe_attempts)   # new port -> full attempts
         if attempts <= 0:
-            continue                              # gave up until it re-enumerates
+            # Out of attempts: sit out the cooldown, counting down through
+            # negative values, then start again with a full set.
+            port_state[dev] = probe_attempts if attempts <= -cooldown_sweeps else attempts - 1
+            continue
 
         connected = False
         try:
