@@ -176,7 +176,8 @@
     "blackbox_firmware_help": "Flash a connected logger over the serial link. Uses the firmware bundled with this release, or upload a .bin file. Takes a few minutes.",
     "blackbox_firmware_no_devices": "No Black Box loggers connected.",
     "blackbox_firmware_confirm": "Flash new firmware onto {{name}}? The logger stops and restarts while it is reprogrammed.",
-    "blackbox_firmware_this_logger": "this logger"
+    "blackbox_firmware_this_logger": "this logger",
+    "logger": "Logger"
   },
   "login": {
     "title": "Login",

@@ -176,7 +176,8 @@
     "blackbox_firmware_help": "通过串行连接为已连接的记录仪刷写固件。使用此版本附带的固件，或上传 .bin 文件。需要几分钟。",
     "blackbox_firmware_no_devices": "没有连接的 Black Box 记录仪。",
     "blackbox_firmware_confirm": "要将新固件刷入 {{name}} 吗？重新编程期间记录仪会停止并重启。",
-    "blackbox_firmware_this_logger": "此记录仪"
+    "blackbox_firmware_this_logger": "此记录仪",
+    "logger": "记录仪"
   },
   "login": {
     "title": "登录",

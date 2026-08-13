@@ -176,7 +176,8 @@
     "blackbox_firmware_help": "Flashez un enregistreur connecté via la liaison série. Utilise le firmware fourni avec cette version, ou téléversez un fichier .bin. Prend quelques minutes.",
     "blackbox_firmware_no_devices": "Aucun enregistreur Black Box connecté.",
     "blackbox_firmware_confirm": "Flasher le nouveau firmware sur {{name}} ? L'enregistreur s'arrête et redémarre pendant la reprogrammation.",
-    "blackbox_firmware_this_logger": "cet enregistreur"
+    "blackbox_firmware_this_logger": "cet enregistreur",
+    "logger": "Enregistreur"
   },
   "login": {
     "title": "Connexion",

@@ -11,7 +11,7 @@ import {
   Upload, X, Loader2, Wifi, WifiHigh, WifiLow, WifiOff,
   Lock, Search, Download, Trash2, ShieldAlert, User,
   Sun, Moon, Monitor, SlidersHorizontal, Network, Wrench, Palette,
-  RefreshCw, Cpu
+  RefreshCw, Cpu, HardDrive
 } from 'lucide-react';
 
 // Success acknowledgements ("scanned", "applied", "saved"...) fade out on
@@ -117,6 +117,9 @@ function Settings() {
     { id: 'preferences', label: tCommon('preferences'), icon: SlidersHorizontal },
     { id: 'network', label: tPages('settings.network'), icon: Network },
     ...(canPerform('modify_test') ? [{ id: 'plc', label: 'PLC', icon: Cpu }] : []),
+    // Loggers come and go from the bench, so they get their own tab rather
+    // than sitting in System Tools next to the permanently-wired chimera.
+    ...(canPerform('modify_test') ? [{ id: 'logger', label: tPages('settings.logger'), icon: HardDrive }] : []),
     ...(isSystemAdmin ? [{ id: 'system', label: tPages('settings.system_tools'), icon: Wrench }] : []),
     ...(isSystemAdmin ? [{ id: 'branding', label: tPages('settings.branding_title'), icon: Palette }] : []),
   ]
@@ -1792,6 +1795,15 @@ function Settings() {
         </section>
         )}
 
+        {activeTab === 'logger' && canPerform('modify_test') && (
+        <section className="space-y-3">
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">{tPages('settings.logger')}</h2>
+          <div className="divide-y divide-gray-200 dark:divide-slate-800">
+            <BlackBoxFirmware requirePassword={requirePassword} />
+          </div>
+        </section>
+        )}
+
         {activeTab === 'system' && isSystemAdmin && (
         <section className="space-y-3">
           <h2 className="text-base font-bold text-gray-900">{tPages('settings.system_tools')}</h2>
@@ -1936,8 +1948,6 @@ function Settings() {
                 </button>
               </div>
             </div>
-
-            <BlackBoxFirmware requirePassword={requirePassword} />
 
             <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
               <div>

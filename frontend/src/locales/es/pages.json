@@ -176,7 +176,8 @@
     "blackbox_firmware_help": "Grabe el firmware en un registrador conectado a través del enlace serie. Usa el firmware incluido en esta versión, o suba un archivo .bin. Tarda unos minutos.",
     "blackbox_firmware_no_devices": "No hay registradores Black Box conectados.",
     "blackbox_firmware_confirm": "¿Grabar el nuevo firmware en {{name}}? El registrador se detiene y se reinicia mientras se reprograma.",
-    "blackbox_firmware_this_logger": "este registrador"
+    "blackbox_firmware_this_logger": "este registrador",
+    "logger": "Registrador"
   },
   "login": {
     "title": "Iniciar Sesión",

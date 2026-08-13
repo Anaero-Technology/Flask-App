@@ -176,7 +176,8 @@
     "blackbox_firmware_help": "Firmware über die serielle Verbindung auf einen verbundenen Logger schreiben. Verwendet die mit dieser Version gelieferte Firmware oder eine hochgeladene .bin-Datei. Dauert einige Minuten.",
     "blackbox_firmware_no_devices": "Keine Black-Box-Logger verbunden.",
     "blackbox_firmware_confirm": "Neue Firmware auf {{name}} schreiben? Der Logger stoppt und startet während der Neuprogrammierung neu.",
-    "blackbox_firmware_this_logger": "diesen Logger"
+    "blackbox_firmware_this_logger": "diesen Logger",
+    "logger": "Logger"
   },
   "login": {
     "title": "Anmelden",
