@@ -76,6 +76,26 @@ def serial_log_info():
         return internal_error(e)
 
 
+# Keep in sync with MIN_FREE_DISK_MB in backend/scripts/safe_git_update.sh —
+# that script enforces the same floor before letting an update touch disk.
+MIN_FREE_DISK_MB = 1024
+
+
+def get_disk_usage():
+    """Free/total/used bytes for the filesystem holding the app + database."""
+    import shutil
+
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    usage = shutil.disk_usage(project_root)
+    return {
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "free_bytes": usage.free,
+        "free_mb": usage.free // (1024 * 1024),
+        "percent_used": round(usage.used / usage.total * 100, 1) if usage.total else 0,
+    }
+
+
 def get_sqlite_db_path():
     uri = current_app.config.get("SQLALCHEMY_DATABASE_URI")
 
@@ -248,6 +268,25 @@ def delete_database():
         return internal_error(e)
 
 
+@system_bp.route("/api/v1/system/disk-usage", methods=['GET'])
+@jwt_required()
+@require_role(['admin'])
+def disk_usage():
+    """Report free/used disk space (admin only).
+
+    A near-full disk has been observed to silently truncate the frontend
+    build to 0-byte files and to drop chimera datapoints on failed SQLite
+    commits, so the frontend surfaces this proactively rather than only
+    discovering it when something breaks.
+    """
+    try:
+        usage = get_disk_usage()
+        usage["low_space_warning"] = usage["free_mb"] < MIN_FREE_DISK_MB
+        return jsonify(usage), 200
+    except Exception as e:
+        return internal_error(e)
+
+
 @system_bp.route("/api/v1/system/git-pull", methods=['POST'])
 @jwt_required()
 @require_role(['admin'])
@@ -257,6 +296,18 @@ def git_pull():
     import os
 
     try:
+        usage = get_disk_usage()
+        if usage["free_mb"] < MIN_FREE_DISK_MB:
+            return jsonify({
+                "success": False,
+                "error": (
+                    f"Cannot update: only {usage['free_mb']}MB free on disk "
+                    f"(need at least {MIN_FREE_DISK_MB}MB). A near-full disk can "
+                    "silently corrupt the frontend build. Free up space first "
+                    "(old database backups, logs, package caches)."
+                )
+            }), 507
+
         running_tests = Test.query.filter_by(status='running').count()
         if running_tests > 0:
             return jsonify({

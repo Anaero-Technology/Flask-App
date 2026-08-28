@@ -48,6 +48,25 @@ require_cmd() {
   }
 }
 
+# A near-full SD card lets `npm run build`/pip write truncated (0-byte)
+# files instead of failing loudly, silently bricking the frontend. Refuse
+# the update outright rather than risk that.
+MIN_FREE_DISK_MB="${MIN_FREE_DISK_MB:-1024}"
+
+check_disk_space() {
+  local avail_mb
+  avail_mb="$(df -Pm "${PROJECT_ROOT}" | awk 'NR==2 {print $4}')"
+  if [[ -z "${avail_mb}" ]]; then
+    log "WARNING: could not determine free disk space; proceeding anyway"
+    return 0
+  fi
+  if (( avail_mb < MIN_FREE_DISK_MB )); then
+    log "ERROR: Refusing update — only ${avail_mb}MB free on disk (need at least ${MIN_FREE_DISK_MB}MB). Free up space (old logs, apt/npm caches, database backups) and try again."
+    exit 4
+  fi
+  log "Disk space check passed (${avail_mb}MB free)"
+}
+
 rollback() {
   local old_commit="$1"
   log "Rollback started (target commit: ${old_commit})"
@@ -98,6 +117,8 @@ main() {
     log "ERROR: backend virtualenv not found at ${BACKEND_DIR}/venv"
     exit 2
   fi
+
+  check_disk_space
 
   local status
   status="$(git -C "${PROJECT_ROOT}" status --porcelain --untracked-files=no)"
