@@ -161,35 +161,42 @@ def start_logging(device_id):
             test = Test.query.get(test_id)
             if not test:
                 return jsonify({"error": "Test not found"}), 404
-        else:
-            # Create new test automatically
-            test_name = data.get('test_name', f"BlackBox Log - {device.name} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            test = Test(
-                name=test_name,
-                description=data.get('test_description', f"Auto-created test for BlackBox logging on {device.name}"),
-                created_by=data.get('created_by', 'system'),
-                date_created=datetime.now(),
-                status='running',
-                date_started=datetime.now()
-            )
-            db.session.add(test)
-            db.session.flush()  # Get the ID without committing
-        
-        # Start logging on device
+
+        # Start logging first: the handler decides whether the Pi's clock is
+        # trustworthy and, if not, reads the authoritative start time back
+        # from the device's own RTC instead (see BlackBoxHandler.start_logging).
+        # Timestamping the Test row from that same value keeps it consistent
+        # with whatever time was actually used/left on the device.
         success, message = handler.start_logging(filename)
         if success:
+            start_time = handler.last_logging_start_time or datetime.now()
+
+            if test is None:
+                # Create new test automatically
+                test_name = data.get('test_name', f"BlackBox Log - {device.name} - {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                test = Test(
+                    name=test_name,
+                    description=data.get('test_description', f"Auto-created test for BlackBox logging on {device.name}"),
+                    created_by=data.get('created_by', 'system'),
+                    date_created=start_time,
+                    status='running',
+                    date_started=start_time
+                )
+                db.session.add(test)
+                db.session.flush()  # Get the ID without committing
+
             # Link test to handler and device
             handler.set_test_id(test.id)
             device.logging = True
             device.active_test_id = test.id
-            
+
             # Update test status if it was existing and in setup
             if test.status == 'setup':
                 test.status = 'running'
-                test.date_started = datetime.now()
-            
+                test.date_started = start_time
+
             db.session.commit()
-            
+
             return jsonify({
                 "success": True,
                 "message": message,
@@ -198,10 +205,9 @@ def start_logging(device_id):
                 "test_name": test.name
             })
         else:
-            # If logging failed and we created a test, don't save it
+            # Logging failed; nothing was created/changed to roll back
             device.logging = False
-            if not test_id:  # Only rollback if we created a new test
-                db.session.rollback()
+            db.session.commit()
             return jsonify({
                 "success": False,
                 "message": message

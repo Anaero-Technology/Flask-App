@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from serial_handler import SerialHandler
 from utils import wifi_manager
+from utils.system_time import is_ntp_synced
 
 
 class ChimeraHandler(SerialHandler):
@@ -30,6 +31,7 @@ class ChimeraHandler(SerialHandler):
         self.past_data = {}
         self.app = None  # Flask app context for database operations
         self.test_id = None  # Current test ID for database logging
+        self.last_logging_start_time = None  # Authoritative start time from the last start_logging() call
 
         # IP monitoring daemon thread
         self.ip_monitor_thread = None
@@ -411,8 +413,20 @@ class ChimeraHandler(SerialHandler):
     
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
-        
-        self.set_time()
+
+        # The Pi's own clock can't be trusted until NTP has actually synced
+        # (link-up isn't enough -- see utils/system_time.py). If it hasn't,
+        # don't stomp on the device's own battery-backed RTC with a possibly
+        # stale Pi time; instead read the RTC back and use that as the
+        # authoritative start time for this test.
+        if is_ntp_synced():
+            self.set_time()
+            self.last_logging_start_time = datetime.now()
+        else:
+            print("[ChimeraHandler] Pi clock not NTP-synced; using device RTC time instead of overwriting it")
+            got_time, device_time = self.get_time()
+            self.last_logging_start_time = device_time if got_time and device_time else datetime.now()
+
         self.send_command_no_wait(f"startlogging {filename}")
         
         # Read through all queued responses until we find the final result

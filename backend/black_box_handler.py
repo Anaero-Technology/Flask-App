@@ -6,6 +6,7 @@ from typing import Optional, Dict, List, Tuple
 from flask import has_app_context, current_app
 from serial_handler import SerialHandler
 from database.models import ChannelConfiguration, db
+from utils.system_time import is_ntp_synced
 
 class BlackBoxHandler(SerialHandler):
     _db_write_lock = threading.RLock()
@@ -20,6 +21,7 @@ class BlackBoxHandler(SerialHandler):
         self.current_log_file = None
         self.app = None  # Flask app context for database operations
         self.test_id = None  # Current test ID for database logging
+        self.last_logging_start_time = None  # Authoritative start time from the last start_logging() call
         self._tip_processing_lock = threading.Lock()  # Prevent race conditions with recovery thread
 
         # Handle automatic messages from the blackbox
@@ -217,7 +219,19 @@ class BlackBoxHandler(SerialHandler):
     def start_logging(self, filename: str) -> Tuple[bool, str]:
         """Start logging to a specific file"""
 
-        self.set_time()
+        # Don't trust the Pi's clock until NTP has actually synced (link-up
+        # alone isn't enough -- see utils/system_time.py). If it hasn't,
+        # leave the device's own battery-backed RTC alone and read it back
+        # instead, so the recorded start time comes from the RTC rather than
+        # a possibly stale Pi clock.
+        if is_ntp_synced():
+            self.set_time()
+            self.last_logging_start_time = datetime.now()
+        else:
+            print("[BlackBoxHandler] Pi clock not NTP-synced; using device RTC time instead of overwriting it")
+            got_time, device_time = self.get_time()
+            self.last_logging_start_time = device_time if got_time and device_time else datetime.now()
+
         self.send_command_no_wait(f"start /{filename}.txt")
 
         # Read responses until we get the final result

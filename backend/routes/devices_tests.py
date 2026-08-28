@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 import io
 import serial.tools.list_ports
 from utils.errors import internal_error
+from utils.system_time import is_ntp_synced
 
 
 devices_tests_bp = Blueprint('devices_tests', __name__)
@@ -1258,6 +1259,19 @@ def start_test(test_id):
             device.active_test_id = test_id
             device.logging = True
             started_devices.append((device, handler))
+
+        # test.date_started above was stamped with the Pi's own clock. If
+        # that clock wasn't actually NTP-synced (link-up alone doesn't mean
+        # NTP succeeded -- see utils/system_time.py), it may be stale, so
+        # prefer the authoritative time one of the just-started devices read
+        # back from its own battery-backed RTC instead (each handler's
+        # start_logging() already made that same choice for itself).
+        if not is_ntp_synced():
+            for _, started_handler in started_devices:
+                device_start_time = getattr(started_handler, 'last_logging_start_time', None)
+                if device_start_time:
+                    test.date_started = device_start_time
+                    break
 
         db.session.commit()
 
