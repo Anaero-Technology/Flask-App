@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from device_manager import DeviceManager
 from database.models import *
 from utils.auth import require_role, check_stream_token
+from utils.system_time import is_ntp_synced
 import os
 import re
 import hashlib
@@ -540,14 +541,27 @@ def set_time(device_id):
         # Use UTC time - frontend will convert to local time when displaying
         dt = datetime.now(timezone.utc)
 
+        # This pushes the Pi's own clock onto the device's RTC, so warn (but
+        # don't block -- this is an explicit manual action, e.g. an operator
+        # who just corrected the Pi's clock by hand with no network) if the
+        # Pi's clock isn't itself confirmed correct yet.
+        ntp_synced = is_ntp_synced()
+
         success, message = handler.set_time()
 
-        return jsonify({
+        response = {
             "success": success,
             "message": message,
             "timestamp": int(dt.timestamp()),
-            "utc_time": dt.isoformat() + "Z"
-        })
+            "utc_time": dt.isoformat() + "Z",
+            "ntp_synced": ntp_synced
+        }
+        if not ntp_synced:
+            response["warning"] = (
+                "The Pi's system clock is not NTP-synchronized, so the time "
+                "being sent to the device may itself be wrong."
+            )
+        return jsonify(response)
 
     finally:
         db.session.close()
