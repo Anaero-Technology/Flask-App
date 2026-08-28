@@ -439,7 +439,7 @@ def _sample_to_dict(sample):
         "substrate_percent_ts": sample.substrate_percent_ts,
         "substrate_percent_vs": sample.substrate_percent_vs,
         "author": sample.author,
-        "date_created": sample.date_created.isoformat() if sample.date_created else None,
+        "date_created": sample.date_created.isoformat() + "Z" if sample.date_created else None,
         "is_inoculum": sample.is_inoculum,
         "has_image": bool(sample.sample_image_data),
         "sample_image_url": f"/api/v1/samples/{sample.id}/image" if sample.sample_image_data else None
@@ -485,7 +485,7 @@ def create_sample():
             sample_image_data=image_data,
             sample_image_mime_type=image_mime_type,
             sample_image_filename=image_filename,
-            date_created=datetime.now()
+            date_created=datetime.utcnow()
         )
 
         db.session.add(sample)
@@ -529,7 +529,7 @@ def list_inoculum_samples():
             "inoculum_source": sample.substrate_source,  # Display as inoculum_source for compatibility
             "sample_name": sample.sample_name,
             "description": sample.description,
-            "date_created": sample.date_created.isoformat() if sample.date_created else None,
+            "date_created": sample.date_created.isoformat() + "Z" if sample.date_created else None,
             "has_image": bool(sample.sample_image_data),
             "sample_image_url": f"/api/v1/samples/{sample.id}/image" if sample.sample_image_data else None
         } for sample in inoculums])
