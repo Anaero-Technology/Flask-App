@@ -6,7 +6,7 @@ from sqlalchemy import text, inspect
 from database.models import db, Device
 from device_manager import DeviceManager
 from config import Config
-import serial.tools.list_ports
+from utils.sim_ports import comports
 import atexit
 import threading
 import os
@@ -178,7 +178,7 @@ def auto_connect_devices():
     while True:
         with app.app_context():
             try:
-                ports = list(serial.tools.list_ports.comports())
+                ports = comports()
                 auto_connect_sweep(device_manager, ports, port_state)
             except Exception as exc:
                 print(f'[AUTO-CONNECT] Error during scan: {exc}')

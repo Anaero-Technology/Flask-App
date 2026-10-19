@@ -637,6 +637,203 @@ def apply_configuration(device_id):
 
 
 # ----------------------------------------------------------------------
+# pH control
+#
+# The pH controller runs on the PLC as a module: one probe per reactor, a LOW
+# (alkaline) and HIGH (acid) dose action per channel, and two syringe pumps.
+# It starts DISARMED and in DRY-RUN, as the standalone pHController did.
+# ----------------------------------------------------------------------
+PH_ROLES = ('acid', 'alkaline')
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph', methods=['GET'])
+@jwt_required()
+def get_ph(device_id):
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        state = handler.get_ph()
+        if state is None:
+            return jsonify({"available": False, "simulated": handler.is_simulated})
+        state.update(handler.ph_snapshot())
+        state.update({"available": True, "simulated": handler.is_simulated,
+                      "sim_speed": handler.sim_speed,
+                      "role_for_edge": {"low": "alkaline", "high": "acid"}})
+        return jsonify(state)
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/controller', methods=['POST'])
+@jwt_required()
+@require_role(WRITE_ROLES)
+def set_ph_controller(device_id):
+    """Arm/disarm automatic dosing and switch dry-run on or off."""
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        messages = []
+        if 'armed' in body:
+            ok, reason = handler.set_ph_armed(bool(body['armed']))
+            if not ok:
+                return _result(False, f"Rejected: {reason}")
+            messages.append("armed" if body['armed'] else "disarmed")
+        if 'dry_run' in body:
+            ok, reason = handler.set_ph_dry_run(bool(body['dry_run']))
+            if not ok:
+                return _result(False, f"Rejected: {reason}")
+            messages.append("dry run" if body['dry_run'] else "live dosing")
+        if not messages:
+            return jsonify({"error": "armed or dry_run is required"}), 400
+
+        test_id = _active_test_id(device_id)
+        if test_id:
+            _record_version(test_id, device_id, handler, f"pH controller {', '.join(messages)}")
+        return _result(True, f"pH controller {', '.join(messages)}")
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/channel', methods=['POST'])
+@jwt_required()
+@require_role(WRITE_ROLES)
+def set_ph_channel(device_id):
+    """Set a channel's alarm limits and/or its LOW and HIGH dose actions."""
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        number = body.get('number')
+        if number is None:
+            return jsonify({"error": "number is required"}), 400
+
+        notes = []
+        if body.get('min') is not None or body.get('max') is not None:
+            if body.get('min') is None or body.get('max') is None:
+                return jsonify({"error": "min and max are set together"}), 400
+            ok, reason = handler.set_ph_limits(number, body['min'], body['max'])
+            if not ok:
+                return _result(False, f"Limits rejected: {reason}")
+            notes.append(f"limits {body['min']}-{body['max']}")
+        for edge in ('low', 'high'):
+            if isinstance(body.get(edge), dict):
+                ok, reason = handler.set_ph_action(number, edge, body[edge])
+                if not ok:
+                    hint = " (that valve is a pump's refill port)" if reason == "refillvalve" else ""
+                    return _result(False, f"{edge.capitalize()} action rejected: {reason}{hint}")
+                a = body[edge]
+                notes.append(f"{edge} {'on' if a.get('enabled') else 'off'} "
+                             f"{a.get('volume_ml', 0)}ml valve {a.get('valve')}")
+        if not notes:
+            return jsonify({"error": "nothing to change"}), 400
+
+        handler.auto_save()
+        test_id = _active_test_id(device_id)
+        if test_id:
+            _record_version(test_id, device_id, handler, f"pH channel {number}: {', '.join(notes)}")
+        return _result(True, f"pH channel {number} updated")
+    except (TypeError, ValueError):
+        return jsonify({"error": "values must be numbers"}), 400
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/dose', methods=['POST'])
+@jwt_required()
+@require_role(WRITE_ROLES)
+def ph_manual_dose(device_id):
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        role = body.get('role')
+        if role not in PH_ROLES:
+            return jsonify({"error": "role must be acid or alkaline"}), 400
+        ok, reason = handler.ph_dose(role, int(body.get('valve', 1)), float(body.get('volume_ml', 0)))
+        return _result(ok, f"Dosing {body.get('volume_ml')} ml {role}" if ok else f"Rejected: {reason}")
+    except (TypeError, ValueError):
+        return jsonify({"error": "valve and volume_ml must be numbers"}), 400
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/refill', methods=['POST'])
+@jwt_required()
+@require_role(WRITE_ROLES)
+def ph_refill(device_id):
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        role = (request.get_json(silent=True) or {}).get('role')
+        if role not in PH_ROLES:
+            return jsonify({"error": "role must be acid or alkaline"}), 400
+        ok, reason = handler.ph_refill(role)
+        return _result(ok, f"{role.capitalize()} syringe refilled" if ok else f"Rejected: {reason}")
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/disturb', methods=['POST'])
+@jwt_required()
+@require_role(WRITE_ROLES)
+def ph_disturb(device_id):
+    """Simulator only: push a reactor's pH up or down for a demo."""
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        if not handler.is_simulated:
+            return jsonify({"error": "Only available on the simulated PLC"}), 400
+        body = request.get_json(silent=True) or {}
+        ok, reason = handler.sim_disturb_ph(int(body.get('number', 1)), float(body.get('delta', -0.5)))
+        return _result(ok, "Disturbance applied" if ok else f"Rejected: {reason}")
+    except (TypeError, ValueError):
+        return jsonify({"error": "number and delta must be numbers"}), 400
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/ph/log.csv', methods=['GET'])
+@jwt_required()
+def ph_dose_log(device_id):
+    """Dose history held since the backend connected to this PLC, as CSV."""
+    try:
+        handler, error = _get_handler(device_id)
+        if error:
+            return error
+        rows = ["datetime,channel,edge,role,volume_ml,valve,status"]
+        for ev in handler.ph_snapshot()["events"]:
+            stamp = datetime.fromtimestamp(ev["ts"]).strftime("%Y-%m-%d %H:%M:%S")
+            rows.append(f"{stamp},{ev['channel']},{ev['edge']},{ev['role']},"
+                        f"{ev['volume_ml']},{ev['valve']},{ev['status']}")
+        return current_app.response_class(
+            "\n".join(rows) + "\n", mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=ph_dose_log.csv"})
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+# ----------------------------------------------------------------------
 # Saved profiles
 #
 # A profile is a machine type plus every unit setting, captured from a PLC and

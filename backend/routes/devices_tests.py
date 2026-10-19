@@ -7,6 +7,7 @@ from device_manager import DeviceManager
 from werkzeug.utils import secure_filename
 import io
 import serial.tools.list_ports
+from utils.sim_ports import comports
 from utils.errors import internal_error
 from utils.system_time import is_ntp_synced
 
@@ -25,7 +26,7 @@ def get_device_manager():
 @jwt_required()
 def list_ports():
     ports = []
-    for port in serial.tools.list_ports.comports():
+    for port in comports():
         ports.append({
             'name': port.name,
             'device': port.device,
@@ -213,7 +214,7 @@ def discover_devices():
             pass
     
     # Get all available serial ports
-    ports = list(serial.tools.list_ports.comports())
+    ports = comports()
 
     
     # Check all ports in parallel with a thread pool

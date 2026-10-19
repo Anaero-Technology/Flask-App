@@ -1,5 +1,7 @@
 import queue
+import threading
 import time
+from collections import deque
 from typing import Dict, List, Optional, Tuple
 
 from serial_handler import SerialHandler
@@ -46,8 +48,20 @@ class PlcHandler(SerialHandler):
         self.seconds_elapsed = 0
         self.latest_temperatures = {}
 
+        # pH module (see simulator/PH_PROTOCOL.md). None until asked: firmware
+        # without the module answers "failed phget unknown".
+        self.has_ph = None
+        self.is_simulated = False
+        self.sim_speed = None
+        self.latest_ph = {}
+        self._ph_lock = threading.Lock()
+        self.ph_history = deque(maxlen=600)   # (wall time, uptime, {channel: pH})
+        self.ph_events = deque(maxlen=200)    # dose events, newest last
+
         self.register_automatic_handler("datapoint ", self._handle_datapoint)
         self.register_automatic_handler("lta ", self._handle_lta)
+        self.register_automatic_handler("phpoint ", self._handle_phpoint)
+        self.register_automatic_handler("phevent ", self._handle_phevent)
 
     # ------------------------------------------------------------------
     # Connection
@@ -67,6 +81,7 @@ class PlcHandler(SerialHandler):
                 self.disconnect()
                 return False
             self._get_system()
+            self._detect_simulator()
             self._restore_saved_config()
             return True
         except Exception as e:
@@ -232,6 +247,19 @@ class PlcHandler(SerialHandler):
         print("[PlcHandler] No valid info response received")
         return False
 
+    def _detect_simulator(self):
+        """Ask whether this is the PLC simulator. Real firmware answers
+        "failed simget unknown", which leaves is_simulated False."""
+        try:
+            lines = self._command_lines("simget", ("sim ", "failed simget"), timeout=1.5)
+            for line in lines:
+                if line.startswith("sim "):
+                    parts = line.split()
+                    self.is_simulated = True
+                    self.sim_speed = float(parts[1]) if len(parts) > 1 else None
+        except Exception:
+            self.is_simulated = False
+
     def get_info(self) -> Dict:
         self._get_device_info()
         return {
@@ -243,6 +271,9 @@ class PlcHandler(SerialHandler):
             "machine_counts": self.machine_counts,
             "maintenance_mode": self.maintenance_mode,
             "port": self.port,
+            "simulated": self.is_simulated,
+            "sim_speed": self.sim_speed,
+            "has_ph": self.has_ph,
         }
 
     def set_name(self, name: str) -> bool:
@@ -529,7 +560,7 @@ class PlcHandler(SerialHandler):
         if status is None:
             return None
 
-        return {
+        settings = {
             "machine_type": self.machine_type,
             "heaters": [
                 {"number": u["number"], "target": u["target"]} for u in status["heaters"]
@@ -546,6 +577,21 @@ class PlcHandler(SerialHandler):
                 {"number": u["number"], "pre_feed": u["pre_feed"]} for u in status["agitators"]
             ],
         }
+
+        # pH limits and dose actions travel with the machine settings so a
+        # profile or a test record captures how pH was being controlled. Armed
+        # and dry-run are deliberately left out: applying a profile must never
+        # be what starts a pump.
+        ph = self.get_ph() if self.has_ph is not False else None
+        if ph:
+            settings["ph"] = {
+                "channels": [{
+                    "number": c["number"], "min": c["min"], "max": c["max"],
+                    "low": c["low"], "high": c["high"],
+                } for c in ph["channels"]],
+                "refill_valves": {r: p["refill_valve"] for r, p in ph["pumps"].items()},
+            }
+        return settings
 
     def apply_settings(self, settings: Dict, machine_type: Optional[str] = None) -> Tuple[bool, str]:
         """Push a captured configuration back onto the PLC.
@@ -575,6 +621,16 @@ class PlcHandler(SerialHandler):
         for u in settings.get("agitators", []):
             run(self.set_agitator(u["number"], u.get("pre_feed", 0))[0])
 
+        ph = settings.get("ph")
+        if ph and self.get_ph() is not None:
+            for role, valve in (ph.get("refill_valves") or {}).items():
+                self.set_ph_refill_valve(role, valve)
+            for c in ph.get("channels", []):
+                run(self.set_ph_limits(c["number"], c["min"], c["max"])[0])
+                for edge in ("low", "high"):
+                    if c.get(edge):
+                        run(self.set_ph_action(c["number"], edge, c[edge])[0])
+
         self.auto_save()
 
         if applied == 0:
@@ -598,8 +654,163 @@ class PlcHandler(SerialHandler):
             return False, str(e)
 
     # ------------------------------------------------------------------
+    # pH module
+    #
+    # The pH controller (probes, LOW/HIGH dose actions, acid and alkaline
+    # syringe pumps) runs on the PLC itself; these are thin wrappers over its
+    # serial commands. Channel n is the probe in reactor n.
+    # ------------------------------------------------------------------
+    def get_ph(self) -> Optional[Dict]:
+        """Whole pH module state in one framed reply, or None if the PLC has no
+        pH module (or no machine type yet)."""
+        lines = self._command_lines("phget", ("done ph", "failed phget"), timeout=5.0)
+        if any(l.startswith("failed phget unknown") for l in lines):
+            self.has_ph = False
+            return None
+        if not any(l.startswith("done ph") for l in lines):
+            return None
+        self.has_ph = True
+
+        out = {"uptime": 0, "armed": False, "dry_run": True, "queue_depth": 0,
+               "channels": [], "pumps": {}}
+        channels = {}
+        for line in lines:
+            p = line.split()
+            try:
+                if line.startswith("ph start"):
+                    out["uptime"] = int(p[2])
+                    out["armed"] = p[3] == "1"
+                    out["dry_run"] = p[4] == "1"
+                    out["queue_depth"] = int(p[6]) if len(p) > 6 else 0
+                elif line.startswith("ph channel"):
+                    n = int(p[2])
+                    channels[n] = {
+                        "number": n,
+                        "ph": None if p[3] == "nan" else float(p[3]),
+                        "min": float(p[4]), "max": float(p[5]),
+                        "alarm": None if p[6] == "none" else p[6].upper(),
+                    }
+                elif line.startswith("ph action"):
+                    n, edge = int(p[2]), p[3]
+                    channels.setdefault(n, {"number": n})[edge] = {
+                        "enabled": p[4] == "1",
+                        "volume_ml": float(p[5]),
+                        "valve": int(p[6]),
+                        "interval_s": float(p[7]),
+                    }
+                elif line.startswith("ph pump"):
+                    out["pumps"][p[2]] = {
+                        "syringe_ml": float(p[3]),
+                        "refill_valve": int(p[4]),
+                        "busy": p[5] == "1",
+                        "dosed_ml": float(p[6]),
+                    }
+            except (IndexError, ValueError):
+                print(f"[PlcHandler] Could not parse pH line: {line}")
+        out["channels"] = [channels[n] for n in sorted(channels)]
+        return out
+
+    def _ph_changed(self, result):
+        if result[0]:
+            self._settings_edited()
+        return result
+
+    def set_ph_limits(self, channel: int, ph_min: float, ph_max: float) -> Tuple[bool, str]:
+        return self._ph_changed(self._acked(f"phlimitset {int(channel)} {float(ph_min):g} {float(ph_max):g}"))
+
+    def set_ph_action(self, channel: int, edge: str, action: Dict) -> Tuple[bool, str]:
+        """edge 'low' doses alkaline, 'high' doses acid. interval_s 0 doses once
+        per excursion; above 0 repeats while the pH stays out of range."""
+        if edge not in ("low", "high"):
+            return False, "edge must be low or high"
+        cmd = (f"phactionset {int(channel)} {edge} {1 if action.get('enabled') else 0} "
+               f"{float(action.get('volume_ml', 0)):g} {int(action.get('valve', channel))} "
+               f"{float(action.get('interval_s', 0)):g}")
+        return self._ph_changed(self._acked(cmd))
+
+    def set_ph_refill_valve(self, role: str, valve: int) -> Tuple[bool, str]:
+        return self._acked(f"phrefillset {role} {int(valve)}")
+
+    def set_ph_armed(self, armed: bool) -> Tuple[bool, str]:
+        return self._acked(f"pharmset {1 if armed else 0}")
+
+    def set_ph_dry_run(self, dry_run: bool) -> Tuple[bool, str]:
+        return self._acked(f"phdryrunset {1 if dry_run else 0}")
+
+    def ph_dose(self, role: str, valve: int, volume_ml: float) -> Tuple[bool, str]:
+        """Manual dose. Bypasses ARMED/DRY-RUN - it is an explicit operator action."""
+        return self._acked(f"phdose {role} {int(valve)} {float(volume_ml):g}")
+
+    def ph_refill(self, role: str) -> Tuple[bool, str]:
+        return self._acked(f"phrefill {role}")
+
+    def sim_disturb_ph(self, channel: int, delta: float) -> Tuple[bool, str]:
+        """Simulator only: knock a reactor's pH to show the controller respond."""
+        return self._acked(f"simph {int(channel)} {float(delta):g}")
+
+    def ph_snapshot(self) -> Dict:
+        with self._ph_lock:
+            return {
+                "history": [{"t": t, "uptime": u, "values": v} for t, u, v in self.ph_history],
+                "events": list(self.ph_events),
+            }
+
+    # ------------------------------------------------------------------
     # Unsolicited telemetry
     # ------------------------------------------------------------------
+    def _handle_phpoint(self, line: str):
+        """phpoint <uptime> [<n> <ph> <alarm>] ..."""
+        parts = line.split()
+        try:
+            uptime = int(parts[1])
+        except (IndexError, ValueError):
+            return
+        values, alarms = {}, {}
+        i = 2
+        while i + 2 < len(parts):
+            try:
+                n = int(parts[i])
+                values[n] = float(parts[i + 1])
+                alarms[n] = None if parts[i + 2] == "none" else parts[i + 2].upper()
+            except ValueError:
+                break
+            i += 3
+        if not values:
+            return
+        self.has_ph = True
+        with self._ph_lock:
+            self.latest_ph = values
+            self.ph_history.append((time.time(), uptime, values))
+        self._publish({
+            "type": "plc_ph",
+            "device_name": self.device_name,
+            "device_id": self.id,
+            "uptime": uptime,
+            "channels": [{"number": n, "ph": values[n], "alarm": alarms[n]} for n in sorted(values)],
+        }, "plc_ph")
+
+    def _handle_phevent(self, line: str):
+        """phevent <uptime> <channel> <edge> <role> <volume_ml> <valve> <status>"""
+        parts = line.split()
+        if len(parts) < 8:
+            return
+        try:
+            event = {
+                "ts": time.time(),
+                "time": time.strftime("%H:%M:%S"),
+                "uptime": int(parts[1]),
+                "channel": int(parts[2]),
+                "edge": parts[3],
+                "role": parts[4],
+                "volume_ml": float(parts[5]),
+                "valve": int(parts[6]),
+                "status": parts[7],
+            }
+        except ValueError:
+            return
+        with self._ph_lock:
+            self.ph_events.append(event)
+        self._publish({"type": "plc_ph_dose", "device_id": self.id, **event}, "plc_ph_dose")
     def _handle_datapoint(self, line: str):
         """datapoint <uptime> [<n> <target> <actual> <on>] ..."""
         parts = line.split()

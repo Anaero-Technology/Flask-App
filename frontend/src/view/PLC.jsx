@@ -4,6 +4,7 @@ import { useToast } from '../components/Toast'
 import { modelsAvailable, modelById, resolveModel, feederForReactor } from './plcLayouts'
 import PlcTree from './PlcTree'
 import PlcConfigView from './PlcConfigView'
+import PlcPh from './PlcPh'
 import {
   Cpu, Loader2, RefreshCw, Wrench, AlertTriangle, Check, MousePointerClick, Unplug,
   Save, FolderOpen, Trash2, Table2, ArrowLeft
@@ -80,7 +81,7 @@ function Field({ label, value, onChange, min, max, type = 'number', options, dis
 
 // Everything attached to one reactor in one place - closer to how the machine
 // is operated than four separate lists.
-function ReactorPanel({ number, status, layout, sensors, onStage, draft }) {
+function ReactorPanel({ number, status, layout, sensors, onStage, draft, ph }) {
   const heater = (status.heaters || []).find((u) => u.number === number)
   const mixer = (status.mixers || []).find((u) => u.number === number)
   const agitator = (status.agitators || []).find((u) => u.number === number)
@@ -107,6 +108,7 @@ function ReactorPanel({ number, status, layout, sensors, onStage, draft }) {
   }, [number, heater?.target, mixer?.mode, mixer?.on_for, mixer?.off_for, agitator?.pre_feed])
 
   const heatingBlocked = !sensors?.heating_available
+  const probe = ph?.channels?.find((c) => c.number === number)
 
   return (
     <ControlSection title={`Reactor ${number}`}>
@@ -119,6 +121,15 @@ function ReactorPanel({ number, status, layout, sensors, onStage, draft }) {
       )}
 
       <div className="space-y-3">
+        {probe && (
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700 dark:text-slate-300">
+            pH
+            <span className={`tabular-nums ${probe.alarm ? 'font-semibold text-red-600 dark:text-red-400' : 'font-normal text-gray-500 dark:text-slate-400'}`}>
+              {probe.ph?.toFixed(2)} now · range {probe.min}–{probe.max}{probe.alarm ? ` · ${probe.alarm.toLowerCase()}` : ''}
+            </span>
+            <span className="font-normal text-gray-400 dark:text-slate-500">— dosing is set under pH control below</span>
+          </div>
+        )}
         {heater ? (
           <div>
             <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700 dark:text-slate-300">
@@ -226,7 +237,7 @@ function FeederPanel({ number, status, layout, onStage, draft }) {
 }
 
 export default function PLC({ initialParams }) {
-  const { authFetch } = useAuth()
+  const { authFetch, canPerform } = useAuth()
   const toast = useToast()
 
   const [plcs, setPlcs] = useState([])
@@ -248,6 +259,8 @@ export default function PLC({ initialParams }) {
   // Edits waiting to be applied, keyed "heater:1". Held here rather than in the
   // panels so a batch can span several reactors before it is sent.
   const [draft, setDraft] = useState({})
+  // pH module state, polled separately - it changes faster than the machine
+  const [ph, setPh] = useState(null)
 
   // Only a connected PLC can be driven, so nothing else is offered.
   const connectedPlcs = plcs.filter((p) => p.connected)
@@ -374,6 +387,25 @@ export default function PLC({ initialParams }) {
       if (!background) setLoading(false)
     }
   }, [authFetch, loadPending])
+
+  const loadPh = useCallback(async (id) => {
+    if (!id) return
+    try {
+      const res = await authFetch(`${API}/${id}/ph`)
+      if (res.ok) setPh(await res.json())
+    } catch { /* keep the last reading on a missed poll */ }
+  }, [authFetch])
+
+  useEffect(() => {
+    if (!selectedId || !connected || !machineType) { setPh(null); return }
+    loadPh(selectedId)
+    const phTimer = setInterval(() => loadPh(selectedId), 3000)
+    return () => clearInterval(phTimer)
+  }, [selectedId, connected, machineType, loadPh])
+
+  const phByReactor = ph?.available
+    ? Object.fromEntries(ph.channels.map((c) => [c.number, c]))
+    : null
 
   // A PLC that has been power cycled comes back with no machine set. If this
   // browser knows which one it is, put it back automatically - the backend then
@@ -691,7 +723,7 @@ export default function PLC({ initialParams }) {
                   <div className="flex items-center justify-center overflow-auto p-4" style={{ height: `${panelHeight}px` }}>
                     <PlcTree machineType={layout?.label || machineType} layout={layout}
                              status={status} selection={selection} onSelect={setSelection}
-                             onMeasure={setTreeHeight} />
+                             onMeasure={setTreeHeight} ph={phByReactor} />
                   </div>
 
                   {/* A column that scrolls its contents but keeps the Apply bar
@@ -705,7 +737,7 @@ export default function PLC({ initialParams }) {
                       </h4>
                       {selection?.type === 'reactor' && (
                         <ReactorPanel number={selection.number} status={status} layout={layout}
-                                      sensors={sensors} onStage={stageChange} draft={draft} />
+                                      sensors={sensors} onStage={stageChange} draft={draft} ph={ph} />
                       )}
                       {selection?.type === 'feeder' && (
                         <FeederPanel number={selection.number} status={status} layout={layout}
@@ -743,6 +775,11 @@ export default function PLC({ initialParams }) {
                 </div>
               </div>
             </>
+          )}
+
+          {machineType && ph?.available && (
+            <PlcPh deviceId={selectedId} ph={ph} authFetch={authFetch} toast={toast}
+                   canWrite={canPerform('modify_test')} onChanged={() => loadPh(selectedId)} />
           )}
 
           {machineType && !status && !loading && (

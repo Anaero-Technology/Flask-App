@@ -82,7 +82,7 @@ function buildTree(machineType, layout, status) {
   return { kind: 'machine', label: machineType, children }
 }
 
-function NodeBox({ node, selection, onSelect }) {
+function NodeBox({ node, selection, onSelect, ph }) {
   const d = node.data
   const x = node.y            // d3 lays out top-down; swapped for a left-to-right tree
   const y = node.x
@@ -134,6 +134,9 @@ function NodeBox({ node, selection, onSelect }) {
   const heating = Boolean(d.heater?.on)
   const mixing = Boolean(d.mixer?.on)
   const agitating = Boolean(d.agitator?.on)
+  // pH probe in this reactor, when the PLC carries the pH module
+  const probe = ph?.[d.number]
+  const phAlarm = probe?.alarm
 
   return (
     <g transform={`translate(${x - NODE_W / 2}, ${y - NODE_H / 2})`}
@@ -142,7 +145,7 @@ function NodeBox({ node, selection, onSelect }) {
       <rect width={NODE_W} height={NODE_H} rx="10" strokeWidth="2"
             className={[
               heating ? 'fill-amber-50 dark:fill-amber-950/40' : 'fill-gray-50 dark:fill-slate-800',
-              selected ? 'stroke-blue-500' : 'stroke-gray-200 dark:stroke-slate-700',
+              selected ? 'stroke-blue-500' : phAlarm ? 'stroke-red-400 dark:stroke-red-600' : 'stroke-gray-200 dark:stroke-slate-700',
             ].join(' ')} />
       <foreignObject width={NODE_W} height={NODE_H}>
         <div className="flex h-full flex-col items-center justify-center leading-tight">
@@ -160,10 +163,16 @@ function NodeBox({ node, selection, onSelect }) {
             )}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 text-[10px] leading-none">
+            {probe && (
+              <span className={`tabular-nums ${phAlarm ? 'font-semibold text-red-600 dark:text-red-400' : 'text-violet-600 dark:text-violet-400'}`}
+                    title={phAlarm ? `pH ${phAlarm.toLowerCase()}` : 'pH in range'}>
+                pH {probe.ph.toFixed(2)}
+              </span>
+            )}
             {heating && <span className="text-amber-600 dark:text-amber-400">heating</span>}
             {mixing && <span className="text-blue-600 dark:text-blue-400">mixing</span>}
             {agitating && <span className="text-teal-600 dark:text-teal-400">agitating</span>}
-            {!heating && !mixing && !agitating && (
+            {!probe && !heating && !mixing && !agitating && (
               <span className="text-gray-400 dark:text-slate-500">idle</span>
             )}
           </span>
@@ -173,7 +182,7 @@ function NodeBox({ node, selection, onSelect }) {
   )
 }
 
-export default function PlcTree({ machineType, layout, status, selection, onSelect, onMeasure }) {
+export default function PlcTree({ machineType, layout, status, selection, onSelect, onMeasure, ph }) {
   const { nodes, links, width, height } = useMemo(() => {
     const root = hierarchy(buildTree(machineType, layout, status))
 
@@ -225,7 +234,7 @@ export default function PlcTree({ machineType, layout, status, selection, onSele
                   className="stroke-gray-300 dark:stroke-slate-600" />
           ))}
           {nodes.map((n, i) => (
-            <NodeBox key={i} node={n} selection={selection} onSelect={onSelect} />
+            <NodeBox key={i} node={n} selection={selection} onSelect={onSelect} ph={ph} />
           ))}
         </g>
       </svg>
