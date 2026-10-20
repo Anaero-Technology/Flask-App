@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
 import { useAppSettings } from './AppSettingsContext';
+import DiskSpaceBanner from './DiskSpaceBanner';
 
 const Layout = ({ children, currentView, onNavigate }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -68,8 +69,16 @@ const Layout = ({ children, currentView, onNavigate }) => {
 
       {/* Main Content Area */}
       <main className={`flex-1 lg:ml-64 overflow-y-auto text-gray-900 dark:text-slate-100 ${currentView === 'settings' ? 'pt-14 lg:pt-0' : 'p-4 pt-16 lg:pt-4'}`}>
-        {currentView === 'settings' ? children : (
+        {currentView === 'settings' ? (
+          <>
+            <div className="px-4 pt-3">
+              <DiskSpaceBanner />
+            </div>
+            {children}
+          </>
+        ) : (
           <div className="max-w-7xl mx-auto">
+            <DiskSpaceBanner />
             {children}
           </div>
         )}

@@ -1,9 +1,18 @@
+import errno
 import serial
 import threading
 import time
 from typing import Optional, Callable
 import queue
 from utils.serial_logger import serial_logger
+
+try:
+    import termios
+except ImportError:  # non-POSIX: pyserial uses a backend without tcdrain
+    termios = None
+
+# serial.Serial.flush() raises termios.error on POSIX, OSError elsewhere.
+_DRAIN_ERRORS = (OSError,) if termios is None else (OSError, termios.error)
 
 
 class SerialHandler:
@@ -255,6 +264,28 @@ class SerialHandler:
                 return None
             if expect_prefix is None or line.startswith(expect_prefix):
                 return line
+
+    def drain_write_buffer(self) -> None:
+        """Block until everything written has physically left the UART.
+
+        This is serial.Serial.flush(), which on POSIX is a bare
+        termios.tcdrain(). PEP 475 does not make tcdrain retry on EINTR the
+        way it does for most syscalls, and pyserial does not retry it either
+        - though its write() does explicitly tolerate EINTR. So a signal
+        arriving while draining raises termios.error(4, 'Interrupted system
+        call'). Over a single command that is unlikely; over the thousands of
+        drains in a multi-minute firmware transfer it is close to certain,
+        and it used to abort the flash. Retrying is the standard EINTR
+        response and is what PEP 475 does for the calls it covers.
+        """
+        while True:
+            try:
+                self.connection.flush()
+                return
+            except _DRAIN_ERRORS as e:
+                if e.args and e.args[0] == errno.EINTR:
+                    continue
+                raise
 
     def send_command_no_wait(self, command: str) -> None:
         """Send a command without waiting for response"""

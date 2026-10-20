@@ -1,12 +1,16 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_sse import sse
 from flask_jwt_extended import jwt_required
 from datetime import datetime
+import hashlib
+import os
+import threading
 import time
 from device_manager import DeviceManager
 from database.models import *
-from utils.auth import require_role
+from utils.auth import require_role, check_stream_token
 from utils.errors import internal_error
+from utils.system_time import is_ntp_synced
 
 black_box_bp = Blueprint('black_box', __name__)
 device_manager = DeviceManager()
@@ -158,35 +162,42 @@ def start_logging(device_id):
             test = Test.query.get(test_id)
             if not test:
                 return jsonify({"error": "Test not found"}), 404
-        else:
-            # Create new test automatically
-            test_name = data.get('test_name', f"BlackBox Log - {device.name} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            test = Test(
-                name=test_name,
-                description=data.get('test_description', f"Auto-created test for BlackBox logging on {device.name}"),
-                created_by=data.get('created_by', 'system'),
-                date_created=datetime.now(),
-                status='running',
-                date_started=datetime.now()
-            )
-            db.session.add(test)
-            db.session.flush()  # Get the ID without committing
-        
-        # Start logging on device
+
+        # Start logging first: the handler decides whether the Pi's clock is
+        # trustworthy and, if not, reads the authoritative start time back
+        # from the device's own RTC instead (see BlackBoxHandler.start_logging).
+        # Timestamping the Test row from that same value keeps it consistent
+        # with whatever time was actually used/left on the device.
         success, message = handler.start_logging(filename)
         if success:
+            start_time = handler.last_logging_start_time or datetime.now()
+
+            if test is None:
+                # Create new test automatically
+                test_name = data.get('test_name', f"BlackBox Log - {device.name} - {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                test = Test(
+                    name=test_name,
+                    description=data.get('test_description', f"Auto-created test for BlackBox logging on {device.name}"),
+                    created_by=data.get('created_by', 'system'),
+                    date_created=start_time,
+                    status='running',
+                    date_started=start_time
+                )
+                db.session.add(test)
+                db.session.flush()  # Get the ID without committing
+
             # Link test to handler and device
             handler.set_test_id(test.id)
             device.logging = True
             device.active_test_id = test.id
-            
+
             # Update test status if it was existing and in setup
             if test.status == 'setup':
                 test.status = 'running'
-                test.date_started = datetime.now()
-            
+                test.date_started = start_time
+
             db.session.commit()
-            
+
             return jsonify({
                 "success": True,
                 "message": message,
@@ -195,10 +206,9 @@ def start_logging(device_id):
                 "test_name": test.name
             })
         else:
-            # If logging failed and we created a test, don't save it
+            # Logging failed; nothing was created/changed to roll back
             device.logging = False
-            if not test_id:  # Only rollback if we created a new test
-                db.session.rollback()
+            db.session.commit()
             return jsonify({
                 "success": False,
                 "message": message
@@ -455,13 +465,26 @@ def set_time(device_id):
         if not handler:
             return jsonify({"error": "Device handler not found"}), 404
         
+        # This pushes the Pi's own clock onto the device's RTC, so warn (but
+        # don't block -- this is an explicit manual action, e.g. an operator
+        # who just corrected the Pi's clock by hand with no network) if the
+        # Pi's clock isn't itself confirmed correct yet.
+        ntp_synced = is_ntp_synced()
+
         success, message = handler.set_time()
-        
-        return jsonify({
+
+        response = {
             "success": success,
-            "message": message
-        })
-        
+            "message": message,
+            "ntp_synced": ntp_synced
+        }
+        if not ntp_synced:
+            response["warning"] = (
+                "The Pi's system clock is not NTP-synchronized, so the time "
+                "being sent to the device may itself be wrong."
+            )
+        return jsonify(response)
+
     finally:
         db.session.close()
 
@@ -566,7 +589,16 @@ def send_command(device_id):
 
 @black_box_bp.route('/api/v1/black_box/<int:device_id>/stream', methods=['GET'])
 def stream(device_id):
-    """SSE endpoint for real-time blackbox notifications for a specific device."""
+    """SSE endpoint for real-time blackbox notifications for a specific device.
+
+    Authenticated via short-lived ?token= (see /api/v1/auth/stream-token)
+    because EventSource cannot send Authorization headers - the same check the
+    chimera and plc streams use. flask-sse serves every event on one channel,
+    so an unauthenticated reader here would see the whole fleet's traffic.
+    """
+    auth_error = check_stream_token()
+    if auth_error:
+        return auth_error
     try:
         # Verify device exists and is connected
         device = Device.query.get(device_id)
@@ -589,5 +621,248 @@ def stream(device_id):
         print(f"Starting SSE stream for device {device_id}")
         return sse.stream()
         
+    finally:
+        db.session.close()
+
+
+# --- Firmware update ---------------------------------------------------------
+# The black box's ESP32 takes the same style of over-serial update as the
+# chimera, but its firmware spells the commands "startUpdate"/"firmwareHash".
+# Progress is published on this blueprint's per-device SSE stream, which is
+# already in the unbuffered nginx location block.
+
+BUNDLED_FIRMWARE_PATH = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', '..', 'firmware', 'blackbox', 'firmware.bin'
+))
+
+
+def _load_bundled_firmware():
+    """Read the repo-bundled firmware.bin and derive its expected device hash.
+
+    esptool appends a SHA-256 digest as the final 32 bytes of the image, and
+    that is exactly what the device's firmwareHash command reports (it returns
+    esp_partition_get_sha256 of the running OTA partition) - so the expected
+    hash IS those 32 bytes, validated here by recomputing sha256(image minus
+    digest).
+
+    Returns (data, hash_hex, error_reason); data is None when unavailable.
+    """
+    if not os.path.isfile(BUNDLED_FIRMWARE_PATH):
+        return None, None, 'no_bundled'
+    with open(BUNDLED_FIRMWARE_PATH, 'rb') as f:
+        data = f.read()
+    if len(data) < 33 or data[0] != 0xE9:
+        return None, None, 'invalid_bundle'
+    appended_digest = data[-32:]
+    if hashlib.sha256(data[:-32]).digest() != appended_digest:
+        return None, None, 'invalid_bundle'
+    return data, appended_digest.hex(), None
+
+
+def _firmware_update_preflight(device_id):
+    """Shared validation for the firmware update routes.
+
+    Returns (handler, error_response); exactly one is None.
+    """
+    device = Device.query.get(device_id)
+    if not device or not device.connected:
+        return None, (jsonify({"error": "Device not found or not connected"}), 404)
+
+    if device.device_type != 'black-box':
+        return None, (jsonify({"error": "Device is not a black-box"}), 400)
+
+    handler = device_manager.get_black_box(device_id)
+    if not handler:
+        return None, (jsonify({"error": "Device handler not found"}), 404)
+
+    if device.active_test_id:
+        test = Test.query.get(device.active_test_id)
+        if test and test.status == 'running':
+            return None, (jsonify({
+                "error": "Cannot update firmware while a test is running on this device"
+            }), 409)
+
+    if handler.is_logging:
+        return None, (jsonify({"error": "Cannot update firmware while the device is logging"}), 409)
+
+    if getattr(handler, 'firmware_update_in_progress', False):
+        return None, (jsonify({"error": "A firmware update is already in progress"}), 409)
+
+    return handler, None
+
+
+def _launch_firmware_update(handler, device_id, firmware_data):
+    """Start the background flash thread; caller must have run preflight."""
+    handler.firmware_update_in_progress = True
+    app = current_app._get_current_object()
+
+    def run_update():
+        try:
+            with app.app_context():
+                last_percent = [-1]
+
+                def progress(sent, total):
+                    percent = int(sent * 100 / total)
+                    if percent == last_percent[0]:
+                        return
+                    last_percent[0] = percent
+                    try:
+                        sse.publish({
+                            "device_id": device_id,
+                            "sent": sent,
+                            "total": total,
+                            "percent": percent,
+                            # 100% only fires after the serial flush, so
+                            # from there the device is flashing/rebooting
+                            "phase": "verifying" if sent >= total else "transferring"
+                        }, type='black_box_firmware_progress')
+                    except Exception:
+                        pass
+
+                success, message = handler.update_firmware(firmware_data, progress_cb=progress)
+                print(f"[BLACK BOX FIRMWARE] Device {device_id}: success={success} - {message}")
+                try:
+                    sse.publish({
+                        "device_id": device_id,
+                        "success": success,
+                        "message": message
+                    }, type='black_box_firmware_complete')
+                except Exception:
+                    pass
+        finally:
+            handler.firmware_update_in_progress = False
+
+    threading.Thread(
+        target=run_update,
+        daemon=True,
+        name=f"BlackBoxFirmwareUpdate-{device_id}"
+    ).start()
+
+
+def _validate_firmware_image(firmware_data):
+    """Size/magic sanity checks shared by the upload route. Returns an error
+    string, or None when the image looks like a flashable ESP32 build."""
+    if len(firmware_data) < 100 * 1024 or len(firmware_data) > 8 * 1024 * 1024:
+        return "Firmware file size looks wrong (expected 100KB-8MB)"
+    # Every ESP32 app image starts with the 0xE9 magic byte; catches uploads
+    # of the wrong file before anything is sent to the device.
+    if firmware_data[0] != 0xE9:
+        return "Not a valid ESP32 firmware image"
+    return None
+
+
+@black_box_bp.route('/api/v1/black_box/<int:device_id>/firmware_check', methods=['GET'])
+@jwt_required()
+def firmware_check(device_id):
+    """Compare the repo-bundled firmware.bin against the device's running
+    firmware (via the firmwareHash serial command)."""
+    try:
+        device = Device.query.get(device_id)
+        if not device or not device.connected:
+            return jsonify({"error": "Device not found or not connected"}), 404
+
+        if device.device_type != 'black-box':
+            return jsonify({"error": "Device is not a black-box"}), 400
+
+        handler = device_manager.get_black_box(device_id)
+        if not handler:
+            return jsonify({"error": "Device handler not found"}), 404
+
+        data, bundled_hash, reason = _load_bundled_firmware()
+        if data is None:
+            return jsonify({"update_available": None, "reason": reason})
+
+        if getattr(handler, 'firmware_update_in_progress', False):
+            return jsonify({
+                "update_available": None,
+                "reason": "update_in_progress",
+                "bundled_hash": bundled_hash
+            })
+
+        success, device_hash = handler.get_firmware_hash()
+        if not success:
+            return jsonify({
+                "update_available": None,
+                "reason": "device_unknown",
+                "bundled_hash": bundled_hash,
+                "bundled_size": len(data)
+            })
+
+        return jsonify({
+            "update_available": device_hash != bundled_hash,
+            "device_hash": device_hash,
+            "bundled_hash": bundled_hash,
+            "bundled_size": len(data)
+        })
+
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@black_box_bp.route('/api/v1/black_box/<int:device_id>/firmware_update', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def firmware_update(device_id):
+    """Upload a .bin file and flash it onto the black box over serial.
+
+    Runs in a background thread; progress is published via SSE as
+    'black_box_firmware_progress' events and the outcome as
+    'black_box_firmware_complete'.
+    """
+    try:
+        handler, error = _firmware_update_preflight(device_id)
+        if error:
+            return error
+
+        if 'firmware' not in request.files:
+            return jsonify({"error": "No firmware file uploaded (expected field 'firmware')"}), 400
+
+        file = request.files['firmware']
+        if not file.filename or not file.filename.lower().endswith('.bin'):
+            return jsonify({"error": "Firmware must be a .bin file"}), 400
+
+        firmware_data = file.read()
+        invalid = _validate_firmware_image(firmware_data)
+        if invalid:
+            return jsonify({"error": invalid}), 400
+
+        _launch_firmware_update(handler, device_id, firmware_data)
+
+        return jsonify({
+            "success": True,
+            "message": "Firmware update started",
+            "size": len(firmware_data)
+        }), 202
+
+    finally:
+        db.session.close()
+
+
+@black_box_bp.route('/api/v1/black_box/<int:device_id>/firmware_update_bundled', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def firmware_update_bundled(device_id):
+    """Flash the firmware.bin bundled with this software release."""
+    try:
+        handler, error = _firmware_update_preflight(device_id)
+        if error:
+            return error
+
+        data, bundled_hash, reason = _load_bundled_firmware()
+        if data is None:
+            return jsonify({"error": "No valid bundled firmware available", "reason": reason}), 404
+
+        _launch_firmware_update(handler, device_id, data)
+
+        return jsonify({
+            "success": True,
+            "message": "Firmware update started",
+            "size": len(data),
+            "bundled_hash": bundled_hash
+        }), 202
+
     finally:
         db.session.close()

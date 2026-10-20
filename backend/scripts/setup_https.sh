@@ -179,8 +179,10 @@ server {
     # Per-device SSE endpoints also live under /api/ (e.g.
     # /api/v1/chimera/3/stream). They must not be buffered, or events sit in
     # nginx until the connection dies and live UI (chimera status ring)
-    # silently stops updating.
-    location ~ ^/api/v1/(chimera|black_box)/[0-9]+/stream\$ {
+    # silently stops updating. Every device type with a stream route must be
+    # listed here: plc was missing, so its firmware progress bar froze partway
+    # through the verify pass and never received the completion event.
+    location ~ ^/api/v1/(chimera|black_box|plc)/[0-9]+/stream\$ {
         proxy_pass http://127.0.0.1:6000;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
