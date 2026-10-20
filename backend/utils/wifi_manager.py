@@ -544,6 +544,69 @@ def _connect_macos(ssid: str, password: str) -> Tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
+# Sharing the Pi's network with a device
+# ---------------------------------------------------------------------------
+
+def _nmcli_value(field: str, args: List[str], secrets: bool = False) -> Optional[str]:
+    """One value from `nmcli -g <field> ...`, unescaped. None if nmcli failed."""
+    result = _nmcli((['-s'] if secrets else []) + ['-g', field] + args, timeout=5)
+    if result.returncode != 0:
+        return None
+    return split_terse_fields(result.stdout.rstrip('\n'))[0]
+
+
+def get_shareable_wifi() -> Tuple[Optional[dict], Optional[str]]:
+    """The Pi's active WiFi network, with its password and the Pi's address on
+    it, for handing to a device that should join the same network - an ESP32
+    PLC, so it can reach this backend without anyone typing the password in.
+
+    Returns ({'ssid', 'password', 'ip'}, None) or (None, reason). The password
+    comes from NetworkManager via sudo, like every other nmcli call here; it is
+    never logged. Only WPA-PSK/SAE and open networks can be shared - a device
+    cannot reuse an 802.1X identity.
+    """
+    if not IS_LINUX:
+        return None, "Sharing the WiFi network is only supported on the Pi"
+    try:
+        result = _nmcli(['-t', '-f', 'UUID,TYPE,DEVICE', 'connection', 'show', '--active'], timeout=5)
+        if result.returncode != 0:
+            return None, _result_error(result, "Could not read the active connections")
+
+        uuid = device = None
+        for line in result.stdout.splitlines():
+            fields = split_terse_fields(line)
+            if len(fields) >= 3 and fields[1] == '802-11-wireless':
+                uuid, device = fields[0], fields[2]
+                break
+        if not uuid:
+            return None, "The Pi is not connected to a WiFi network"
+
+        ssid = _nmcli_value('802-11-wireless.ssid', ['connection', 'show', uuid])
+        key_mgmt = _nmcli_value('802-11-wireless-security.key-mgmt', ['connection', 'show', uuid]) or ''
+        if not ssid:
+            return None, "Could not read the WiFi network name"
+        if key_mgmt.startswith('wpa-eap') or key_mgmt == 'ieee8021x':
+            return None, "The Pi is on an enterprise (802.1X) network, which a PLC cannot join"
+
+        password = ''
+        if key_mgmt:
+            password = _nmcli_value('802-11-wireless-security.psk', ['connection', 'show', uuid], secrets=True)
+            if not password:
+                return None, "Could not read the WiFi password"
+
+        address = _nmcli_value('IP4.ADDRESS', ['device', 'show', device]) or ''
+        ip = address.split(' | ')[0].split('/')[0] or None   # several addresses come back " | " separated
+        if not ip:
+            return None, "The Pi has no IPv4 address on its WiFi network"
+
+        return {'ssid': ssid, 'password': password, 'ip': ip}, None
+    except subprocess.TimeoutExpired:
+        return None, "Timed out reading the WiFi network"
+    except Exception as e:
+        return None, str(e)
+
+
+# ---------------------------------------------------------------------------
 # Local IP detection
 # ---------------------------------------------------------------------------
 

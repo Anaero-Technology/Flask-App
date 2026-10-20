@@ -5,9 +5,16 @@ import { Upload, Loader2, AlertTriangle } from 'lucide-react'
 const API = '/api/v1/plc'
 
 //
-// Flash new firmware onto the PLC. The board cannot update itself, so the
-// server runs avrdude against its serial port; this uploads a .hex and follows
-// progress over SSE. Upload only - the bundled firmware is not offered here.
+// Flash new firmware onto the PLC, with the tool its platform needs - the
+// backend tells the two apart when the PLC connects:
+//
+//   - M-Duino (avr): the board cannot update itself, so the server runs
+//     avrdude against its USB port. Takes a .hex.
+//   - ESP32: the PLC takes a .bin over the link it is already attached by -
+//     USB, RS232 or the network - and only switches to it once it verifies.
+//     The firmware bundled with this release can be flashed without an upload.
+//
+// Progress follows over SSE either way.
 //
 export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
   const { authFetch } = useAuth()
@@ -19,6 +26,9 @@ export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
   const [message, setMessage] = useState(null)      // { text, type }
   const streamRef = useRef(null)
 
+  const isEsp32 = check?.platform === 'esp32'
+  const extension = isEsp32 ? '.bin' : '.hex'
+
   const runCheck = useCallback(async () => {
     if (!deviceId) return
     try {
@@ -27,7 +37,7 @@ export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
     } catch { setCheck(null) }
   }, [deviceId, authFetch])
 
-  useEffect(() => { runCheck() }, [runCheck])
+  useEffect(() => { setFile(null); setMessage(null); runCheck() }, [runCheck])
 
   const closeStream = () => {
     if (streamRef.current) { streamRef.current.close(); streamRef.current = null }
@@ -36,20 +46,33 @@ export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
 
   const onFile = (e) => {
     const f = e.target.files?.[0]
+    e.target.value = ''
     if (!f) return
-    if (!f.name.toLowerCase().endsWith('.hex')) {
-      setMessage({ text: 'Firmware must be a .hex file', type: 'error' })
+    if (!f.name.toLowerCase().endsWith(extension)) {
+      setMessage({
+        text: isEsp32 ? 'This is an ESP32 PLC - firmware must be a .bin file'
+                      : 'This is an M-Duino PLC - firmware must be a .hex file',
+        type: 'error',
+      })
       return
     }
     setFile(f)
     setMessage(null)
   }
 
-  const startUpdate = async () => {
-    if (updating || !deviceId || !file) return
+  // An ESP32 PLC can take the bundled image without an upload; the M-Duino
+  // always needs a chosen file here.
+  const useBundled = isEsp32 && !file && check?.update_available === true
+  const canStart = !updating && (file || useBundled)
 
+  const startUpdate = async () => {
+    if (!canStart || !deviceId) return
+
+    const what = file ? file.name : 'the bundled firmware'
     const confirmed = await requirePassword(
-      `Flash ${file.name} onto ${deviceName || 'this PLC'}? The machine stops while it is reprogrammed.`
+      isEsp32
+        ? `Send ${what} to ${deviceName || 'this PLC'}? Its outputs switch off while the image transfers (about two minutes), then it restarts into the new firmware.`
+        : `Flash ${what} onto ${deviceName || 'this PLC'}? The machine stops while it is reprogrammed.`
     )
     if (!confirmed) return
 
@@ -87,9 +110,14 @@ export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
         runCheck()
       })
 
-      const body = new FormData()
-      body.append('firmware', file)
-      const res = await authFetch(`${API}/${deviceId}/firmware_update`, { method: 'POST', body })
+      let res
+      if (file) {
+        const body = new FormData()
+        body.append('firmware', file)
+        res = await authFetch(`${API}/${deviceId}/firmware_update`, { method: 'POST', body })
+      } else {
+        res = await authFetch(`${API}/${deviceId}/firmware_update_bundled`, { method: 'POST' })
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         closeStream()
@@ -105,41 +133,71 @@ export default function PlcFirmware({ deviceId, deviceName, requirePassword }) {
     }
   }
 
-  const avrdudeMissing = check && !check.avrdude_available
+  const avrdudeMissing = check && !isEsp32 && !check.avrdude_available
+  const avrOverNetwork = check && !isEsp32 && check.transport === 'network'
+
+  const platformLabel = !check ? null
+    : isEsp32 ? `ESP32 PLC, connected over ${check.transport === 'network' ? 'WiFi' : check.transport.toUpperCase()}`
+    : check.platform === 'avr' ? 'M-Duino PLC'
+    : 'PLC type not identified - treated as M-Duino'
 
   return (
     <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-[1fr_auto]">
       <div>
         <h3 className="text-sm font-medium text-gray-900 dark:text-white">Firmware</h3>
         <p className="mt-0.5 text-[13px] text-gray-500 dark:text-slate-400">
-          Reprogram the PLC over its serial connection. The machine stops for the
-          duration and comes back once flashing completes.
+          {isEsp32
+            ? 'Send new firmware to the PLC over its existing connection. It is checked before the PLC switches to it, so a failed transfer leaves the current firmware running.'
+            : 'Reprogram the PLC over its USB connection. The machine stops for the duration and comes back once flashing completes.'}
         </p>
+        {platformLabel && (
+          <p className="mt-1 text-[12px] text-gray-500 dark:text-slate-400">{platformLabel}</p>
+        )}
+
+        {isEsp32 && !updating && (
+          check.update_available === true ? (
+            <p className="mt-1 text-[12px] text-emerald-600">
+              Bundled firmware differs from the PLC's ({check.device_hash?.slice(0, 12)} → {check.bundled_hash?.slice(0, 12)}).
+            </p>
+          ) : check.update_available === false ? (
+            <p className="mt-1 text-[12px] text-gray-500">
+              Running the bundled firmware ({check.device_hash?.slice(0, 12)}).
+            </p>
+          ) : check.reason === 'no_bundled' ? (
+            <p className="mt-1 text-[12px] text-gray-500">No ESP32 firmware is bundled with this release - upload a .bin.</p>
+          ) : check.reason === 'invalid_bundle' ? (
+            <p className="mt-1 text-[12px] text-amber-600">The bundled ESP32 firmware is damaged - upload a .bin.</p>
+          ) : null
+        )}
       </div>
 
-      {avrdudeMissing ? (
+      {avrdudeMissing || avrOverNetwork ? (
         <div className="flex max-w-sm items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-          <span>
-            avrdude is not installed on the server, so firmware cannot be flashed.
-            Install it (on the Pi: <code>sudo apt install avrdude</code>) and reload.
-          </span>
+          {avrOverNetwork ? (
+            <span>An M-Duino PLC can only be flashed over USB.</span>
+          ) : (
+            <span>
+              avrdude is not installed on the server, so firmware cannot be flashed.
+              Install it (on the Pi: <code>sudo apt install avrdude</code>) and reload.
+            </span>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
             <Upload size={14} />
-            {file ? file.name : 'Choose .hex…'}
-            <input type="file" accept=".hex" className="hidden" onChange={onFile} disabled={updating} />
+            {file ? file.name : `Choose ${extension}…`}
+            <input type="file" accept={extension} className="hidden" onChange={onFile} disabled={updating || !check} />
           </label>
 
           <button
             onClick={startUpdate}
-            disabled={updating || !file}
+            disabled={!canStart}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
             {updating && <Loader2 size={14} className="animate-spin" />}
-            Update firmware
+            {useBundled ? 'Install bundled firmware' : 'Update firmware'}
           </button>
         </div>
       )}

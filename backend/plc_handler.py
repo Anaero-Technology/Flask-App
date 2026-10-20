@@ -1,13 +1,16 @@
 import queue
+import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
+from plc_network import is_network_port
 from serial_handler import SerialHandler
 from utils.serial_logger import serial_logger
 
 
 class PlcHandler(SerialHandler):
-    """Driver for the Kittiwake M-Duino PLC.
+    """Driver for the Kittiwake PLC - the M-Duino 57R+ (ATmega2560) or the
+    ESP32 PLC 57R port of the same firmware.
 
     Speaks the same protocol as the black box and chimera: lower case compound
     commands, a "done <command>" / "failed <command> <reason>" ack for anything
@@ -16,6 +19,10 @@ class PlcHandler(SerialHandler):
 
     Machine part counts are read back from the device with systemget rather than
     held in a table here, so the two can never disagree.
+
+    The two builds speak one protocol, but the ESP32 adds firmware updates over
+    the link itself and a network transport; `platform` records which one is
+    attached ("esp32", "avr", or None if it could not be told).
     """
 
     # The personalities the firmware implements, in its own systemType order.
@@ -49,6 +56,10 @@ class PlcHandler(SerialHandler):
         self.seconds_elapsed = 0
         self.latest_temperatures = {}
 
+        self.platform = None
+        self.firmware_hash = None
+        self._heartbeat_thread = None
+
         self.register_automatic_handler("datapoint ", self._handle_datapoint)
         self.register_automatic_handler("lta ", self._handle_lta)
 
@@ -77,6 +88,16 @@ class PlcHandler(SerialHandler):
             return self.native_uart_settle_seconds
         return self.boot_settle_seconds
 
+    @property
+    def transport(self) -> str:
+        """usb, rs232 or network - how this PLC is attached."""
+        port = (self.port or "").lower()
+        if is_network_port(port):
+            return "network"
+        if any(port.startswith(prefix) for prefix in self._NATIVE_UART_PREFIXES):
+            return "rs232"
+        return "usb"
+
     def connect(self) -> bool:
         try:
             super().connect(self.port)
@@ -85,12 +106,69 @@ class PlcHandler(SerialHandler):
             if not self._get_device_info():
                 self.disconnect()
                 return False
+            self._detect_platform()
             self._get_system()
             self._restore_saved_config()
             return True
         except Exception as e:
             print(f"[PlcHandler] Connection failed: {e}")
             return False
+
+    def connect_network(self, connection) -> bool:
+        """Adopt an accepted network connection (plc_network.SocketConnection).
+
+        Opening a socket does not reset the board, so there is no boot window
+        to sit out - the PLC is already running and answers straight away.
+        """
+        try:
+            self.connection = connection
+            self.clear_buffer()
+            self._start_reader_thread()
+            if not self._get_device_info(attempts=3):
+                self.disconnect()
+                return False
+            self._detect_platform()
+            self._get_system()
+            self._restore_saved_config()
+            self._start_heartbeat()
+            return True
+        except Exception as e:
+            print(f"[PlcHandler] Network connection failed: {e}")
+            self.disconnect()
+            return False
+
+    # The PLC drops a network link that has been silent for two minutes - it
+    # has no other way to notice a host that went away without closing (a
+    # reboot, a WiFi dropout). A cheap query every 30 s keeps a healthy link
+    # from ever reaching that, and a few unanswered in a row mean the link here
+    # is dead, so it is closed and the PLC's own reconnect takes over.
+    heartbeat_interval = 30.0
+    heartbeat_misses_allowed = 3
+
+    def _start_heartbeat(self):
+        def run():
+            misses = 0
+            while self.connection is not None and self.connection.is_open:
+                time.sleep(self.heartbeat_interval)
+                if self.firmware_update_in_progress:
+                    continue
+                try:
+                    lines = self._command_lines("timeget", ("time ",), timeout=5.0)
+                    answered = any(l.startswith("time ") for l in lines)
+                except Exception:
+                    answered = False
+                misses = 0 if answered else misses + 1
+                if misses >= self.heartbeat_misses_allowed:
+                    print(f"[PlcHandler] {self.port} stopped answering - closing the network link")
+                    try:
+                        self.connection.close()
+                    except Exception:
+                        pass
+                    return
+
+        self._heartbeat_thread = threading.Thread(target=run, daemon=True,
+                                                  name=f"PlcHeartbeat-{self.port}")
+        self._heartbeat_thread.start()
 
     def _restore_saved_config(self):
         """Reload the config the PLC saved to its own SD card.
@@ -188,6 +266,8 @@ class PlcHandler(SerialHandler):
         """
         if not self.connection.is_open:
             raise Exception("Device not connected")
+        if self.firmware_update_in_progress:
+            raise Exception("Device is busy with a firmware update")
 
         with self._command_lock:
             while not self._command_response_queue.empty():
@@ -283,6 +363,9 @@ class PlcHandler(SerialHandler):
             "machine_counts": self.machine_counts,
             "maintenance_mode": self.maintenance_mode,
             "port": self.port,
+            "platform": self.platform,
+            "transport": self.transport,
+            "firmware_hash": self.firmware_hash,
         }
 
     def set_name(self, name: str) -> bool:
@@ -301,6 +384,263 @@ class PlcHandler(SerialHandler):
         if success:
             self.mac_address = mac_address
         return success, reason
+
+    # ------------------------------------------------------------------
+    # Platform and firmware
+    # ------------------------------------------------------------------
+    def _detect_platform(self) -> Optional[str]:
+        """Tell the ESP32 build from the M-Duino one.
+
+        Both speak the same protocol, but only the ESP32 build has firmwarehash:
+        it answers with the running image's digest, while the M-Duino rejects
+        the word as "failed firmwarehash unknown". That works on every
+        transport, unlike the USB vendor ID, and the digest is wanted anyway.
+        """
+        try:
+            lines = self._command_lines(
+                "firmwarehash", ("firmwarehash ", "failed firmwarehash"), timeout=3.0)
+        except Exception:
+            lines = []
+
+        for line in lines:
+            if line.startswith("firmwarehash "):
+                self.platform = "esp32"
+                self.firmware_hash = self._parse_hash(line)
+                return self.platform
+            if line.startswith("failed firmwarehash unknown"):
+                self.platform = "avr"
+                self.firmware_hash = None
+                return self.platform
+
+        self.platform = None
+        return None
+
+    @staticmethod
+    def _parse_hash(line: str) -> Optional[str]:
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+        digest = parts[1].strip().lower()
+        if len(digest) == 64 and all(c in "0123456789abcdef" for c in digest):
+            return digest
+        return None
+
+    def get_firmware_hash(self) -> Tuple[bool, Optional[str]]:
+        """SHA-256 of the running image - the digest esptool appends to the
+        .bin, so it compares directly with the last 32 bytes of a firmware file.
+        ESP32 builds only; the M-Duino has no equivalent."""
+        try:
+            lines = self._command_lines(
+                "firmwarehash", ("firmwarehash ", "failed firmwarehash"), timeout=5.0)
+        except Exception:
+            return False, None
+        for line in lines:
+            if line.startswith("firmwarehash "):
+                digest = self._parse_hash(line)
+                if digest:
+                    self.firmware_hash = digest
+                    return True, digest
+        return False, None
+
+    def update_firmware(self, firmware_data: bytes, progress_cb=None) -> Tuple[bool, str]:
+        """Flash a new image onto an ESP32 PLC over the link it is attached by.
+
+        The chimera's protocol: "startupdate <size>", "done startupdate", then
+        the raw image. The PLC erases the whole image area before acking, so the
+        transfer itself only writes - one 4 KB sector per block, in the idle
+        gap left after each block, since the ESP32 cannot service its UART while
+        flash is busy. It verifies the image, answers "done update" or "failed
+        update", and restarts into the new build only if it verified.
+
+        Over USB the port survives the restart, so the PLC is re-read and its
+        saved configuration reloaded - the machine type does not survive a
+        reset. Over the network the restart closes the connection; the PLC calls
+        back in by itself and is adopted as a fresh connection.
+
+        The command lock is held for the whole transfer so nothing else - the
+        heartbeat, the automation engine, a request thread - can put command
+        bytes into the middle of the image. progress_cb(bytes_sent, total).
+        """
+        if self.platform != "esp32":
+            return False, "Only the ESP32 PLC can be updated over its link"
+        if not (self.connection and self.connection.is_open):
+            return False, "Device not connected"
+        if self.is_logging:
+            return False, "Cannot update firmware while the PLC is logging"
+
+        total = len(firmware_data)
+        if total == 0:
+            return False, "Firmware file is empty"
+
+        over_network = self.transport == "network"
+        self.firmware_update_in_progress = True
+        try:
+            with self._command_lock:
+                # Erasing an image-sized area takes a few seconds before the ack
+                response = self._send_command_locked(
+                    f"startupdate {total}", timeout=20.0, expect_prefix=None)
+                if response == "failed startupdate logging":
+                    return False, "Device refused: cannot update while logging"
+                if response == "failed startupdate invalidsize":
+                    return False, "Device refused: the image is too large for the update partition"
+                if response is None:
+                    return False, "Device did not respond to startupdate"
+                if response != "done startupdate":
+                    return False, f"Unexpected response: {response}"
+
+                original_write_timeout = self.connection.write_timeout
+                self.connection.write_timeout = 30.0
+                try:
+                    block_size = 4096
+                    block_gap = 0.2
+                    sent_total = 0
+                    for offset in range(0, total, block_size):
+                        block = firmware_data[offset:offset + block_size]
+                        with self._write_lock:
+                            written = self.connection.write(block)
+                        if written != len(block):
+                            return False, (f"Write incomplete at byte {offset}: "
+                                           f"wrote {written} of {len(block)}")
+                        # Drained before the pause, so the gap is a true idle
+                        # window on the wire for the PLC's sector write.
+                        self.drain_write_buffer()
+                        time.sleep(block_gap)
+                        sent_total += written
+                        if progress_cb and sent_total < total:
+                            progress_cb(sent_total, total)
+                    if progress_cb:
+                        progress_cb(total, total)
+                finally:
+                    try:
+                        self.connection.write_timeout = original_write_timeout
+                    except Exception:
+                        pass
+
+                print(f"[PLC UPDATE] Sent {total} firmware bytes to {self.port}")
+
+                # The PLC always answers - it verifies the image before acking.
+                # Boot output or the banner can only follow a "done update".
+                result = None
+                deadline = time.time() + 60.0
+                while time.time() < deadline:
+                    line = self.get_response(timeout=5.0)
+                    if line is None:
+                        if not self.connection.is_open:
+                            break
+                        continue
+                    if line.startswith("failed update"):
+                        return False, "The PLC rejected the image - the running firmware was kept"
+                    if line.startswith("done update"):
+                        result = line
+                        break
+
+                if result is None:
+                    return False, ("No answer after the transfer. The PLC keeps its "
+                                   "running firmware unless the new one verified - "
+                                   "check it before retrying.")
+
+                if over_network:
+                    return True, ("Firmware updated. The PLC is restarting and will "
+                                  "reconnect over the network by itself")
+
+                # USB/RS232: the port stays open across the restart. Wait for
+                # the new build to answer, then re-read it and restore its
+                # saved configuration.
+                time.sleep(3.0)
+                device_back = False
+                verify_deadline = time.time() + 30.0
+                while time.time() < verify_deadline:
+                    if self._send_command_locked("info", timeout=3.0, expect_prefix="info"):
+                        device_back = True
+                        break
+                    time.sleep(2.0)
+                if not device_back:
+                    return False, ("Firmware was accepted but the PLC did not answer "
+                                   "after restarting. Check it before retrying.")
+        except Exception as e:
+            return False, f"Firmware transfer failed: {e}"
+        finally:
+            self.firmware_update_in_progress = False
+
+        # Outside the lock - these take it themselves.
+        try:
+            self._get_device_info()
+            self._detect_platform()
+            self.machine_type = None
+            self._get_system()
+            self._restore_saved_config()
+        except Exception as e:
+            print(f"[PLC UPDATE] Could not re-read the PLC after updating: {e}")
+        return True, "Firmware updated and the PLC is back online"
+
+    # ------------------------------------------------------------------
+    # Network (ESP32 only)
+    # ------------------------------------------------------------------
+    # A command line is capped at 63 bytes, so a WPA password (up to 63
+    # characters on its own) goes in pieces: wifipassset, then wifipassadd.
+    _PASSWORD_CHUNK = 40
+
+    def get_network(self) -> Optional[Dict]:
+        """network <wifi> <ip> <rssi> <ssid> <host> <port> <link>"""
+        lines = self._command_lines("networkget", ("network ", "failed networkget"), timeout=5.0)
+        for line in lines:
+            parts = line.split()
+            if not line.startswith("network ") or len(parts) < 8:
+                continue
+            try:
+                return {
+                    "wifi": parts[1],                    # off, connecting, connected
+                    "ip": None if parts[2] == "none" else parts[2],
+                    "rssi": int(parts[3]),
+                    "ssid": None if parts[4] == "none" else parts[4],
+                    "host": None if parts[5] == "none" else parts[5],
+                    "port": int(parts[6]),
+                    "link": parts[7],                    # off, down, connecting, up
+                }
+            except ValueError:
+                return None
+        return None
+
+    def configure_network(self, ssid: str, password: str, host: str, port: int) -> Tuple[bool, str]:
+        """Give the PLC a WiFi network and the host to call in to.
+
+        The PLC joins in the background; follow with get_network() to see it
+        come up. Arguments travel in a space delimited protocol, so names and
+        passwords with spaces cannot be sent.
+        """
+        if self.platform != "esp32":
+            return False, "Only the ESP32 PLC has network support"
+        if not ssid or len(ssid) > 32 or any(c.isspace() for c in ssid):
+            return False, "The network name must be 1-32 characters with no spaces"
+        password = password or ""
+        if len(password) > 63 or any(c.isspace() for c in password):
+            return False, "The password must be at most 63 characters with no spaces"
+        if not host or len(host) > 40 or any(c.isspace() for c in host):
+            return False, "Invalid host address"
+        if not 1 <= int(port) <= 65535:
+            return False, "Invalid port"
+
+        steps = [f"wifissidset {ssid}"]
+        chunks = [password[i:i + self._PASSWORD_CHUNK]
+                  for i in range(0, len(password), self._PASSWORD_CHUNK)]
+        for index, chunk in enumerate(chunks):
+            steps.append(f"{'wifipassset' if index == 0 else 'wifipassadd'} {chunk}")
+        steps += ["wificonnect", f"hostset {host} {int(port)}"]
+
+        for step in steps:
+            ok, reason = self._acked(step)
+            if not ok:
+                # Do not echo the step - it may hold part of the password
+                return False, f"The PLC rejected {step.split()[0]}: {reason}"
+        return True, f"Joining {ssid}; the PLC will connect to {host}:{int(port)}"
+
+    def reset_network(self) -> Tuple[bool, str]:
+        """Forget the WiFi network and host, switching the radio off."""
+        for step in ("hostreset", "wifireset"):
+            ok, reason = self._acked(step)
+            if not ok:
+                return False, f"The PLC rejected {step}: {reason}"
+        return True, "Network settings cleared"
 
     # ------------------------------------------------------------------
     # Machine personality
@@ -627,10 +967,11 @@ class PlcHandler(SerialHandler):
         return self._acked(f"debugset {1 if enable else 0}")
 
     def reset(self) -> Tuple[bool, str]:
-        """Watchdog reset. The port drops, so the handler should be rebuilt after.
+        """Restart the PLC. The port drops, so the handler should be rebuilt after.
 
-        On bootloaders that do not clear WDRF this can loop until the unit is
-        power cycled, so it is not something to call casually.
+        On the M-Duino this is a watchdog reset, which on bootloaders that do
+        not clear WDRF can loop until the unit is power cycled, so it is not
+        something to call casually. The ESP32 restarts cleanly.
         """
         try:
             return self._acked("reset", timeout=5.0)

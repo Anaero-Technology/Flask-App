@@ -5,6 +5,7 @@ from serial_handler import SerialHandler
 from black_box_handler import BlackBoxHandler
 from chimera_handler import ChimeraHandler
 from plc_handler import PlcHandler
+from plc_network import is_network_port
 
 class DeviceManager:
     _instance = None
@@ -122,63 +123,9 @@ class DeviceManager:
                 if not handler.connect():
                     print(f"[DeviceManager] Handler failed to connect to {port}")
                     return False
-                mac_address = handler.mac_address
-                print(f"[DeviceManager] DEBUG: Handler connected, MAC={mac_address}")
+                print(f"[DeviceManager] DEBUG: Handler connected, MAC={handler.mac_address}")
 
-                # Look up device by MAC address (robust across port changes)
-                device = None
-                if mac_address:
-                    device = Device.query.filter_by(mac_address=mac_address).first()
-                    print(f"[DeviceManager] DEBUG: Found device by MAC: {device.id if device else None}, active_test_id={device.active_test_id if device else None}")
-
-                # Check if already connected
-                if device and device.id in self._active_handlers:
-                    print(f"[DeviceManager] DEBUG: Device {device.id} already in _active_handlers, disconnecting duplicate")
-                    handler.disconnect()  # Don't need duplicate connection
-                    return True
-
-                if device:
-                    # Existing device - update port if changed
-                    if device.serial_port != port:
-                        print(f"[DeviceManager] Device {device.id} moved from {device.serial_port} to {port}")
-                        device.serial_port = port
-                    device.connected = True
-                    device.logging = handler.is_logging
-                    print(f"[DeviceManager] DEBUG: Setting handler.test_id = {device.active_test_id}")
-                    handler.set_test_id(device.active_test_id)
-                    if device_name:
-                        device.name = device_name
-                    handler.set_name(device.name)
-                    db.session.commit()
-                else:
-                    # New device - create record
-                    if device_name:
-                        handler.set_name(device_name)
-                    else:
-                        device_name = handler.device_name
-
-                    device = Device(
-                        name=device_name,
-                        device_type=device_type,
-                        serial_port=port,
-                        mac_address=mac_address,
-                        connected=True,
-                        logging=handler.is_logging
-                    )
-                    db.session.add(device)
-                    db.session.commit()
-                    db.session.refresh(device)
-
-                handler.id = device.id
-                print(f"[DeviceManager] DEBUG: Set handler.id = {device.id}")
-
-                # Set the disconnect callback (pass device_id, not port)
-                handler.on_disconnect = lambda: self._handle_disconnect(device.id)
-
-                # Store handler by device_id (not port)
-                self._active_handlers[device.id] = handler
-                print(f"[DeviceManager] DEBUG: Handler added to _active_handlers. Final state: test_id={handler.test_id}, id={handler.id}, app={handler.app is not None}")
-
+                self._register_handler(handler, port, device_type, device_name)
                 return True
 
             except Exception as e:
@@ -186,6 +133,92 @@ class DeviceManager:
                 if handler:
                     handler.disconnect()
                 return False
+
+    def _register_handler(self, handler, port: str, device_type: str,
+                          device_name: Optional[str] = None):
+        """Record a connected handler against its device row and make it active.
+
+        Devices are matched by MAC so one keeps its history across port changes
+        - including moving between USB and the network. A device that already
+        has an active handler keeps it and the new one is dropped. Caller holds
+        self._lock and an app context.
+        """
+        mac_address = handler.mac_address
+
+        # Look up device by MAC address (robust across port changes)
+        device = None
+        if mac_address:
+            device = Device.query.filter_by(mac_address=mac_address).first()
+            print(f"[DeviceManager] DEBUG: Found device by MAC: {device.id if device else None}, active_test_id={device.active_test_id if device else None}")
+
+        # Check if already connected
+        if device and device.id in self._active_handlers:
+            print(f"[DeviceManager] DEBUG: Device {device.id} already in _active_handlers, disconnecting duplicate")
+            handler.disconnect()  # Don't need duplicate connection
+            return
+
+        if device:
+            # Existing device - update port if changed
+            if device.serial_port != port:
+                print(f"[DeviceManager] Device {device.id} moved from {device.serial_port} to {port}")
+                device.serial_port = port
+            device.connected = True
+            device.logging = handler.is_logging
+            print(f"[DeviceManager] DEBUG: Setting handler.test_id = {device.active_test_id}")
+            handler.set_test_id(device.active_test_id)
+            if device_name:
+                device.name = device_name
+            handler.set_name(device.name)
+            db.session.commit()
+        else:
+            # New device - create record
+            if device_name:
+                handler.set_name(device_name)
+            else:
+                device_name = handler.device_name
+
+            device = Device(
+                name=device_name,
+                device_type=device_type,
+                serial_port=port,
+                mac_address=mac_address,
+                connected=True,
+                logging=handler.is_logging
+            )
+            db.session.add(device)
+            db.session.commit()
+            db.session.refresh(device)
+
+        handler.id = device.id
+        print(f"[DeviceManager] DEBUG: Set handler.id = {device.id}")
+
+        # Set the disconnect callback (pass device_id, not port)
+        device_id = device.id
+        handler.on_disconnect = lambda: self._handle_disconnect(device_id)
+
+        # Store handler by device_id (not port)
+        self._active_handlers[device_id] = handler
+        print(f"[DeviceManager] DEBUG: Handler added to _active_handlers. Final state: test_id={handler.test_id}, id={handler.id}, app={handler.app is not None}")
+
+    def connect_network_plc(self, connection, port: str) -> bool:
+        """Adopt a PLC that called in over the network (see plc_network.py).
+
+        The PLC is identified before the lock is taken - the handshake takes a
+        few seconds and must not hold up USB connects. A PLC already connected
+        over USB keeps that connection; the network one is closed, and the PLC
+        backs off and retries.
+        """
+        if not self._app:
+            return False
+
+        handler = PlcHandler(port)
+        handler.app = self._app
+        if not handler.connect_network(connection):
+            return False
+
+        with self._lock, self._app.app_context():
+            self._register_handler(handler, port, "plc")
+            return handler.id is not None and self._active_handlers.get(handler.id) is handler
 
     def connect_black_box(self, device_id: int, port: str) -> bool:
         from black_box_handler import BlackBoxHandler
@@ -314,6 +347,13 @@ class DeviceManager:
             if not device or not device.connected:
                 return None
 
+            # A network PLC cannot be dialled - it calls in by itself once its
+            # link comes back, so a stale connected flag is simply cleared.
+            if is_network_port(device.serial_port):
+                device.connected = False
+                db.session.commit()
+                return None
+
             # Not in cache but marked as connected - try to reconnect
             if device.device_type == "black-box":
                 handler = BlackBoxHandler(device.serial_port)
@@ -418,6 +458,8 @@ class DeviceManager:
                             device_info["machine_type"] = getattr(handler, 'machine_type', None)
                             device_info["machine_counts"] = getattr(handler, 'machine_counts', None)
                             device_info["maintenance_mode"] = getattr(handler, 'maintenance_mode', False)
+                            device_info["platform"] = getattr(handler, 'platform', None)
+                            device_info["transport"] = handler.transport
 
                     plc_list.append(device_info)
 

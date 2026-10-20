@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import tempfile
@@ -10,11 +11,13 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_sse import sse
 
 import plc_firmware
+import plc_network
 from device_manager import DeviceManager
 from database.models import *
 from plc_handler import PlcHandler
 from utils.auth import require_role, check_stream_token
 from utils.errors import internal_error
+from utils import wifi_manager
 
 plc_bp = Blueprint('plc', __name__)
 device_manager = DeviceManager()
@@ -74,6 +77,8 @@ def connect_plc(device_id):
         port = (request.get_json(silent=True) or {}).get('port') or device.serial_port
         if not port:
             return jsonify({"error": "No serial port known for this PLC"}), 400
+        if plc_network.is_network_port(port):
+            return _result(False, "A network PLC connects by itself once its WiFi link is up")
 
         if device_manager.connect(port):
             return _result(True, f"Connected to PLC on {port}")
@@ -973,10 +978,18 @@ def _apply_and_log(device_id, handler, unit_type, number, values, note):
 # ----------------------------------------------------------------------
 # Firmware update
 #
-# The PLC cannot rewrite its own flash, so the server runs avrdude against its
-# serial port. The port is reserved and the handler disconnected first so
-# avrdude has it alone, then the device is reconnected once flashing is done.
-# Progress is streamed over SSE, mirroring the chimera firmware flow.
+# Two PLC builds share one protocol but update differently, so the handler's
+# detected platform picks the tool:
+#
+#   - avr (M-Duino 57R+): the board cannot rewrite its own flash, so the server
+#     runs avrdude against its serial port. The port is reserved and the handler
+#     disconnected first so avrdude has it alone, then the PLC is reconnected.
+#   - esp32 (ESP32 PLC 57R): the PLC takes the image over the link it is already
+#     attached by - USB, RS232 or the network - with the chimera's startupdate
+#     protocol, and verifies it before switching to it.
+#
+# Progress is streamed over SSE as plc_firmware_progress / plc_firmware_complete
+# for both.
 # ----------------------------------------------------------------------
 @plc_bp.route('/api/v1/plc/<int:device_id>/stream', methods=['GET'])
 def firmware_stream(device_id):
@@ -994,31 +1007,57 @@ def firmware_stream(device_id):
         db.session.close()
 
 
-@plc_bp.route('/api/v1/plc/<int:device_id>/firmware_check', methods=['GET'])
-@jwt_required()
-def firmware_check(device_id):
-    """Report whether the server has avrdude available to flash with, and the
-    firmware bundled in the repo. There is no on-device version to compare
-    against - the AVR bootloader exposes no firmware hash - so this only tells
-    the UI what it can offer."""
-    try:
-        device = Device.query.get(device_id)
-        if not device or device.device_type != 'plc':
-            return jsonify({"error": "PLC not found"}), 404
+ESP32_BUNDLED_FIRMWARE_PATH = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', '..', 'firmware', 'plc-esp32', 'firmware.bin'
+))
 
-        avrdude, _ = plc_firmware.locate_avrdude()
-        bundled = _bundled_plc_firmware()
-        return jsonify({
-            "avrdude_available": bool(avrdude),
-            "bundled_available": bundled is not None,
-            "bundled_name": os.path.basename(bundled) if bundled else None,
-        })
-    finally:
-        db.session.close()
+
+def _connected_plc(device_id):
+    """(device, handler) for a connected PLC, or (None, error_response)."""
+    device = Device.query.get(device_id)
+    if not device or device.device_type != 'plc':
+        return None, (jsonify({"error": "PLC not found"}), 404)
+    if not device.connected:
+        return None, (jsonify({"error": "PLC not connected"}), 409)
+    handler = device_manager.get_plc(device_id)
+    if not handler:
+        return None, (jsonify({"error": "Device handler not found"}), 404)
+    return (device, handler), None
+
+
+def _load_bundled_esp32_firmware():
+    """Read the bundled ESP32 PLC image and derive its expected device hash.
+
+    esptool appends a SHA-256 of the image as its last 32 bytes, and that is
+    exactly what the PLC's firmwarehash reports for its running partition - so
+    the expected hash IS those bytes, validated by recomputing it here.
+
+    Returns (data, hash_hex, error_reason); data is None when unavailable.
+    """
+    if not os.path.isfile(ESP32_BUNDLED_FIRMWARE_PATH):
+        return None, None, 'no_bundled'
+    with open(ESP32_BUNDLED_FIRMWARE_PATH, 'rb') as f:
+        data = f.read()
+    if len(data) < 33 or data[0] != 0xE9:
+        return None, None, 'invalid_bundle'
+    digest = data[-32:]
+    if hashlib.sha256(data[:-32]).digest() != digest:
+        return None, None, 'invalid_bundle'
+    return data, digest.hex(), None
+
+
+def _validate_esp32_image(data):
+    """Error string, or None when this looks like a flashable ESP32 app image."""
+    if len(data) < 100 * 1024 or len(data) > 6 * 1024 * 1024:
+        return "Firmware file size looks wrong (expected 100 KB - 6 MB)"
+    if data[0] != 0xE9:
+        return "Not an ESP32 firmware image (.bin)"
+    return None
 
 
 def _bundled_plc_firmware():
-    """Path to the application-only .hex bundled in the repo, if present.
+    """Path to the application-only M-Duino .hex bundled in the repo, if present.
 
     The plain .hex is flashed over the serial bootloader; the
     with_bootloader variant is for ISP programming and would be wrong here.
@@ -1029,19 +1068,106 @@ def _bundled_plc_firmware():
     return candidate if os.path.exists(candidate) else None
 
 
+@plc_bp.route('/api/v1/plc/<int:device_id>/firmware_check', methods=['GET'])
+@jwt_required()
+def firmware_check(device_id):
+    """What the firmware panel can offer for this PLC.
+
+    For an ESP32 PLC this compares the running image's hash with the bundled
+    firmware.bin. The M-Duino exposes no firmware hash, so for it this only
+    reports whether avrdude and a bundled .hex are available.
+    """
+    try:
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        _, handler = found
+        platform = handler.platform
+
+        if platform == 'esp32':
+            data, bundled_hash, reason = _load_bundled_esp32_firmware()
+            payload = {
+                "platform": platform,
+                "transport": handler.transport,
+                "bundled_available": data is not None,
+                "bundled_hash": bundled_hash,
+                "bundled_size": len(data) if data else None,
+                "reason": reason,
+                "update_available": None,
+            }
+            if handler.firmware_update_in_progress:
+                payload["reason"] = "update_in_progress"
+                return jsonify(payload)
+            ok, device_hash = handler.get_firmware_hash()
+            payload["device_hash"] = device_hash if ok else None
+            if ok and data is not None:
+                payload["update_available"] = device_hash != bundled_hash
+            return jsonify(payload)
+
+        avrdude, _ = plc_firmware.locate_avrdude()
+        bundled = _bundled_plc_firmware()
+        return jsonify({
+            "platform": platform or "avr",
+            "transport": handler.transport,
+            "avrdude_available": bool(avrdude),
+            "bundled_available": bundled is not None,
+            "bundled_name": os.path.basename(bundled) if bundled else None,
+        })
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+def _esp32_preflight(device, handler):
+    """Error response, or None when an ESP32 update may start."""
+    if device.active_test_id:
+        test = Test.query.get(device.active_test_id)
+        if test and test.status == 'running':
+            return jsonify({"error": "Cannot update firmware while a test is running"}), 409
+    if handler.is_logging:
+        return jsonify({"error": "Cannot update firmware while the PLC is logging"}), 409
+    if handler.firmware_update_in_progress:
+        return jsonify({"error": "A firmware update is already in progress"}), 409
+    return None
+
+
 @plc_bp.route('/api/v1/plc/<int:device_id>/firmware_update', methods=['POST'])
 @jwt_required()
 @require_role(['admin'])
 def firmware_update(device_id):
-    """Flash a .hex onto the PLC. Upload one as 'firmware', or omit it to flash
-    the repo-bundled firmware. Runs in the background; progress arrives as
-    'plc_firmware_progress' SSE events and the outcome as 'plc_firmware_complete'."""
+    """Flash firmware onto the PLC with the tool its platform needs.
+
+    ESP32: upload a .bin as 'firmware'; it is sent over the PLC's own link.
+    M-Duino: upload a .hex as 'firmware', or omit it to flash the bundled .hex;
+    avrdude flashes it over USB. Runs in the background; progress arrives as
+    'plc_firmware_progress' SSE events and the outcome as 'plc_firmware_complete'.
+    """
     try:
-        device = Device.query.get(device_id)
-        if not device or device.device_type != 'plc':
-            return jsonify({"error": "PLC not found"}), 404
-        if not device.connected:
-            return jsonify({"error": "PLC not connected"}), 409
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        device, handler = found
+
+        if handler.platform == 'esp32':
+            error = _esp32_preflight(device, handler)
+            if error:
+                return error
+            upload = request.files.get('firmware')
+            if upload is None:
+                return jsonify({"error": "No firmware file uploaded (expected field 'firmware')"}), 400
+            if not upload.filename or not upload.filename.lower().endswith('.bin'):
+                return jsonify({"error": "This is an ESP32 PLC - firmware must be a .bin file"}), 400
+            data = upload.read()
+            invalid = _validate_esp32_image(data)
+            if invalid:
+                return jsonify({"error": invalid}), 400
+            _launch_esp32_update(handler, device_id, data, upload.filename)
+            return jsonify({"success": True, "message": "Firmware update started",
+                            "size": len(data)}), 202
+
+        if handler.transport == 'network':
+            return jsonify({"error": "Only an ESP32 PLC can be updated over the network"}), 409
         if device.active_test_id:
             return jsonify({"error": "Cannot flash firmware while a test is running"}), 409
 
@@ -1055,7 +1181,7 @@ def firmware_update(device_id):
         upload = request.files.get('firmware')
         if upload is not None:
             if not upload.filename or not upload.filename.lower().endswith('.hex'):
-                return jsonify({"error": "Firmware must be a .hex file"}), 400
+                return jsonify({"error": "This is an M-Duino PLC - firmware must be a .hex file"}), 400
             data = upload.read()
             if not plc_firmware.is_intel_hex(data):
                 return jsonify({"error": "That does not look like an Intel HEX firmware file"}), 400
@@ -1074,6 +1200,80 @@ def firmware_update(device_id):
         return jsonify({"success": True, "message": "Firmware update started"}), 202
     finally:
         db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/firmware_update_bundled', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def firmware_update_bundled(device_id):
+    """Flash the ESP32 PLC firmware.bin bundled with this software release."""
+    try:
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        device, handler = found
+        if handler.platform != 'esp32':
+            return jsonify({"error": "The bundled .bin is for the ESP32 PLC only"}), 400
+        error = _esp32_preflight(device, handler)
+        if error:
+            return error
+
+        data, bundled_hash, reason = _load_bundled_esp32_firmware()
+        if data is None:
+            return jsonify({"error": "No valid bundled firmware available", "reason": reason}), 404
+
+        _launch_esp32_update(handler, device_id, data, os.path.basename(ESP32_BUNDLED_FIRMWARE_PATH))
+        return jsonify({"success": True, "message": "Firmware update started",
+                        "size": len(data), "bundled_hash": bundled_hash}), 202
+    finally:
+        db.session.close()
+
+
+def _launch_esp32_update(handler, device_id, data, source):
+    """Send an image to an ESP32 PLC in the background; preflight already run."""
+    handler.firmware_update_in_progress = True
+    app = current_app._get_current_object()
+    over_network = handler.transport == 'network'
+
+    def run():
+        try:
+            with app.app_context():
+                last = [-1]
+
+                def progress(sent, total):
+                    percent = int(sent * 100 / total)
+                    if percent == last[0]:
+                        return
+                    last[0] = percent
+                    try:
+                        sse.publish({
+                            "device_id": device_id,
+                            # 100% only fires once the last block has left, so
+                            # from there the PLC is verifying and restarting
+                            "phase": "verifying" if sent >= total else "transferring",
+                            "percent": percent,
+                        }, type='plc_firmware_progress')
+                    except Exception:
+                        pass
+
+                ok, message = handler.update_firmware(data, progress_cb=progress)
+                print(f"[PLC FIRMWARE] device {device_id}: ok={ok} - {message}")
+                try:
+                    sse.publish({
+                        "device_id": device_id,
+                        "success": ok,
+                        "message": message,
+                        "source": source,
+                        # Over USB the handler re-reads the PLC itself; over the
+                        # network the PLC reconnects by itself after restarting.
+                        "reconnected": ok and not over_network,
+                    }, type='plc_firmware_complete')
+                except Exception:
+                    pass
+        finally:
+            handler.firmware_update_in_progress = False
+
+    threading.Thread(target=run, daemon=True, name=f"PlcFirmwareUpdate-{device_id}").start()
 
 
 def _launch_plc_flash(device_id, port, hex_path, source, owns_file):
@@ -1137,3 +1337,108 @@ def _launch_plc_flash(device_id, port, hex_path, source, owns_file):
             print(f"[PLC FIRMWARE] device {device_id}: ok={ok} - {message}")
 
     threading.Thread(target=run, daemon=True, name=f"PlcFirmwareUpdate-{device_id}").start()
+
+
+# ----------------------------------------------------------------------
+# Network (ESP32 PLC)
+#
+# An ESP32 PLC given WiFi credentials and this server's address calls in to the
+# PLC network listener (plc_network.py) and is then controlled over WiFi
+# exactly as over USB. It is configured while attached some other way - or
+# over its existing network link, to move it to another network.
+# ----------------------------------------------------------------------
+@plc_bp.route('/api/v1/plc/<int:device_id>/network', methods=['GET'])
+@jwt_required()
+def get_network(device_id):
+    """The PLC's WiFi and link state, and what this server can share with it."""
+    try:
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        _, handler = found
+
+        payload = {
+            "platform": handler.platform,
+            "transport": handler.transport,
+            "listener_port": plc_network.listener_port(),
+            "supported": handler.platform == 'esp32',
+            "network": None,
+            "pi_wifi": wifi_manager.get_connected_ssid(),
+        }
+        if payload["supported"] and not handler.firmware_update_in_progress:
+            payload["network"] = handler.get_network()
+        return jsonify(payload)
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/network', methods=['POST'])
+@jwt_required()
+@require_role(['admin'])
+def set_network(device_id):
+    """Put the PLC on a WiFi network and point it at this server.
+
+    {"use_pi_wifi": true} hands the PLC the network this server is on, password
+    included, read from NetworkManager - it never passes through the browser.
+    Otherwise {"ssid", "password"} are used as given. "host" and "port" default
+    to this server's address on that network and the listener port.
+    """
+    try:
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        _, handler = found
+        if handler.platform != 'esp32':
+            return jsonify({"error": "Only the ESP32 PLC has network support"}), 400
+        if handler.firmware_update_in_progress:
+            return jsonify({"error": "A firmware update is in progress"}), 409
+
+        data = request.get_json(silent=True) or {}
+        host = (data.get('host') or '').strip() or None
+        try:
+            port = int(data.get('port') or plc_network.listener_port())
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid port"}), 400
+
+        if data.get('use_pi_wifi'):
+            shared, reason = wifi_manager.get_shareable_wifi()
+            if not shared:
+                return jsonify({"error": reason}), 409
+            ssid, password = shared['ssid'], shared['password']
+            host = host or shared['ip']
+        else:
+            ssid = (data.get('ssid') or '').strip()
+            password = data.get('password') or ''
+            host = host or wifi_manager.get_local_ip()
+        if not host:
+            return jsonify({"error": "Could not work out this server's address - give a host"}), 400
+
+        ok, message = handler.configure_network(ssid, password, host, port)
+        return _result(ok, message, {"ssid": ssid, "host": host, "port": port})
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()
+
+
+@plc_bp.route('/api/v1/plc/<int:device_id>/network', methods=['DELETE'])
+@jwt_required()
+@require_role(['admin'])
+def reset_network(device_id):
+    """Forget the PLC's WiFi network and host. A PLC attached over the network
+    drops off as soon as this is acknowledged."""
+    try:
+        found, error = _connected_plc(device_id)
+        if error:
+            return error
+        _, handler = found
+        if handler.platform != 'esp32':
+            return jsonify({"error": "Only the ESP32 PLC has network support"}), 400
+        ok, message = handler.reset_network()
+        return _result(ok, message)
+    except Exception as e:
+        return internal_error(e)
+    finally:
+        db.session.close()

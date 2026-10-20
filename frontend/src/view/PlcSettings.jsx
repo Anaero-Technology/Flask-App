@@ -5,6 +5,7 @@ import { modelsAvailable, modelById, resolveModel } from './plcLayouts'
 import { Loader2 } from 'lucide-react'
 import PlcMaintenance from './PlcMaintenance'
 import PlcFirmware from './PlcFirmware'
+import PlcNetwork from './PlcNetwork'
 import PlcCalibration from './PlcCalibration'
 
 const API = '/api/v1/plc'
@@ -159,6 +160,14 @@ export default function PlcSettings({ requirePassword }) {
 
     <div className="border-t border-gray-200 dark:border-slate-800">
       <PlcCalibration deviceId={deviceId} deviceName={selected?.name} />
+    </div>
+
+    <div className="border-t border-gray-200 dark:border-slate-800">
+      <PlcNetwork
+        deviceId={deviceId}
+        deviceName={selected?.name}
+        requirePassword={requirePassword}
+      />
     </div>
 
     <div className="border-t border-gray-200 dark:border-slate-800">

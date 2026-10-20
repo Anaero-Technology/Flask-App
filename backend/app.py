@@ -188,6 +188,12 @@ def auto_connect_devices():
         Device.query.update({Device.connected: False})
         db.session.commit()
 
+    # ESP32 PLCs given this server's address call in over WiFi and are then
+    # driven like any USB device. Listening only starts after the reset above,
+    # which would otherwise clear the flag of a PLC that called in first.
+    from plc_network import PlcNetworkListener
+    PlcNetworkListener(device_manager).start()
+
     port_state = {}             # port path -> 'connected' or attempts remaining
     delay = 3
     while True:
