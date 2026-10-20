@@ -150,6 +150,20 @@
   - Returns `update_available` (true/false, or null with a `reason`: `no_bundled`, `invalid_bundle`, `device_unknown`, `update_in_progress`), plus `device_hash`/`bundled_hash`.
 - `POST /api/v1/chimera/<int:device_id>/firmware_update_bundled` - Flash the bundled firmware.bin (admin only). Same SSE events as the upload route.
 
+## PLC Endpoints
+A PLC is either the M-Duino 57R+ (`platform: "avr"`) or the ESP32 PLC 57R (`platform: "esp32"`); the backend tells them apart on connect by whether the PLC answers `firmwarehash`. `transport` is `usb`, `rs232` or `network`. Only these routes are listed here; see `routes/plc.py` for status, configuration, maintenance, profiles and logging.
+- `GET /api/v1/plc/connected` - PLCs with connection state; connected ones include `platform`, `transport`, `machine_type`, `machine_counts`.
+- `GET /api/v1/plc/<int:device_id>/info` - Includes `platform`, `transport` and (ESP32) `firmware_hash`.
+- `GET /api/v1/plc/<int:device_id>/firmware_check` - What the firmware panel can offer.
+  - ESP32: compares the repo-bundled `firmware/plc-esp32/firmware.bin` hash with the PLC's `firmwarehash`; returns `update_available` (true/false, or null with a `reason`: `no_bundled`, `invalid_bundle`, `update_in_progress`), `device_hash`, `bundled_hash`, `bundled_size`.
+  - M-Duino: `avrdude_available`, `bundled_available`, `bundled_name` (the M-Duino exposes no firmware hash).
+- `POST /api/v1/plc/<int:device_id>/firmware_update` - Flash uploaded firmware (admin only). Multipart field `firmware`: a `.bin` for an ESP32 PLC (sent over its own link, verified before it is booted) or a `.hex` for an M-Duino (flashed by avrdude over USB; omit the file to flash the bundled `.hex`). Returns 202; progress arrives on the PLC SSE stream as `plc_firmware_progress` (`phase`, `percent`) and the outcome as `plc_firmware_complete` (`success`, `message`, `reconnected`).
+- `POST /api/v1/plc/<int:device_id>/firmware_update_bundled` - Flash the bundled ESP32 `firmware.bin` (admin only, ESP32 only). Same SSE events.
+- `GET /api/v1/plc/<int:device_id>/network` - ESP32 WiFi/link state as `network` (`wifi`: off/connecting/connected, `ip`, `rssi`, `ssid`, `host`, `port`, `link`: off/down/connecting/up), plus `supported`, `transport`, `listener_port` and `pi_wifi` (the SSID this server is on).
+- `POST /api/v1/plc/<int:device_id>/network` - Put an ESP32 PLC on WiFi and point it at this server (admin only). Body `{"use_pi_wifi": true}` shares this server's own WiFi network, password included, read from NetworkManager on the server; or `{"ssid", "password"}`. Optional `host`/`port` default to this server's address and `listener_port`. The PLC joins in the background - poll `GET .../network`.
+- `DELETE /api/v1/plc/<int:device_id>/network` - Forget the PLC's WiFi network and host (admin only).
+- Network PLCs connect themselves to the PLC listener on TCP `PLC_NETWORK_PORT` (default 6001) and appear with a `net://<ip>` port; `POST /api/v1/plc/<id>/connect` does not apply to them.
+
 ## Data and Outlier Endpoints
 - `GET /api/v1/tests/<int:test_id>/device/<int:device_id>/data` - Get time-series data.
   - Query params: `type`, `aggregation`, `start_time`, `end_time`, `limit`.
@@ -195,6 +209,7 @@ A rule carries a `conditions` array (1-5 entries, each with `source_type`, `sour
 ## Streaming
 - `GET /api/v1/black_box/<int:device_id>/stream` - BlackBox event SSE.
 - `GET /api/v1/chimera/<int:device_id>/stream` - Chimera event SSE.
+- `GET /api/v1/plc/<int:device_id>/stream` - PLC firmware-update SSE (`?token=`).
 - `GET /stream` - Flask-SSE blueprint endpoint (internal event bus transport).
 
 ## Notes
